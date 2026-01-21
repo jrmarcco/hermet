@@ -8,6 +8,7 @@ import (
 	"github.com/jrmarcco/hermet/internal/pkg/sharding"
 	"github.com/jrmarcco/jit/xsync"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // UserContact 【 写入侧 】用户联系人表。
@@ -126,7 +127,13 @@ func (d *DefaultUserContactDao) Create(ctx context.Context, userContact UserCont
 		userContact.ID = id
 		userContact.CreatedAt = now
 		userContact.UpdatedAt = now
-		err = tx.WithContext(ctx).Table(dst.TB).Model(&UserContact{}).Create(&userContact).Error
+		err = tx.WithContext(ctx).Table(dst.TB).Model(&UserContact{}).
+			// 唯一索引 ( user_id, contact_id ) 冲突时，不进行任何操作。
+			Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "user_id"}, {Name: "contact_id"}},
+				DoNothing: true,
+			}).
+			Create(&userContact).Error
 		if err != nil {
 			return fmt.Errorf("failed to save user contact: %w", err)
 		}
@@ -136,26 +143,32 @@ func (d *DefaultUserContactDao) Create(ctx context.Context, userContact UserCont
 		if err != nil {
 			return fmt.Errorf("failed to get shard destination from user id [ %d ]", userContact.UserID)
 		}
-		err = tx.WithContext(ctx).Table(viewDst.TB).Model(&UserContactView{}).Create(&UserContactView{
-			ID: id,
+		err = tx.WithContext(ctx).Table(viewDst.TB).Model(&UserContactView{}).
+			// 唯一索引 ( user_id, contact_id ) 冲突时，不进行任何操作。
+			Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "user_id"}, {Name: "contact_id"}},
+				DoNothing: true,
+			}).
+			Create(&UserContactView{
+				ID: id,
 
-			UserID:    userContact.UserID,
-			ContactID: userContact.ContactID,
+				UserID:    userContact.UserID,
+				ContactID: userContact.ContactID,
 
-			ContactNickname: contact.Nickname,
-			ContactAvatar:   contact.Avatar,
-			ContactInfoVer:  contact.InfoVer,
-			ContactGender:   contact.Gender,
+				ContactNickname: contact.Nickname,
+				ContactAvatar:   contact.Avatar,
+				ContactInfoVer:  contact.InfoVer,
+				ContactGender:   contact.Gender,
 
-			Mobile: contact.Mobile,
-			Source: userContact.Source,
+				Mobile: contact.Mobile,
+				Source: userContact.Source,
 
-			AddedAt:   now,
-			DeletedAt: 0,
+				AddedAt:   now,
+				DeletedAt: 0,
 
-			CreatedAt: now,
-			UpdatedAt: now,
-		}).Error
+				CreatedAt: now,
+				UpdatedAt: now,
+			}).Error
 		if err != nil {
 			return fmt.Errorf("failed to save user contact view: %w", err)
 		}
@@ -165,15 +178,21 @@ func (d *DefaultUserContactDao) Create(ctx context.Context, userContact UserCont
 		if err != nil {
 			return fmt.Errorf("failed to get shard destination from contact id [ %d ]", userContact.ContactID)
 		}
-		err = tx.WithContext(ctx).Table(reverseIndexDst.TB).Model(&ContactReverseIndex{}).Create(&ContactReverseIndex{
-			ID: id,
-			// 这里是反向索引 ( userID 为当前用户 / ownerID 为联系人 ID )。
-			// 即 owner 的联系人中有当前用户。
-			UserID:  userContact.UserID,
-			OwnerID: userContact.ContactID,
+		err = tx.WithContext(ctx).Table(reverseIndexDst.TB).Model(&ContactReverseIndex{}).
+			// 唯一索引 ( user_id, contact_id ) 冲突时，不进行任何操作。
+			Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "user_id"}, {Name: "contact_id"}},
+				DoNothing: true,
+			}).
+			Create(&ContactReverseIndex{
+				ID: id,
+				// 这里是反向索引 ( userID 为当前用户 / ownerID 为联系人 ID )。
+				// 即 owner 的联系人中有当前用户。
+				UserID:  userContact.UserID,
+				OwnerID: userContact.ContactID,
 
-			CreatedAt: now,
-		}).Error
+				CreatedAt: now,
+			}).Error
 		if err != nil {
 			return fmt.Errorf("failed to save contact reverse index: %w", err)
 		}

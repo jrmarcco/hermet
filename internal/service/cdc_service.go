@@ -4,12 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/jrmarcco/hermet/internal/domain"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/repo"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+)
+
+const (
+	contactApplicationCacheTTL = 24 * time.Hour
 )
 
 type CDCService interface {
@@ -20,18 +26,22 @@ type CDCService interface {
 }
 
 type DefaultCDCService struct {
+	rdb             redis.Cmdable
 	userContactRepo repo.UserContactRepo
 
 	logger *zap.Logger
 }
 
 func NewDefaultCDCService(
+	rdb redis.Cmdable,
 	userContactRepo repo.UserContactRepo,
 	logger *zap.Logger,
 ) *DefaultCDCService {
 	return &DefaultCDCService{
+		rdb:             rdb,
 		userContactRepo: userContactRepo,
-		logger:          logger,
+
+		logger: logger,
 	}
 }
 
@@ -45,7 +55,12 @@ func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message
 		return nil
 	}
 
-	// TODO: 判断联系人关系是否已经建立。
+	// 幂等性判断 ( 防止重复处理相同的联系人申请事件 )。
+	cacheKey := fmt.Sprintf("contact:application:%d", event.ID)
+	if exists, _ := s.rdb.Exists(ctx, cacheKey).Result(); exists > 0 {
+		s.logger.Debug("[hermet] contact application already processed", zap.Uint64("application_id", event.ID))
+		return nil
+	}
 
 	// 建立双向关联关系。
 	eg, ctx := errgroup.WithContext(ctx)
@@ -72,5 +87,13 @@ func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message
 		return err
 	})
 
-	return eg.Wait()
+	if err := eg.Wait(); err != nil {
+		s.logger.Error("[hermet] failed to create contact relation", zap.Uint64("application_id", event.ID), zap.Error(err))
+		return err
+	}
+
+	// 关联关系建立成功，设置缓存标记 ( 用于幂等性判断 )。
+	s.rdb.Set(ctx, cacheKey, "1", contactApplicationCacheTTL)
+
+	return nil
 }
