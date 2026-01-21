@@ -41,13 +41,13 @@ func (m *KafkaOAuthMechanism) Start(ctx context.Context) (ss sasl.StateMachine, 
 
 	// 构造 OAuthBearer 初始响应 ( 格式 n,,\x01auth=Bearer <token>\x01\x01 )。
 	//
-	// 根据 RFC 7628 第 3.1 节，GS2 header 部分：
-	// - "n" 表示客户端不支持 channel binding。
-	// - 第一个逗号后为可选的 authzid，留空表示让 Kafka 从 token 的 sub 字段中提取 principal。
-	// - 第二个逗号后为可选的保留字段，通常为空。
+	// 根据 RFC 7628 第 3.1 节，GS2 header 部分:
+	// 	- "n" 表示客户端不支持 channel binding。
+	// 	- 第一个逗号后为可选的 authzid，留空表示让 Kafka 从 token 的 sub 字段中提取 principal。
+	// 	- 第二个逗号后为可选的保留字段，通常为空。
 	//
-	// 注意：
-	// 	不能在 authzid 中指定用户名（如 service-account-kafka-client），
+	// 注意:
+	// 	不能在 authzid 中指定用户名 ( 如 service-account-kafka-client )。
 	//  因为 Kafka 会验证它是否与 token 中的 sub 字段匹配。
 	initialResponse := fmt.Sprintf("n,,\x01auth=Bearer %s\x01\x01", token)
 
@@ -102,10 +102,11 @@ func (m *KafkaOAuthMechanism) getAccessToken(ctx context.Context) (string, error
 		return "", fmt.Errorf("failed to get access token with status [ %d ], body: %s", resp.StatusCode, string(body))
 	}
 
+	//nolint:tagliatelle // OAuth2 标准使用 snake_case
 	var tokenRes struct {
-		AccessToken string `json:"access_token"` //nolint:tagliatelle // OAuth2 标准使用 snake_case
-		TokenType   string `json:"token_type"`   //nolint:tagliatelle // OAuth2 标准使用 snake_case
-		ExpiresIn   int    `json:"expires_in"`   //nolint:tagliatelle // OAuth2 标准使用 snake_case
+		AccessToken string `json:"access_token"`
+		TokenType   string `json:"token_type"`
+		ExpiresIn   int    `json:"expires_in"`
 	}
 	if err := json.Unmarshal(body, &tokenRes); err != nil {
 		return "", fmt.Errorf("failed to parse http response body: %w", err)

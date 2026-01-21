@@ -1,28 +1,42 @@
 sharding:
-  # 用户表。
+  # 用户表
   biz_user:
-    db_prefix: "hermet"
-    tb_prefix: "biz_user"
+    db_prefix: hermet
+    tb_prefix: biz_user
     db_shard_count: 2
     tb_shard_count: 4
 
-  # 用户联系人表。
-  user_contact:
-    db_prefix: "hermet"
-    tb_prefix: "user_contact"
-    db_shard_count: 2
-    tb_shard_count: 4
-
-  # 联系人申请表。
+  # 联系人申请表
   contact_application:
-    db_prefix: "hermet"
-    tb_prefix: "contact_application"
+    db_prefix: hermet
+    tb_prefix: contact_application
     db_shard_count: 2
     tb_shard_count: 4
 
-  # 频道申请表。
+  # 频道申请表
   channel_application:
-    db_prefix: "hermet"
-    tb_prefix: "channel_application"
+    db_prefix: hermet
+    tb_prefix: channel_application
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 用户联系人表
+  user_contact:
+    db_prefix: hermet
+    tb_prefix: user_contact
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 用户联系人视图表
+  user_contact_view:
+    db_prefix: hermet
+    tb_prefix: user_contact_view
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 联系人反向索引表
+  contact_reverse_index:
+    db_prefix: hermet
+    tb_prefix: contact_reverse_index
     db_shard_count: 2
     tb_shard_count: 4

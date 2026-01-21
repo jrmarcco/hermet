@@ -8,6 +8,15 @@ const (
 	ApplicationStatusRejected ApplicationStatus = "rejected"
 )
 
+func (s ApplicationStatus) IsValid() bool {
+	switch s {
+	case ApplicationStatusPending, ApplicationStatusApproved, ApplicationStatusRejected:
+		return true
+	default:
+		return false
+	}
+}
+
 type ContactApplication struct {
 	ID uint64 `json:"id"`
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/jrmarcco/hermet/internal/api"
 	"github.com/jrmarcco/hermet/internal/app"
+	"github.com/jrmarcco/hermet/internal/cdc"
 	"github.com/jrmarcco/hermet/internal/pkg/providers"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/hermet/internal/repo/dao"
@@ -39,6 +40,8 @@ func main() {
 
 		// 初始化 kafka client。
 		providers.KafkaFxModule,
+		providers.KafkaProducerFxModule,
+		providers.KafkaConsumerFxModule,
 
 		// 初始化 jwt manager。
 		providers.JwtManagerFxModule,
@@ -64,6 +67,9 @@ func main() {
 		// 初始化 web。
 		api.APIFxModule,
 
+		// 初始化 cdc。
+		cdc.CdcFxModule,
+
 		// 初始化 app。
 		app.AppFxModule,
 	).Run()
@@ -73,13 +79,13 @@ func loadConfig() error {
 	viper.AddConfigPath("config")
 	viper.SetConfigType("yaml")
 
-	// 读取基础配置
+	// 读取基础配置。
 	viper.SetConfigName("base")
 	if err := viper.ReadInConfig(); err != nil {
 		return fmt.Errorf("failed to read base config: %w", err)
 	}
 
-	subConfigNames := []string{"redis", "db", "mongodb", "kafka", "sharding"}
+	subConfigNames := []string{"redis", "db", "mongodb", "kafka", "sharding", "cdc"}
 	for _, subConfigName := range subConfigNames {
 		viper.SetConfigName(subConfigName)
 		if err := viper.MergeInConfig(); err != nil {

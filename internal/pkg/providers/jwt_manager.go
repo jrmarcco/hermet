@@ -32,7 +32,7 @@ func newJwtManager() (jwtFxResult, error) {
 	}, nil
 }
 
-// newAccessTokenManager 创建用于 Access Token 的 Manager
+// newAccessTokenManager 创建用于 Access Token 的 Manager。
 func newAccessTokenManager() (xjwt.Manager[authv1.JwtPayload], error) {
 	cfg, err := loadJwtConfig("jwt.access")
 	if err != nil {
@@ -53,7 +53,7 @@ func newAccessTokenManager() (xjwt.Manager[authv1.JwtPayload], error) {
 	return manager, nil
 }
 
-// newRefreshTokenManager 创建用于 Refresh Token 的 Manager
+// newRefreshTokenManager 创建用于 Refresh Token 的 Manager。
 func newRefreshTokenManager() (xjwt.Manager[authv1.JwtPayload], error) {
 	cfg, err := loadJwtConfig("jwt.refresh")
 	if err != nil {
@@ -74,7 +74,7 @@ func newRefreshTokenManager() (xjwt.Manager[authv1.JwtPayload], error) {
 	return manager, nil
 }
 
-// loadJwtConfig 加载配置
+// loadJwtConfig 加载配置。
 func loadJwtConfig(key string) (*jwtConfig, error) {
 	cfg := &jwtConfig{}
 	if err := viper.UnmarshalKey(key, cfg); err != nil {

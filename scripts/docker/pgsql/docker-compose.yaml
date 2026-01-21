@@ -1,0 +1,45 @@
+x-postgresql-common: &postgresql-common
+  image: postgres:latest
+  restart: unless-stopped
+  networks:
+    - jrmarcco_net
+
+networks:
+  jrmarcco_net:
+    external: true
+
+services:
+  pgsql-hermet-0:
+    <<: *postgresql-common
+    hostname: pgsql-hermet-0
+    container_name: pgsql-hermet-0
+    ports:
+      - "15432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hermet_0}
+      POSTGRES_USER: ${POSTGRES_USER:-hermet_0}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-<passwd>}
+      # 启用逻辑复制 （ Debezium 同步数据必需 )
+      POSTGRES_INITDB_ARGS: "-c wal_level=logical"
+    volumes:
+      - ./data-0:/var/lib/postgresql/MAJOR/docker
+    networks:
+      - jrmarcco_net
+
+  pgsql-hermet-1:
+    <<: *postgresql-common
+    hostname: pgsql-hermet-1
+    container_name: pgsql-hermet-1
+    ports:
+      - "25432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hermet_1}
+      POSTGRES_USER: ${POSTGRES_USER:-hermet_1}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-<passwd>}
+      # 启用逻辑复制 （ Debezium 同步数据必需 )
+      POSTGRES_INITDB_ARGS: "-c wal_level=logical"
+    volumes:
+      - ./data-1:/var/lib/postgresql/MAJOR/docker
+    networks:
+      - jrmarcco_net
+

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -54,6 +55,9 @@ type tokenResp struct {
 func (h *AuthHandler) SignIn(ctx *gin.Context, req signInReq) (xgin.R, error) {
 	au, err := h.svc.SignIn(ctx, req.Account, req.AccountType, req.Credential)
 	if err != nil {
+		if errors.Is(err, errs.ErrRecordNotFound) {
+			return xgin.R{}, fmt.Errorf("%w: user not found", errs.ErrUnauthorized)
+		}
 		return xgin.R{}, err
 	}
 
@@ -115,18 +119,12 @@ func (h *AuthHandler) RefreshToken(ctx *gin.Context, req refreshTokenRequest) (x
 func (h *AuthHandler) SignOut(ctx *gin.Context) (xgin.R, error) {
 	val, ok := ctx.Get(xgin.ContextKeyAuthUser)
 	if !ok {
-		return xgin.R{
-			Code: http.StatusUnauthorized,
-			Msg:  "user is not signed in",
-		}, nil
+		return xgin.R{}, fmt.Errorf("%w: user is not signed in", errs.ErrUnauthorized)
 	}
 
 	au, ok := val.(xgin.ContextUser)
 	if !ok {
-		return xgin.R{
-			Code: http.StatusUnauthorized,
-			Msg:  "user is not signed in",
-		}, nil
+		return xgin.R{}, fmt.Errorf("%w: user is not signed in", errs.ErrUnauthorized)
 	}
 
 	go func() {

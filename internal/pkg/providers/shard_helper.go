@@ -33,14 +33,6 @@ type shardingConfig struct {
 	TBShardCount uint64 `mapstructure:"tb_shard_count"`
 }
 
-func newChannelApplicationShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
-	cfg := shardingConfig{}
-	if err := viper.UnmarshalKey("sharding.channel_application", &cfg); err != nil {
-		return nil, err
-	}
-	return newShardHelper(gen, extractor, cfg)
-}
-
 func newBizUserShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
 	cfg := shardingConfig{}
 	if err := viper.UnmarshalKey("sharding.biz_user", &cfg); err != nil {
@@ -57,9 +49,33 @@ func newContactApplicationShardHelper(gen idgen.Generator, extractor sharding.Sh
 	return newShardHelper(gen, extractor, cfg)
 }
 
+func newChannelApplicationShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
+	cfg := shardingConfig{}
+	if err := viper.UnmarshalKey("sharding.channel_application", &cfg); err != nil {
+		return nil, err
+	}
+	return newShardHelper(gen, extractor, cfg)
+}
+
 func newUserContactShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
 	cfg := shardingConfig{}
 	if err := viper.UnmarshalKey("sharding.user_contact", &cfg); err != nil {
+		return nil, err
+	}
+	return newShardHelper(gen, extractor, cfg)
+}
+
+func newUserContactViewShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
+	cfg := shardingConfig{}
+	if err := viper.UnmarshalKey("sharding.user_contact_view", &cfg); err != nil {
+		return nil, err
+	}
+	return newShardHelper(gen, extractor, cfg)
+}
+
+func newContactReverseIndexShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
+	cfg := shardingConfig{}
+	if err := viper.UnmarshalKey("sharding.contact_reverse_index", &cfg); err != nil {
 		return nil, err
 	}
 	return newShardHelper(gen, extractor, cfg)
@@ -70,14 +86,9 @@ func newShardHelper(
 	extractor sharding.ShardValExtractor,
 	cfg shardingConfig,
 ) (*sharding.ShardHelper, error) {
-	baseStrategy, err := sharding.NewModuloSharding(extractor, cfg.DBPrefix, cfg.TBPrefix, cfg.DBShardCount, cfg.TBShardCount)
+	strategy, err := sharding.NewModuloSharding(extractor, cfg.DBPrefix, cfg.TBPrefix, cfg.DBShardCount, cfg.TBShardCount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create modulo sharding: %w", err)
-	}
-
-	strategy, err := sharding.NewBalancedSharding(baseStrategy, sharding.BroadcastModeRoundRobin)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create balanced sharding: %w", err)
 	}
 
 	helper, err := sharding.NewShardHelper(gen, strategy)

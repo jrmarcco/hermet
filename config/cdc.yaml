@@ -1,0 +1,9 @@
+cdc:
+  contact_processor:
+    group_id: hermet-contact-processor
+    db_shard_count: 2
+    tb_shard_count: 4
+  conversation_processor:
+    group_id: hermet-conversation-processor
+    db_shard_count: 2
+    tb_shard_count: 4

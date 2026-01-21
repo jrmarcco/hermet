@@ -37,3 +37,27 @@ type UserContact struct {
 	CreatedAt int64 `json:"createdAt"`
 	UpdatedAt int64 `json:"updatedAt"`
 }
+
+// UserContactView 用户联系人视图。
+type UserContactView struct {
+	ID uint64 `json:"id"`
+
+	UserID    uint64 `json:"userId"`
+	ContactID uint64 `json:"contactId"`
+
+	ContactNickname string `json:"contactNickname"`
+	ContactAvatar   string `json:"contactAvatar"`
+	ContactInfoVer  int    `json:"contactInfoVer"`
+	ContactGender   string `json:"contactGender"`
+
+	RemarkName string   `json:"remarkName"`
+	Tags       []string `json:"tags"`
+
+	IsStarred bool `json:"isStarred"`
+	IsBlocked bool `json:"isBlocked"`
+
+	Mobile string            `json:"mobile"`
+	Source UserContactSource `json:"source"`
+
+	AddedAt int64 `json:"addedAt"`
+}

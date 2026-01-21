@@ -1,13 +1,13 @@
 # MongoDB 配置
 mongodb:
-  uri: "mongodb://192.168.3.3:27017"
-  db_name: "hermet"
-  app_name: "hermet"
+  uri: mongodb://192.168.3.3:27017
+  db_name: hermet
+  app_name: hermet
 
   # 认证信息
-  username: "jrmarcco"
-  password: "<passwd>"
-  auth_source: "admin"
+  username: jrmarcco
+  password: passwd
+  auth_source: admin
 
   # 连接池配置
   max_pool_size: 100
@@ -18,7 +18,7 @@ mongodb:
   shutdown_timeout: 1s
 
   tls:
-    ca: |
+    ca_cert: |
       -----BEGIN CERTIFICATE-----
       MIIDSTCCAjGgAwIBAgIUcUyxnveLP7h2ZomRyTosUyhKyDYwDQYJKoZIhvcNAQEL
       BQAwNDETMBEGA1UEAwwKTW9uZ29EQi1DQTEQMA4GA1UECgwHTW9uZ29EQjELMAkG

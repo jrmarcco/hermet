@@ -44,7 +44,7 @@ type mongoConfig struct {
 }
 
 type mongoTLSConfig struct {
-	CA      string `mapstructure:"ca"`
+	CaCert  string `mapstructure:"ca_cert"`
 	CertKey string `mapstructure:"cert_key"`
 	CertPem string `mapstructure:"cert_pem"`
 }
@@ -55,18 +55,20 @@ func newMongoClient(zapLogger *zap.Logger, lifecycle fx.Lifecycle) (mongoFxResul
 		return mongoFxResult{}, err
 	}
 
-	certPool := x509.NewCertPool()
-	if ok := certPool.AppendCertsFromPEM([]byte(cfg.TLS.CA)); !ok {
-		return mongoFxResult{}, fmt.Errorf("failed to append ca cert to pool")
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM([]byte(cfg.TLS.CaCert)) {
+		zapLogger.Error("[hermet-ioc] failed to append CA certificate to pool for MongoDB")
+		return mongoFxResult{}, fmt.Errorf("failed to append CA certificate to pool for MongoDB")
 	}
 	clientCert, err := tls.X509KeyPair([]byte(cfg.TLS.CertPem), []byte(cfg.TLS.CertKey))
 	if err != nil {
-		return mongoFxResult{}, fmt.Errorf("failed to load client cert: %w", err)
+		zapLogger.Error("[hermet-ioc] failed to load client cert for MongoDB", zap.Error(err))
+		return mongoFxResult{}, fmt.Errorf("failed to load client cert for MongoDB: %w", err)
 	}
 	tlsConfig := &tls.Config{
 		MinVersion:         tls.VersionTLS13,
 		InsecureSkipVerify: false,
-		RootCAs:            certPool,
+		RootCAs:            caCertPool,
 		Certificates:       []tls.Certificate{clientCert},
 	}
 

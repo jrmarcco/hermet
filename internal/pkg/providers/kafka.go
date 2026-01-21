@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/consumer"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl"
 	"github.com/segmentio/kafka-go/sasl/scram"
@@ -20,8 +20,8 @@ import (
 type kafkaFxResult struct {
 	fx.Out
 
-	Writer           *kafka.Writer                  `name:"ws_kafka_writer"`
-	ReaderCreateFunc consumer.KafkaReaderCreateFunc `name:"ws_kafka_reader_create_func"`
+	Writer           *kafka.Writer
+	ReaderCreateFunc xconsumer.KafkaReaderCreateFunc
 }
 
 type kafkaConfig struct {
@@ -57,11 +57,12 @@ type kafkaConsumerConfig struct {
 }
 
 type kafkaTLSConfig struct {
-	CA string `mapstructure:"ca"`
+	CaCert  string `mapstructure:"ca_cert"`
+	CertKey string `mapstructure:"cert_key"`
+	CertPem string `mapstructure:"cert_pem"`
 }
 
 type kafkaSaslConfig struct {
-	// 认证机制类型: "scram" (默认) 或 "oauth"
 	Mechanism string `mapstructure:"mechanism"`
 
 	// SCRAM 认证配置
@@ -84,19 +85,36 @@ func newKafkaClient(zapLogger *zap.Logger, lifecycle fx.Lifecycle) (kafkaFxResul
 		return kafkaFxResult{}, err
 	}
 
-	// 配置 TLS。
+	// 配置 TLS ( 强制要求启用 TLS )。
 	tlsConfig, err := configureKafkaTLS(cfg.TLS, zapLogger)
 	if err != nil {
 		return kafkaFxResult{}, err
 	}
 
-	// 配置 SASL。
-	saslMechanism, err := configureKafkaSasl(cfg.SASL, zapLogger)
-	if err != nil {
-		return kafkaFxResult{}, err
+	// 配置 Kafka Dialer。
+	const defaultDialTimeout = 10 * time.Second
+	dialer := &kafka.Dialer{
+		Timeout:   defaultDialTimeout,
+		DualStack: true,
+		TLS:       tlsConfig,
 	}
 
-	// 创建 Writer（Producer）。
+	// 配置 Kafka Transport。
+	transport := &kafka.Transport{
+		TLS: tlsConfig,
+	}
+
+	if cfg.SASL.Mechanism != "" {
+		// 启用 SASL 认证。
+		saslMechanism, err := configureKafkaSasl(cfg.SASL, zapLogger)
+		if err != nil {
+			return kafkaFxResult{}, err
+		}
+		dialer.SASLMechanism = saslMechanism
+		transport.SASL = saslMechanism
+	}
+
+	// 创建 Writer ( Producer )。
 	writer := &kafka.Writer{
 		Addr:         kafka.TCP(cfg.Brokers...),
 		Balancer:     &kafka.Hash{}, // 使用 Hash 负载均衡
@@ -108,10 +126,7 @@ func newKafkaClient(zapLogger *zap.Logger, lifecycle fx.Lifecycle) (kafkaFxResul
 		WriteTimeout: cfg.Producer.WriteTimeout,
 		RequiredAcks: getKafkaRequiredAcks(cfg.Producer.RequiredAcks),
 		Async:        false, // 同步模式
-		Transport: &kafka.Transport{
-			TLS:  tlsConfig,
-			SASL: saslMechanism,
-		},
+		Transport:    transport,
 	}
 
 	// 如果启用幂等性，设置为精确一次语义。
@@ -127,11 +142,8 @@ func newKafkaClient(zapLogger *zap.Logger, lifecycle fx.Lifecycle) (kafkaFxResul
 	)
 
 	// 创建 ReaderFactory，用于按需创建 Reader ( Consumer )。
-	const (
-		defaultReadBackoffMin = 100 * time.Millisecond
-		defaultReadBackoffMax = 1 * time.Second
-		defaultDialTimeout    = 10 * time.Second
-	)
+	const defaultReadBackoffMin = 100 * time.Millisecond
+	const defaultReadBackoffMax = 1 * time.Second
 	readerFactory := func(topic string, groupId string) *kafka.Reader {
 		reader := kafka.NewReader(kafka.ReaderConfig{
 			Brokers:        cfg.Brokers,
@@ -144,12 +156,7 @@ func newKafkaClient(zapLogger *zap.Logger, lifecycle fx.Lifecycle) (kafkaFxResul
 			ReadBackoffMax: defaultReadBackoffMax,
 			CommitInterval: cfg.Consumer.CommitInterval,
 			StartOffset:    cfg.Consumer.StartOffset,
-			Dialer: &kafka.Dialer{
-				Timeout:       defaultDialTimeout,
-				DualStack:     true,
-				TLS:           tlsConfig,
-				SASLMechanism: saslMechanism,
-			},
+			Dialer:         dialer,
 		})
 
 		zapLogger.Info(
@@ -162,7 +169,7 @@ func newKafkaClient(zapLogger *zap.Logger, lifecycle fx.Lifecycle) (kafkaFxResul
 		return reader
 	}
 
-	// 注册生命周期钩子。
+	// 注册生命周期 Hook。
 	lifecycle.Append(fx.Hook{
 		OnStop: func(_ context.Context) error {
 			if err := writer.Close(); err != nil {
@@ -191,34 +198,30 @@ func loadKafkaConfig() (*kafkaConfig, error) {
 
 // configureKafkaTLS 配置 TLS。
 func configureKafkaTLS(tlsCfg kafkaTLSConfig, logger *zap.Logger) (*tls.Config, error) {
-	if tlsCfg.CA == "" {
-		return nil, errors.New("CA file is required")
-	}
-
-	tlsConf := &tls.Config{
-		MinVersion:         tls.VersionTLS13,
-		InsecureSkipVerify: false, // 强制 TLS 认证
-	}
-
 	caCertPool := x509.NewCertPool()
-	if !caCertPool.AppendCertsFromPEM([]byte(tlsCfg.CA)) {
+	if ok := caCertPool.AppendCertsFromPEM([]byte(tlsCfg.CaCert)); !ok {
 		logger.Error("[synp-ioc-kafka] failed to append CA certificate to pool for kafka")
 		return nil, fmt.Errorf("failed to append CA certificate to pool for kafka")
 	}
-	tlsConf.RootCAs = caCertPool
+
+	clientCert, err := tls.X509KeyPair([]byte(tlsCfg.CertPem), []byte(tlsCfg.CertKey))
+	if err != nil {
+		logger.Error("[synp-ioc-kafka] failed to create certificate key pair for kafka", zap.Error(err))
+		return nil, fmt.Errorf("failed to create certificate key pair for kafka: %w", err)
+	}
 
 	logger.Info("[synp-ioc-kafka] successfully configured TLS for kafka")
-	return tlsConf, nil
+	return &tls.Config{
+		MinVersion:         tls.VersionTLS13,
+		InsecureSkipVerify: false, // 强制要求 TLS 认证
+		RootCAs:            caCertPool,
+		Certificates:       []tls.Certificate{clientCert},
+	}, nil
 }
 
 // configureKafkaSasl 配置 SASL 认证机制。
 func configureKafkaSasl(saslCfg kafkaSaslConfig, logger *zap.Logger) (sasl.Mechanism, error) {
-	// 默认使用 SCRAM 认证。
 	mechanism := saslCfg.Mechanism
-	if mechanism == "" {
-		mechanism = "scram"
-	}
-
 	switch mechanism {
 	case "scram":
 		return configureKafkaSaslScram(saslCfg, logger)

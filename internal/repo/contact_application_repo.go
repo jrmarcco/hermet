@@ -12,6 +12,7 @@ type ContactApplicationRepo interface {
 
 	UpdateStatus(ctx context.Context, applicationID uint64, status domain.ApplicationStatus) error
 
+	FindByID(ctx context.Context, applicationID uint64) (domain.ContactApplication, error)
 	ListPendingByTargetID(ctx context.Context, targetID uint64) ([]domain.ContactApplication, error)
 }
 
@@ -37,6 +38,14 @@ func (r *DefaultContactApplicationRepo) Save(ctx context.Context, application do
 
 func (r *DefaultContactApplicationRepo) UpdateStatus(ctx context.Context, applicationID uint64, status domain.ApplicationStatus) error {
 	return r.contactApplicationDao.UpdateStatus(ctx, applicationID, status)
+}
+
+func (r *DefaultContactApplicationRepo) FindByID(ctx context.Context, applicationID uint64) (domain.ContactApplication, error) {
+	entity, err := r.contactApplicationDao.FindByID(ctx, applicationID)
+	if err != nil {
+		return domain.ContactApplication{}, err
+	}
+	return r.toDomain(entity), nil
 }
 
 func (r *DefaultContactApplicationRepo) ListPendingByTargetID(ctx context.Context, targetID uint64) ([]domain.ContactApplication, error) {

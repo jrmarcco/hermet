@@ -5,17 +5,17 @@
 POST {{uri}}/api/v1/auth/sign-in
 Content-Type: application/json
 
-# {
-#     "account": "jrmarcco@gmail.com",
-#     "accountType": "email",
-#     "credential": "<passwd>"
-# }
-
 {
-    "account": "test-user-1@example.com",
+    "account": "jrmarcco@gmail.com",
     "accountType": "email",
-    "credential": "hermet@2026"
+    "credential": "<passwd>"
 }
+
+# {
+#     "account": "test-user-1@example.com",
+#     "accountType": "email",
+#     "credential": "hermet@2026"
+# }
 
 
 ### Refresh Access Token
@@ -34,10 +34,30 @@ x-access-token: Bearer {{signIn.response.body.$.data.accessToken}}
 Content-Type: application/json
 
 {
-    "contactId": 135343145434849280,
+    "contactId": 134605228232032256,
     "message": "hello hello!!!",
     "source": "search"
 }
+
+
+
+### Get Contacts
+GET {{uri}}/api/v1/contact/contacts
+x-access-token: Bearer {{signIn.response.body.$.data.accessToken}}
+Content-Type: application/json
+
+
+
+### Review Contact Application
+POST {{uri}}/api/v1/contact/review
+x-access-token: Bearer {{signIn.response.body.$.data.accessToken}}
+Content-Type: application/json
+
+{
+    "applicationId": 139648821490614272,
+    "status": "approved"
+}
+
 
 
 ### Get Contact Applications

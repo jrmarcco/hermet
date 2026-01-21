@@ -1,6 +1,6 @@
 package domain
 
-type ContactApplicantEvent struct {
+type ContactApplyEvent struct {
 	ApplicantID uint64            `json:"applicantId"` // 申请人 ID
 	TargetID    uint64            `json:"targetId"`    // 目标用户 ID
 	Message     string            `json:"message"`     // 申请消息
