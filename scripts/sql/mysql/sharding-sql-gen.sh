@@ -229,7 +229,7 @@ generate_sharding_sql() {
                 ')
 
                 # 替换表名。
-                table_section=$(echo "$table_section" | sed "s/[[:<:]]${table_name}[[:>:]]/${sharded_table_name}/g")
+                table_section=$(echo "$table_section" | sed -E "s/(^|[^a-zA-Z0-9_])${table_name}([^a-zA-Z0-9_]|$)/\1${sharded_table_name}\2/g")
 
                 # 替换 CONSTRAINT 名称 ( 添加分表后缀 )。
                 table_section=$(echo "$table_section" | sed -E "s/(CONSTRAINT[[:space:]]+)([a-zA-Z_][a-zA-Z0-9_]*)/\1\2_${table_idx}/g")
@@ -257,7 +257,7 @@ generate_sharding_sql() {
                         buffer = ""
                         found=0
                     }
-                ' | sed "s/[[:<:]]${table_name}[[:>:]]/${sharded_table_name}/g" | \
+                ' | sed -E "s/(^|[^a-zA-Z0-9_])${table_name}([^a-zA-Z0-9_]|$)/\1${sharded_table_name}\2/g" | \
                     sed -E "s/(INDEX[[:space:]]+)([a-zA-Z_][a-zA-Z0-9_]*)/\1\2_${table_idx}/g")
 
                 if [[ -n "$index_section" ]]; then
