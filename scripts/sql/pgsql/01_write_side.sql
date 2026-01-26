@@ -116,12 +116,6 @@ CREATE TABLE channel_member (
     channel_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
 
-    -- 成员角色
-    role VARCHAR(16) NOT NULL DEFAULT 'member',
-
-    -- 成员昵称 ( 群昵称 )
-    nickname VARCHAR(64) NOT NULL DEFAULT '',
-
     -- 加入 / 退出时间
     joined_at BIGINT NOT NULL,
     left_at BIGINT NOT NULL DEFAULT 0,
@@ -133,15 +127,13 @@ CREATE TABLE channel_member (
     -- 唯一约束 - 同一用户在同一频道中只能有一条记录
     CONSTRAINT uk_channel_member_channel_user UNIQUE(channel_id, user_id),
     -- 成员角色 - 枚举 ( owner=群主 / admin=管理员 / member=普通成员 )
-    CONSTRAINT chk_channel_member_role CHECK (role IN ('owner', 'admin', 'member'))
+    CONSTRAINT chk_channel_member_role CHECK (member_role IN ('owner', 'admin', 'member'))
 );
 
 COMMENT ON TABLE channel_member IS '【 写入侧 】频道成员表 ( 群聊成员 )';
 COMMENT ON COLUMN channel_member.id IS '主键 ID';
 COMMENT ON COLUMN channel_member.channel_id IS '频道 ID';
 COMMENT ON COLUMN channel_member.user_id IS '用户 ID';
-COMMENT ON COLUMN channel_member.role IS '成员角色 ( owner=群主 / admin=管理员 / member=普通成员 )';
-COMMENT ON COLUMN channel_member.nickname IS '群昵称（用户在该群的昵称）';
 COMMENT ON COLUMN channel_member.joined_at IS '加入时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN channel_member.left_at IS '退出时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN channel_member.created_at IS '创建时间戳 ( Unix 毫秒值 )';

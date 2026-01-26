@@ -1,56 +1,30 @@
 package cdc
 
 import (
-	"context"
-
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
 	"go.uber.org/zap"
 )
 
 var _ Processor = (*ConversationProcessor)(nil)
 
+// ConversationProcessor 是会话 CDC 处理器。
+// 负责消费会话 CDC 事件，当用户联系人关系建立后，创建会话。
 type ConversationProcessor struct {
-	consumerFactory xconsumer.ConsumerFactory
-
-	dbShardCount int // 数据库分片数量
-	tbShardCount int // 表分片数量
-
-	groupID string
-
-	ctx        context.Context
-	cancelFunc context.CancelFunc
-
-	logger *zap.Logger
+	*BaseProcessor
 }
 
 func NewConversationProcessor(
-	consumerFactory xconsumer.ConsumerFactory,
 	dbShardCount, tbShardCount int,
 	groupID string,
+	consumerFactory xconsumer.ConsumerFactory,
 	zapLogger *zap.Logger,
 ) *ConversationProcessor {
-	ctx, cancel := context.WithCancel(context.Background())
-
 	return &ConversationProcessor{
-		consumerFactory: consumerFactory,
-
-		dbShardCount: dbShardCount,
-		tbShardCount: tbShardCount,
-
-		groupID: groupID,
-
-		ctx:        ctx,
-		cancelFunc: cancel,
-
-		logger: zapLogger,
+		BaseProcessor: NewBaseProcessor(ProcessorConfig{
+			DBShardCount: dbShardCount,
+			TBShardCount: tbShardCount,
+			GroupID:      groupID,
+			TopicPattern: "pgsql_hermet_%d.public.conversation_%d",
+		}, consumerFactory, zapLogger),
 	}
-}
-
-func (p *ConversationProcessor) Start(_ ProcessFunc) error {
-	return nil
-}
-
-func (p *ConversationProcessor) Stop() error {
-	p.cancelFunc()
-	return nil
 }

@@ -164,15 +164,15 @@ generate_db_init_scripts() {
 # 提取 SQL 文件中的所有表名。
 extract_table_names() {
     local sql_file="$1"
-    grep -iE '^\s*(CREATE|DROP)\s+TABLE\s+(IF\s+EXISTS\s+)?[a-zA-Z_][a-zA-Z0-9_]*' "$sql_file" | \
-        sed -E 's/.*TABLE\s+(IF\s+EXISTS\s+)?([a-zA-Z_][a-zA-Z0-9_]*).*/\2/' | sort -u
+    grep -iE '^[[:space:]]*(CREATE|DROP)[[:space:]]+TABLE[[:space:]]+(IF[[:space:]]+EXISTS[[:space:]]+)?[a-zA-Z_][a-zA-Z0-9_]*' "$sql_file" | \
+        sed -E 's/.*TABLE[[:space:]]+(IF[[:space:]]+EXISTS[[:space:]]+)?([a-zA-Z_][a-zA-Z0-9_]*).*/\2/' | sort -u
 }
 
 # 提取 SQL 文件中的所有 TYPE 名。
 extract_type_names() {
     local sql_file="$1"
-    grep -iE '^\s*(CREATE|DROP)\s+TYPE\s+(IF\s+EXISTS\s+)?[a-zA-Z_][a-zA-Z0-9_]*' "$sql_file" | \
-        sed -E 's/.*TYPE\s+(IF\s+EXISTS\s+)?([a-zA-Z_][a-zA-Z0-9_]*).*/\2/' | sort -u
+    grep -iE '^[[:space:]]*(CREATE|DROP)[[:space:]]+TYPE[[:space:]]+(IF[[:space:]]+EXISTS[[:space:]]+)?[a-zA-Z_][a-zA-Z0-9_]*' "$sql_file" | \
+        sed -E 's/.*TYPE[[:space:]]+(IF[[:space:]]+EXISTS[[:space:]]+)?([a-zA-Z_][a-zA-Z0-9_]*).*/\2/' | sort -u
 }
 
 # 生成单个分库分表 SQL。
@@ -238,8 +238,10 @@ generate_sharding_sql() {
                 local table_section
                 table_section=$(echo "$content" | awk -v table="$table_name" '
                     /DROP TABLE.*IF EXISTS/ {
-                        # 精确匹配表名: IF EXISTS table; 或 IF EXISTS table<空格>
-                        if ($0 ~ "IF EXISTS " table ";$" || $0 ~ "IF EXISTS " table "[[:space:]]") {
+                        # 精确匹配表名: IF EXISTS table; 或 IF EXISTS table 后面跟空格/分号
+                        if (index($0, "IF EXISTS " table ";") > 0 ||
+                            (index($0, "IF EXISTS " table " ") > 0) ||
+                            (index($0, "IF EXISTS " table) > 0 && $0 ~ /IF EXISTS [a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*$/)) {
                             found=1
                         }
                     }
@@ -250,7 +252,7 @@ generate_sharding_sql() {
                 ')
 
                 # 替换表名。
-                table_section=$(echo "$table_section" | sed "s/\b${table_name}\b/${sharded_table_name}/g")
+                table_section=$(echo "$table_section" | sed "s/[[:<:]]${table_name}[[:>:]]/${sharded_table_name}/g")
 
                 # 替换 CONSTRAINT 名称 ( 添加分表后缀 )。
                 table_section=$(echo "$table_section" | sed -E "s/(CONSTRAINT[[:space:]]+)([a-zA-Z_][a-zA-Z0-9_]*)/\1\2_${table_idx}/g")
@@ -260,7 +262,7 @@ generate_sharding_sql() {
 
                 # 提取该表的 COMMENT 语句。
                 local comment_section
-                comment_section=$(echo "$content" | grep -E "COMMENT ON (TABLE|COLUMN) ${table_name}([[:space:]]|\\.)" | sed "s/\b${table_name}\b/${sharded_table_name}/g")
+                comment_section=$(echo "$content" | grep -E "COMMENT ON (TABLE|COLUMN) ${table_name}([[:space:]]|\\.)" 2>/dev/null | sed "s/[[:<:]]${table_name}[[:>:]]/${sharded_table_name}/g")
 
                 if [[ -n "$comment_section" ]]; then
                     echo "$comment_section"
@@ -272,8 +274,8 @@ generate_sharding_sql() {
                 index_section=$(echo "$content" | awk -v table="$table_name" '
                     # 匹配 CREATE INDEX ... ON table_name(
                     /CREATE[[:space:]]+.*INDEX.*ON[[:space:]]+/ {
-                        # 检查是否包含目标表名
-                        if ($0 ~ "ON[[:space:]]+" table "[[:space:]]*\\(") {
+                        # 检查是否包含目标表名: ON table( 或 ON table (
+                        if (index($0, "ON " table "(") > 0 || index($0, "ON " table " (") > 0) {
                             found=1
                         }
                     }
@@ -287,7 +289,7 @@ generate_sharding_sql() {
                         buffer = ""
                         found=0
                     }
-                ' | sed "s/\b${table_name}\b/${sharded_table_name}/g" | \
+                ' | sed "s/[[:<:]]${table_name}[[:>:]]/${sharded_table_name}/g" | \
                     sed -E "s/(INDEX[[:space:]]+)([a-zA-Z_][a-zA-Z0-9_]*)/\1\2_${table_idx}/g")
 
                 if [[ -n "$index_section" ]]; then

@@ -11,20 +11,20 @@ var DaoFxModule = fx.Module(
 			fx.ParamTags(`name:"db_sharding_clients"`, `name:"biz_user_shard_helper"`),
 		),
 
-		// 联系人申请表。
+		// 联系人申请。
 		fx.Annotate(
 			NewDefaultContactApplicationDao,
 			fx.As(new(ContactApplicationDao)),
 			fx.ParamTags(`name:"db_sharding_clients"`, `name:"contact_application_shard_helper"`),
 		),
-		// 频道申请表。
+		// 频道申请。
 		fx.Annotate(
 			NewDefaultChannelApplicationDao,
 			fx.As(new(ChannelApplicationDao)),
 			fx.ParamTags(`name:"db_sharding_clients"`, `name:"channel_application_shard_helper"`),
 		),
 
-		// 用户联系人表。
+		// 用户联系人。
 		fx.Annotate(
 			NewDefaultUserContactDao,
 			fx.As(new(UserContactDao)),
@@ -34,6 +34,14 @@ var DaoFxModule = fx.Module(
 				`name:"user_contact_view_shard_helper"`,
 				`name:"contact_reverse_index_shard_helper"`,
 			),
+		),
+		// TODO:用户频道。
+
+		// 用户会话。
+		fx.Annotate(
+			NewDefaultUserConversationDao,
+			fx.As(new(UserConversationDao)),
+			fx.ParamTags(`name:"db_sharding_clients"`, `name:"user_conversation_shard_helper"`),
 		),
 
 		// 消息 Dao ( MongoDB )。

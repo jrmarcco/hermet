@@ -24,7 +24,7 @@ CREATE TABLE user_contact_view (
     is_starred BOOLEAN NOT NULL DEFAULT FALSE,                  -- 星标
     is_blocked BOOLEAN NOT NULL DEFAULT FALSE,                  -- 黑名单
 
-    -- 扩展信息 ( 冗余自 user 表 )
+    -- 扩展信息 ( 冗余自 biz_user 表 )
     mobile VARCHAR(16) NOT NULL DEFAULT '',                     -- 手机号
     source VARCHAR(16) NOT NULL DEFAULT 'search',               -- 添加来源 ( search=搜索 / qrcode=扫码 / group=群聊 )
 
@@ -82,6 +82,56 @@ CREATE INDEX idx_ucov_initial ON user_contact_view(
     LEFT(contact_nickname, 1),
     contact_nickname
 ) WHERE deleted_at = 0;
+
+
+-- 频道成员视图表 ( 群聊成员展示专用 - 冗余成员信息 )
+DROP TABLE IF EXISTS channel_member_view;
+CREATE TABLE channel_member_view (
+    id BIGINT PRIMARY KEY,
+
+    channel_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+
+    -- 成员关系信息 ( 冗余自 channel_member 表 )
+    member_role VARCHAR(16) NOT NULL DEFAULT 'member',      -- 成员角色
+    member_nickname VARCHAR(64) NOT NULL DEFAULT '',        -- 群昵称
+
+    -- 用户信息 ( 冗余自 biz_user 表 )
+    user_nickname VARCHAR(128) NOT NULL DEFAULT '',         -- 昵称 ( 冗余 )
+    user_avatar VARCHAR(512) NOT NULL DEFAULT '',           -- 头像 ( 冗余 )
+    user_gender VARCHAR(16) NOT NULL DEFAULT 'unknown',     -- 性别
+    user_remark VARCHAR(128) NOT NULL DEFAULT '',           -- 备注名
+    user_info_ver INT NOT NULL DEFAULT 1,                   -- 【 CQRS 关键字段 】用户信息版本号
+
+    -- 时间信息
+    joined_at BIGINT NOT NULL,
+    left_at BIGINT NOT NULL DEFAULT 0,
+
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+
+    -- 约束
+    CONSTRAINT uk_channel_member_view UNIQUE(channel_id, user_id),
+    CONSTRAINT chk_member_role CHECK (member_role IN ('owner', 'admin', 'member')),
+    CONSTRAINT chk_user_gender CHECK (user_gender IN ('unknown', 'male', 'female'))
+);
+
+COMMENT ON TABLE channel_member_view IS '【 读取侧 】频道成员视图表 ( 用于群成员列表展示 )';
+COMMENT ON COLUMN channel_member_view.user_info_ver IS '【 CQRS 关键字段 】用户信息版本号 ( 用于同步检测 )';
+
+-- 索引 ( 针对群成员查询优化 )
+-- 1. 群成员列表查询
+CREATE INDEX idx_cmv_channel_active ON channel_member_view(
+    channel_id,
+    member_role,
+    user_nickname
+) WHERE left_at = 0;
+
+-- 2. 用户的所有群聊
+CREATE INDEX idx_cmv_user_channels ON channel_member_view(
+    user_id,
+    joined_at DESC
+) WHERE left_at = 0;
 
 
 -- 用户会话视图表 ( 会话列表专用 - 冗余所有展示字段 )

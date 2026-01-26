@@ -18,12 +18,19 @@ const (
 	contactApplicationCacheTTL = 24 * time.Hour
 )
 
+// CDCService 是 CDC 服务接口。
 type CDCService interface {
 	// ProcessContact 处理联系人申请审批事件。
 	// 审批通过建立联系人关联关系。
 	// msg 是 debezium 推送到 kafka 的消息。
 	ProcessContact(ctx context.Context, msg *xmq.Message) error
+
+	// ProcessConversation 处理会话创建事件。
+	// 用户联系人关系建立后，创建会话。
+	ProcessConversation(ctx context.Context, msg *xmq.Message) error
 }
+
+var _ CDCService = (*DefaultCDCService)(nil)
 
 type DefaultCDCService struct {
 	rdb             redis.Cmdable
@@ -58,7 +65,7 @@ func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message
 	// 幂等性判断 ( 防止重复处理相同的联系人申请事件 )。
 	cacheKey := fmt.Sprintf("contact:application:%d", event.ID)
 	if exists, _ := s.rdb.Exists(ctx, cacheKey).Result(); exists > 0 {
-		s.logger.Debug("[hermet] contact application already processed", zap.Uint64("application_id", event.ID))
+		s.logger.Debug("[hermet-cdc-contact] contact application already processed", zap.Uint64("application_id", event.ID))
 		return nil
 	}
 
@@ -88,12 +95,16 @@ func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message
 	})
 
 	if err := eg.Wait(); err != nil {
-		s.logger.Error("[hermet] failed to create contact relation", zap.Uint64("application_id", event.ID), zap.Error(err))
+		s.logger.Error("[hermet-cdc-contact] failed to create contact relation", zap.Uint64("application_id", event.ID), zap.Error(err))
 		return err
 	}
 
 	// 关联关系建立成功，设置缓存标记 ( 用于幂等性判断 )。
 	s.rdb.Set(ctx, cacheKey, "1", contactApplicationCacheTTL)
-
 	return nil
+}
+
+func (s *DefaultCDCService) ProcessConversation(_ context.Context, _ *xmq.Message) error {
+	// TODO: not implemented.
+	panic("not implemented")
 }

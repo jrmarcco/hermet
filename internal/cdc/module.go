@@ -33,7 +33,7 @@ func newContactProcessor(
 		return nil, err
 	}
 
-	processor := NewContactProcessor(consumerFactory, cfg.DBShardCount, cfg.TBShardCount, cfg.GroupID, zapLogger)
+	processor := NewContactProcessor(cfg.DBShardCount, cfg.TBShardCount, cfg.GroupID, consumerFactory, zapLogger)
 	lifecycle.Append(fx.Hook{
 		OnStart: func(_ context.Context) error {
 			if err := processor.Start(cdcService.ProcessContact); err != nil {
@@ -50,6 +50,7 @@ func newContactProcessor(
 }
 
 func newConversationProcessor(
+	cdcService service.CDCService,
 	consumerFactory xconsumer.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
@@ -59,10 +60,13 @@ func newConversationProcessor(
 		return nil, err
 	}
 
-	processor := NewConversationProcessor(consumerFactory, cfg.DBShardCount, cfg.TBShardCount, cfg.GroupID, zapLogger)
+	processor := NewConversationProcessor(cfg.DBShardCount, cfg.TBShardCount, cfg.GroupID, consumerFactory, zapLogger)
 	lifecycle.Append(fx.Hook{
 		OnStart: func(_ context.Context) error {
-			// TODO: 消费会话 CDC 事件，并处理会话相关业务。
+			if err := processor.Start(cdcService.ProcessConversation); err != nil {
+				zapLogger.Error("failed to start conversation processor", zap.Error(err))
+				return err
+			}
 			return nil
 		},
 		OnStop: func(_ context.Context) error {

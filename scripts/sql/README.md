@@ -64,10 +64,10 @@
 │                   Debezium CDC                                  │
 └─────────────────────────────────────────────────────────────────┘
                               │
-                              ▼ Kafka: db.contact_application
+                              ▼ Kafka
 ┌─────────────────────────────────────────────────────────────────┐
 │              Phase 2 - Contact Processor                        │
-│                 ( Comsume CDC event )                           │    
+│                 ( Comsume CDC event )                           │
 │                                                                 │
 │           status: pending → approved                            │
 │                         │                                       │
@@ -79,10 +79,10 @@
 │   • user_contact_view              • user_contact_view          │
 └─────────────────────────────────────────────────────────────────┘
                               │
-                              ▼ Kafka: db.user_contact
+                              ▼ Kafka
 ┌─────────────────────────────────────────────────────────────────┐
 │             Phase 2 - Conversation Processor                    │
-│                  ( Comsume CDC event )                          │    
+│                  ( Comsume CDC event )                          │
 │                                                                 │
 │               聚合双向联系人创建事件，创建会话                        │
 │         ┌───────────────┴───────────────┐                       │
