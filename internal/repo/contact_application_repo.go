@@ -86,7 +86,7 @@ func (r *DefaultContactApplicationRepo) toDomain(entity dao.ContactApplication) 
 		ApplicantAvatar:    entity.ApplicantAvatar,
 		ApplicationStatus:  domain.ApplicationStatus(entity.ApplicationStatus),
 		ApplicationMessage: entity.ApplicationMessage,
-		Source:             domain.UserContactSource(entity.Source),
+		Source:             domain.ContactSource(entity.Source),
 		ReviewedAt:         entity.ReviewedAt,
 		CreatedAt:          entity.CreatedAt,
 		UpdatedAt:          entity.UpdatedAt,

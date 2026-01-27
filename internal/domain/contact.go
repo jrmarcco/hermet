@@ -1,32 +1,32 @@
 package domain
 
-type UserContactSource string
+type ContactSource string
 
 const (
-	UserContactSourceSearch UserContactSource = "search"
-	UserContactSourceQRCode UserContactSource = "qrcode"
-	UserContactSourceGroup  UserContactSource = "group"
+	ContactSourceSearch ContactSource = "search"
+	ContactSourceQRCode ContactSource = "qrcode"
+	ContactSourceGroup  ContactSource = "group"
 )
 
-func (s UserContactSource) IsValid() bool {
+func (s ContactSource) IsValid() bool {
 	switch s {
-	case UserContactSourceSearch, UserContactSourceQRCode, UserContactSourceGroup:
+	case ContactSourceSearch, ContactSourceQRCode, ContactSourceGroup:
 		return true
 	default:
 		return false
 	}
 }
 
-type UserContact struct {
+type Contact struct {
 	ID uint64 `json:"id"`
 
 	UserID    uint64 `json:"userId"`
 	ContactID uint64 `json:"contactId"`
 
-	RemarkName string            `json:"remarkName"`
-	Source     UserContactSource `json:"source"`
-	Tags       []string          `json:"tags"`
-	GroupName  string            `json:"groupName"`
+	RemarkName string        `json:"remarkName"`
+	Source     ContactSource `json:"source"`
+	Tags       []string      `json:"tags"`
+	GroupName  string        `json:"groupName"`
 
 	IsStarred bool `json:"isStarred"`
 	IsBlocked bool `json:"isBlocked"`
@@ -38,8 +38,8 @@ type UserContact struct {
 	UpdatedAt int64 `json:"updatedAt"`
 }
 
-// UserContactView 用户联系人视图。
-type UserContactView struct {
+// ContactView 联系人视图。
+type ContactView struct {
 	ID uint64 `json:"id"`
 
 	UserID    uint64 `json:"userId"`
@@ -56,8 +56,8 @@ type UserContactView struct {
 	IsStarred bool `json:"isStarred"`
 	IsBlocked bool `json:"isBlocked"`
 
-	Mobile string            `json:"mobile"`
-	Source UserContactSource `json:"source"`
+	Mobile string        `json:"mobile"`
+	Source ContactSource `json:"source"`
 
 	AddedAt int64 `json:"addedAt"`
 }

@@ -8,17 +8,16 @@ CREATE TABLE contact_application (
     id BIGINT PRIMARY KEY,
 
     target_id BIGINT NOT NULL,
+    applicant_id BIGINT NOT NULL,
 
     -- 申请用户信息。
-    applicant_id BIGINT NOT NULL,
     applicant_name VARCHAR(128) NOT NULL DEFAULT '',
     applicant_avatar VARCHAR(256) NOT NULL DEFAULT '',
+    application_status VARCHAR(16) NOT NULL DEFAULT 'pending',
+    application_message VARCHAR(256) NOT NULL DEFAULT '',
 
     -- 添加来源 ( search=搜索添加 / qrcode=扫码添加 / group=群聊添加 )
     source VARCHAR(16) NOT NULL DEFAULT 'search',
-
-    application_status VARCHAR(16) NOT NULL DEFAULT 'pending',
-    application_message VARCHAR(256) NOT NULL DEFAULT '',
 
     reviewed_at BIGINT NOT NULL DEFAULT 0,
 
@@ -38,9 +37,9 @@ COMMENT ON COLUMN contact_application.target_id IS '目标用户 ID';
 COMMENT ON COLUMN contact_application.applicant_id IS '申请人 ID';
 COMMENT ON COLUMN contact_application.applicant_name IS '申请人昵称';
 COMMENT ON COLUMN contact_application.applicant_avatar IS '申请人头像';
-COMMENT ON COLUMN contact_application.source IS '添加来源 ( search=搜索添加 / qrcode=扫码添加 / group=群聊添加 )';
 COMMENT ON COLUMN contact_application.application_status IS '申请状态 ( pending=待处理 / approved=已批准 / rejected=已拒绝 )';
 COMMENT ON COLUMN contact_application.application_message IS '申请验证消息';
+COMMENT ON COLUMN contact_application.source IS '添加来源 ( search=搜索添加 / qrcode=扫码添加 / group=群聊添加 )';
 COMMENT ON COLUMN contact_application.reviewed_at IS '审批时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN contact_application.created_at IS '创建时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN contact_application.updated_at IS '更新时间戳 ( Unix 毫秒值 )';

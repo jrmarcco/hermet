@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	contactApplicationCacheTTL = 24 * time.Hour
+	// CDC 幂等操作 redis 缓存过期时间。
+	cdcIdempotentCacheTTL = 24 * time.Hour
 )
 
 // CDCService 是 CDC 服务接口。
@@ -33,20 +34,21 @@ type CDCService interface {
 var _ CDCService = (*DefaultCDCService)(nil)
 
 type DefaultCDCService struct {
-	rdb             redis.Cmdable
-	userContactRepo repo.UserContactRepo
+	rdb              redis.Cmdable
+	contactRepo      repo.ContactRepo
+	conversationRepo repo.ConversationRepo
 
 	logger *zap.Logger
 }
 
 func NewDefaultCDCService(
 	rdb redis.Cmdable,
-	userContactRepo repo.UserContactRepo,
+	userContactRepo repo.ContactRepo,
 	logger *zap.Logger,
 ) *DefaultCDCService {
 	return &DefaultCDCService{
-		rdb:             rdb,
-		userContactRepo: userContactRepo,
+		rdb:         rdb,
+		contactRepo: userContactRepo,
 
 		logger: logger,
 	}
@@ -74,7 +76,7 @@ func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message
 
 	// 创建 A -> B 的联系人关系。
 	eg.Go(func() error {
-		_, err := s.userContactRepo.Create(ctx, domain.UserContact{
+		err := s.contactRepo.Create(ctx, domain.Contact{
 			UserID:    event.ApplicantID,
 			ContactID: event.TargetID,
 			Source:    event.Source,
@@ -85,11 +87,11 @@ func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message
 
 	// 创建 B -> A 的联系人关系。
 	eg.Go(func() error {
-		_, err := s.userContactRepo.Create(ctx, domain.UserContact{
+		err := s.contactRepo.Create(ctx, domain.Contact{
 			UserID:    event.TargetID,
 			ContactID: event.ApplicantID,
 			Source:    event.Source,
-			AddedAt:   event.CreatedAt,
+			AddedAt:   event.ReviewedAt,
 		})
 		return err
 	})
@@ -100,11 +102,40 @@ func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message
 	}
 
 	// 关联关系建立成功，设置缓存标记 ( 用于幂等性判断 )。
-	s.rdb.Set(ctx, cacheKey, "1", contactApplicationCacheTTL)
+	s.rdb.Set(ctx, cacheKey, "1", cdcIdempotentCacheTTL)
 	return nil
 }
 
-func (s *DefaultCDCService) ProcessConversation(_ context.Context, _ *xmq.Message) error {
-	// TODO: not implemented.
-	panic("not implemented")
+func (s *DefaultCDCService) ProcessConversation(ctx context.Context, msg *xmq.Message) error {
+	var event domain.UserContactCDCEvent
+	if err := json.Unmarshal(msg.Val, &event); err != nil {
+		return fmt.Errorf("failed to unmarshal user contact cdc event: %w", err)
+	}
+
+	// 幂等性判断 ( 防止重复处理相同的联系人关系建立事件 )。
+	cacheKey := fmt.Sprintf("conversation:relation:%d-%d", event.UserID, event.ContactID)
+	if exists, _ := s.rdb.Exists(ctx, cacheKey).Result(); exists > 0 {
+		s.logger.Debug(
+			"[hermet-cdc-conversation] conversation already processed",
+			zap.Uint64("user_id", event.UserID),
+			zap.Uint64("contact_id", event.ContactID),
+		)
+		return nil
+	}
+
+	// 创建会话 ( 这里消费的是联系人关系建立事件，只需要创建会话即可 )。
+	err := s.conversationRepo.Create(ctx, domain.ConversationView{
+		UserID:           event.UserID,
+		TargetID:         event.ContactID,
+		ConversationType: domain.ConversationTypeSingle,
+		OpenedAt:         event.AddedAt,
+	})
+	if err != nil {
+		s.logger.Error("[hermet-cdc-conversation] failed to create conversation", zap.Error(err))
+		return err
+	}
+
+	// 关联关系建立成功，设置缓存标记 ( 用于幂等性判断 )。
+	s.rdb.Set(ctx, cacheKey, "1", cdcIdempotentCacheTTL)
+	return nil
 }

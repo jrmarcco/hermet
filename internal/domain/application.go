@@ -29,7 +29,7 @@ type ContactApplication struct {
 	ApplicationStatus  ApplicationStatus `json:"applicationStatus"`
 	ApplicationMessage string            `json:"applicationMessage"`
 
-	Source UserContactSource `json:"source"` // 添加来源 ( search=搜索添加 / qrcode=扫码添加 / group=群聊添加 )
+	Source ContactSource `json:"source"` // 添加来源 ( search=搜索添加 / qrcode=扫码添加 / group=群聊添加 )
 
 	ReviewedAt int64 `json:"reviewedAt"` // 审批时间戳 ( Unix 毫秒值 )
 

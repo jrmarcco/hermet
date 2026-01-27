@@ -16,7 +16,7 @@ type ContactService interface {
 
 	ReviewApplication(ctx context.Context, userID uint64, event domain.ContactReviewEvent) error
 
-	GetContacts(ctx context.Context, userID uint64) ([]domain.UserContactView, error)
+	GetContacts(ctx context.Context, userID uint64) ([]domain.ContactView, error)
 	GetApplications(ctx context.Context, userID uint64) ([]domain.ContactApplication, error)
 }
 
@@ -25,7 +25,7 @@ var _ ContactService = (*DefaultContactService)(nil)
 type DefaultContactService struct {
 	bizUserRepo repo.BizUserRepo
 
-	userContactRepo        repo.UserContactRepo
+	contactRepo            repo.ContactRepo
 	contactApplicationRepo repo.ContactApplicationRepo
 
 	logger *zap.Logger
@@ -33,14 +33,14 @@ type DefaultContactService struct {
 
 func NewDefaultContactService(
 	bizUserRepo repo.BizUserRepo,
-	userContactRepo repo.UserContactRepo,
+	contactRepo repo.ContactRepo,
 	contactApplicationRepo repo.ContactApplicationRepo,
 	logger *zap.Logger,
 ) *DefaultContactService {
 	return &DefaultContactService{
 		bizUserRepo: bizUserRepo,
 
-		userContactRepo:        userContactRepo,
+		contactRepo:            contactRepo,
 		contactApplicationRepo: contactApplicationRepo,
 
 		logger: logger,
@@ -49,7 +49,7 @@ func NewDefaultContactService(
 
 func (s *DefaultContactService) Apply(ctx context.Context, event domain.ContactApplyEvent) error {
 	// 判断是否已经存在联系人。
-	uc, err := s.userContactRepo.FindByUserIDAndContactID(ctx, event.ApplicantID, event.TargetID)
+	uc, err := s.contactRepo.FindByUserIDAndContactID(ctx, event.ApplicantID, event.TargetID)
 	if err != nil && !errors.Is(err, errs.ErrRecordNotFound) {
 		return err
 	}
@@ -113,8 +113,8 @@ func (s *DefaultContactService) ReviewApplication(ctx context.Context, userID ui
 	return nil
 }
 
-func (s *DefaultContactService) GetContacts(ctx context.Context, userID uint64) ([]domain.UserContactView, error) {
-	ucvs, err := s.userContactRepo.ListViewByUserID(ctx, userID)
+func (s *DefaultContactService) GetContacts(ctx context.Context, userID uint64) ([]domain.ContactView, error) {
+	ucvs, err := s.contactRepo.ListViewByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}

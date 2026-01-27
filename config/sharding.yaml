@@ -20,15 +20,15 @@ sharding:
     db_shard_count: 2
     tb_shard_count: 4
 
-  # 用户联系人表
-  user_contact:
+  # 联系人表
+  contact:
     db_prefix: hermet
     tb_prefix: user_contact
     db_shard_count: 2
     tb_shard_count: 4
 
-  # 用户联系人视图表
-  user_contact_view:
+  # 联系人视图表
+  contact_view:
     db_prefix: hermet
     tb_prefix: user_contact_view
     db_shard_count: 2
@@ -38,5 +38,26 @@ sharding:
   contact_reverse_index:
     db_prefix: hermet
     tb_prefix: contact_reverse_index
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 会话表
+  conversation:
+    db_prefix: hermet
+    tb_prefix: conversation
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 会话视图表
+  conversation_view:
+    db_prefix: hermet
+    tb_prefix: conversation_view
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 会话反向索引表
+  conversation_reverse_index:
+    db_prefix: hermet
+    tb_prefix: conversation_reverse_index
     db_shard_count: 2
     tb_shard_count: 4

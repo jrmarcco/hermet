@@ -81,31 +81,41 @@ var ShardingFxModule = fx.Module(
 			fx.ResultTags(`name:"biz_user_shard_helper"`),
 		),
 
-		// 联系人申请表。
+		// 联系人申请。
 		fx.Annotate(
 			newContactApplicationShardHelper,
 			fx.ResultTags(`name:"contact_application_shard_helper"`),
 		),
-		// 频道申请表。
+		// 频道申请。
 		fx.Annotate(
 			newChannelApplicationShardHelper,
 			fx.ResultTags(`name:"channel_application_shard_helper"`),
 		),
 
-		// 用户联系人表。
+		// 用户联系人。
 		fx.Annotate(
-			newUserContactShardHelper,
-			fx.ResultTags(`name:"user_contact_shard_helper"`),
+			newContactShardHelper,
+			fx.ResultTags(`name:"contact_shard_helper"`),
 		),
-		// 用户联系人视图表。
+		// 用户联系人视图。
 		fx.Annotate(
-			newUserContactViewShardHelper,
-			fx.ResultTags(`name:"user_contact_view_shard_helper"`),
+			newContactViewShardHelper,
+			fx.ResultTags(`name:"contact_view_shard_helper"`),
 		),
-		// 联系人反向索引表。
+		// 联系人反向索引。
 		fx.Annotate(
 			newContactReverseIndexShardHelper,
 			fx.ResultTags(`name:"contact_reverse_index_shard_helper"`),
+		),
+		// 用户会话。
+		fx.Annotate(
+			newConversationViewShardHelper,
+			fx.ResultTags(`name:"conversation_view_shard_helper"`),
+		),
+		// 会话反向索引。
+		fx.Annotate(
+			newConversationReverseIndexShardHelper,
+			fx.ResultTags(`name:"conversation_reverse_index_shard_helper"`),
 		),
 	),
 )

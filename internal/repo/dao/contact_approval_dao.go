@@ -63,7 +63,7 @@ func (d *TxContactApprovalDao) SaveUserRelation(ctx context.Context, userID, con
 
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 2. 写入 user_contact 表。
-		uc := UserContact{
+		uc := Contact{
 			UserID:    userID,
 			ContactID: contactID,
 			Source:    source,
@@ -77,7 +77,7 @@ func (d *TxContactApprovalDao) SaveUserRelation(ctx context.Context, userID, con
 			return fmt.Errorf("failed to get next id and shard: %w", err)
 		}
 		uc.ID = ucID
-		err = tx.WithContext(ctx).Table(dst.TB).Model(&UserContact{}).Create(&uc).Error
+		err = tx.WithContext(ctx).Table(dst.TB).Model(&Contact{}).Create(&uc).Error
 		if err != nil {
 			return fmt.Errorf("failed to save user contact: %w", err)
 		}

@@ -173,9 +173,9 @@ COMMENT ON COLUMN channel_read_record.updated_at IS '更新时间戳 ( Unix 毫�
 CREATE INDEX idx_channel_read_user_channel ON channel_read_record(user_id, channel_id);
 
 
--- 用户联系人表
-DROP TABLE IF EXISTS user_contact;
-CREATE TABLE user_contact (
+-- 联系人表
+DROP TABLE IF EXISTS contact;
+CREATE TABLE contact (
     id BIGINT PRIMARY KEY,
 
     user_id BIGINT NOT NULL,
@@ -198,26 +198,25 @@ CREATE TABLE user_contact (
 
     -- 约束
     -- 唯一约束 - 同一用户在同一联系人中只能有一条记录
-    CONSTRAINT uk_user_contact UNIQUE(user_id, contact_id),
+    CONSTRAINT uk_contact UNIQUE(user_id, contact_id),
     -- 添加来源 - 枚举 ( search=搜索 / qrcode=扫码 / group=群聊 )
     CONSTRAINT chk_user_contact_source CHECK (source IN ('search', 'qrcode', 'group'))
 );
 
-COMMENT ON TABLE user_contact IS '【 写入侧 】用户联系人表';
-COMMENT ON COLUMN user_contact.id IS '主键 ID';
-COMMENT ON COLUMN user_contact.user_id IS '联系人 ID';
-COMMENT ON COLUMN user_contact.contact_id IS '联系人 ID';
-COMMENT ON COLUMN user_contact.remark_name IS '联系人备注名';
-COMMENT ON COLUMN user_contact.source IS '添加来源 ( search=搜索 / qrcode=扫码 / group=群聊 )';
-COMMENT ON COLUMN user_contact.tags IS '联系人标签数组';
-COMMENT ON COLUMN user_contact.is_starred IS '是否星标联系人';
-COMMENT ON COLUMN user_contact.is_blocked IS '是否黑名单联系人';
-COMMENT ON COLUMN user_contact.added_at IS '添加时间戳 ( Unix 毫秒值 )';
-COMMENT ON COLUMN user_contact.deleted_at IS '删除时间戳 ( Unix 毫秒值 )';
-COMMENT ON COLUMN user_contact.created_at IS '创建时间戳 ( Unix 毫秒值 )';
-COMMENT ON COLUMN user_contact.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
-
+COMMENT ON TABLE contact IS '【 写入侧 】联系人表';
+COMMENT ON COLUMN contact.id IS '主键 ID';
+COMMENT ON COLUMN contact.user_id IS '联系人 ID';
+COMMENT ON COLUMN contact.contact_id IS '联系人 ID';
+COMMENT ON COLUMN contact.remark_name IS '联系人备注名';
+COMMENT ON COLUMN contact.source IS '添加来源 ( search=搜索 / qrcode=扫码 / group=群聊 )';
+COMMENT ON COLUMN contact.tags IS '联系人标签数组';
+COMMENT ON COLUMN contact.is_starred IS '是否星标联系人';
+COMMENT ON COLUMN contact.is_blocked IS '是否黑名单联系人';
+COMMENT ON COLUMN contact.added_at IS '添加时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN contact.deleted_at IS '删除时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN contact.created_at IS '创建时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN contact.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
 -- 索引
-CREATE INDEX idx_user_contact_user ON user_contact(user_id);
-CREATE INDEX idx_user_contact_user_active ON user_contact(user_id, deleted_at) WHERE deleted_at = 0;
-CREATE INDEX idx_user_contact_user_starred ON user_contact(user_id, is_starred) WHERE is_starred = TRUE AND deleted_at = 0;
+CREATE INDEX idx_contact_user ON contact(user_id);
+CREATE INDEX idx_contact_user_active ON contact(user_id, deleted_at) WHERE deleted_at = 0;
+CREATE INDEX idx_contact_user_starred ON contact(user_id, is_starred) WHERE is_starred = TRUE AND deleted_at = 0;

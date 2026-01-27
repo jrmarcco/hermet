@@ -16,13 +16,11 @@ import (
 type ContactApplication struct {
 	ID uint64 `gorm:"column:id"`
 
-	TargetID uint64 `gorm:"column:target_id"`
-
+	TargetID    uint64 `gorm:"column:target_id"`
 	ApplicantID uint64 `gorm:"column:applicant_id"`
 
-	ApplicantName   string `gorm:"column:applicant_name"`
-	ApplicantAvatar string `gorm:"column:applicant_avatar"`
-
+	ApplicantName      string `gorm:"column:applicant_name"`
+	ApplicantAvatar    string `gorm:"column:applicant_avatar"`
 	ApplicationStatus  string `gorm:"column:application_status"`
 	ApplicationMessage string `gorm:"column:application_message"`
 
@@ -91,7 +89,8 @@ func (d *DefaultContactApplicationDao) UpdateStatus(ctx context.Context, applica
 
 	err = db.WithContext(ctx).Table(dst.TB).Model(&ContactApplication{}).
 		Where("id = ?", applicationID).
-		Update("application_status", string(status)).Error
+		Update("application_status", string(status)).
+		Update("reviewed_at", time.Now().UnixMilli()).Error
 	return err
 }
 

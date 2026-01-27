@@ -18,12 +18,12 @@ var _ UserService = (*DefaultUserService)(nil)
 
 type DefaultUserService struct {
 	bizUserRepo     repo.BizUserRepo
-	userContactRepo repo.UserContactRepo
+	userContactRepo repo.ContactRepo
 }
 
 func NewDefaultUserService(
 	bizUserRepo repo.BizUserRepo,
-	userContactRepo repo.UserContactRepo,
+	userContactRepo repo.ContactRepo,
 ) *DefaultUserService {
 	return &DefaultUserService{
 		bizUserRepo:     bizUserRepo,

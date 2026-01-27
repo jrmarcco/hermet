@@ -53,7 +53,7 @@ func (h *ContactHandler) Apply(ctx *gin.Context, req applyContactReq, au xgin.Co
 		return xgin.R{}, fmt.Errorf("%w: can not add self as contact", errs.ErrInvalidParam)
 	}
 
-	source := domain.UserContactSource(req.Source)
+	source := domain.ContactSource(req.Source)
 	if !source.IsValid() {
 		return xgin.R{}, fmt.Errorf("%w: invalid source", errs.ErrInvalidParam)
 	}
