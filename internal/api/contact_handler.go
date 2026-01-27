@@ -162,34 +162,34 @@ type getContactsResp struct {
 }
 
 func (h *ContactHandler) GetContacts(ctx *gin.Context, au xgin.ContextUser) (xgin.R, error) {
-	ucvs, err := h.contactSvc.GetContacts(ctx, au.UID)
+	contacts, err := h.contactSvc.GetContacts(ctx, au.UID)
 	if err != nil {
 		return xgin.R{}, err
 	}
 
-	resps := make([]getContactsResp, 0, len(ucvs))
-	for i := range ucvs {
+	resps := make([]getContactsResp, 0, len(contacts))
+	for i := range contacts {
 		resps = append(resps, getContactsResp{
-			ID: ucvs[i].ID,
+			ID: contacts[i].ID,
 
-			UserID:    ucvs[i].UserID,
-			ContactID: ucvs[i].ContactID,
+			UserID:    contacts[i].UserID,
+			ContactID: contacts[i].ContactID,
 
-			ContactNickname: ucvs[i].ContactNickname,
-			ContactAvatar:   ucvs[i].ContactAvatar,
-			ContactInfoVer:  ucvs[i].ContactInfoVer,
-			ContactGender:   ucvs[i].ContactGender,
+			ContactNickname: contacts[i].ContactNickname,
+			ContactAvatar:   contacts[i].ContactAvatar,
+			ContactInfoVer:  contacts[i].ContactInfoVer,
+			ContactGender:   contacts[i].ContactGender,
 
-			RemarkName: ucvs[i].RemarkName,
-			Tags:       ucvs[i].Tags,
+			RemarkName: contacts[i].RemarkName,
+			Tags:       contacts[i].Tags,
 
-			IsStarred: ucvs[i].IsStarred,
-			IsBlocked: ucvs[i].IsBlocked,
+			IsStarred: contacts[i].IsStarred,
+			IsBlocked: contacts[i].IsBlocked,
 
-			Mobile: ucvs[i].Mobile,
-			Source: string(ucvs[i].Source),
+			Mobile: contacts[i].Mobile,
+			Source: string(contacts[i].Source),
 
-			AddedAt: ucvs[i].AddedAt,
+			AddedAt: contacts[i].AddedAt,
 		})
 	}
 	return xgin.R{

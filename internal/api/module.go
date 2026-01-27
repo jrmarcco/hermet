@@ -8,14 +8,23 @@ import (
 var APIFxModule = fx.Module(
 	"api",
 	fx.Provide(
+		// 认证 ( Auth ) API。
 		fx.Annotate(
 			NewAuthHandler,
 			fx.As(new(xgin.RouteRegistry)),
 			fx.ResultTags(`group:"api_registry"`),
 		),
 
+		// 联系人 ( Contact ) API。
 		fx.Annotate(
 			NewContactHandler,
+			fx.As(new(xgin.RouteRegistry)),
+			fx.ResultTags(`group:"api_registry"`),
+		),
+
+		// 会话 ( Conversation ) API。
+		fx.Annotate(
+			NewConversationHandler,
 			fx.As(new(xgin.RouteRegistry)),
 			fx.ResultTags(`group:"api_registry"`),
 		),

@@ -122,9 +122,5 @@ func (s *DefaultContactService) GetContacts(ctx context.Context, userID uint64) 
 }
 
 func (s *DefaultContactService) GetApplications(ctx context.Context, userID uint64) ([]domain.ContactApplication, error) {
-	applications, err := s.contactApplicationRepo.ListPendingByTargetID(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	return applications, nil
+	return s.contactApplicationRepo.ListPendingByTargetID(ctx, userID)
 }

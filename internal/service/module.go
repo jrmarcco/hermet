@@ -13,20 +13,16 @@ var ServiceFxModule = fx.Module(
 		newAuthService,
 
 		// CDC service
-		fx.Annotate(
-			NewDefaultCDCService,
-			fx.As(new(CDCService)),
-		),
+		fx.Annotate(NewDefaultCDCService, fx.As(new(CDCService))),
 
-		fx.Annotate(
-			NewDefaultUserService,
-			fx.As(new(UserService)),
-		),
+		// User service
+		fx.Annotate(NewDefaultUserService, fx.As(new(UserService))),
 
-		fx.Annotate(
-			NewDefaultContactService,
-			fx.As(new(ContactService)),
-		),
+		// Contact service
+		fx.Annotate(NewDefaultContactService, fx.As(new(ContactService))),
+
+		// Conversation service
+		fx.Annotate(NewDefaultConversationService, fx.As(new(ConversationService))),
 	),
 )
 

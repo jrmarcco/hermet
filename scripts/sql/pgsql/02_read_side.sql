@@ -143,9 +143,8 @@ CREATE TABLE conversation_view (
     target_id BIGINT NOT NULL,                                  -- 会话目标 ID ( 用户 ID or 频道 ID )
     target_info_ver INT NOT NULL DEFAULT 1,                     -- 【 CQRS 关键字段 】目标信息版本号 ( 用于检测 channel / user 信息变更 )
 
-    conversation_type VARCHAR(16) NOT NULL,                     -- 会话类型 ( single=单聊 / group=群聊 )
-
     -- 会话基础信息 ( 冗余 )
+    conversation_type VARCHAR(16) NOT NULL,                     -- 会话类型 ( single=单聊 / group=群聊 )
     conversation_name VARCHAR(128) NOT NULL,                    -- 冗余 ( 群名 或 对方昵称 / 备注名 )
     conversation_remark VARCHAR(128) NOT NULL DEFAULT '',       -- 冗余 ( 备注名 )
     conversation_avatar VARCHAR(256) NOT NULL DEFAULT '',       -- 冗余 ( 群头像 或 对方头像 )

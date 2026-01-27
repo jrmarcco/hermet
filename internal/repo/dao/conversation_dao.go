@@ -59,6 +59,8 @@ type ConversationReverseIndex struct {
 type ConversationDao interface {
 	// CreateView 创建用户会话视图。
 	CreateView(ctx context.Context, userConversation ConversationView) error
+
+	ListViewByUserID(ctx context.Context, userID uint64) ([]ConversationView, error)
 }
 
 var _ ConversationDao = (*DefaultConversationDao)(nil)
@@ -148,4 +150,24 @@ func (d *DefaultConversationDao) CreateView(ctx context.Context, userConversatio
 		return nil
 	})
 	return err
+}
+
+func (d *DefaultConversationDao) ListViewByUserID(ctx context.Context, userID uint64) ([]ConversationView, error) {
+	dst, err := d.viewShardHelper.DstFromSharder(sharding.NewSingleIDSharder(userID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get shard destination from user id [ %d ]", userID)
+	}
+
+	db, ok := d.dbs.Load(dst.DB)
+	if !ok {
+		return nil, fmt.Errorf("failed to load database [ %s ]", dst.DB)
+	}
+
+	var conversations []ConversationView
+	err = db.WithContext(ctx).Table(dst.TB).Model(&ConversationView{}).
+		Where("user_id = ?", userID).
+		Where("closed_at = ?", 0).
+		Order("last_message_time DESC").
+		Find(&conversations).Error
+	return conversations, err
 }

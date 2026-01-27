@@ -15,11 +15,10 @@ type ConversationView struct {
 	TargetID      uint64 `json:"targetId"`
 	TargetInfoVer int    `json:"targetInfoVer"`
 
-	ConversationType ConversationType `json:"conversationType"`
-
-	ConversationName   string `json:"conversationName"`
-	ConversationRemark string `json:"conversationRemark"`
-	ConversationAvatar string `json:"conversationAvatar"`
+	ConversationType   ConversationType `json:"conversationType"`
+	ConversationName   string           `json:"conversationName"`
+	ConversationRemark string           `json:"conversationRemark"`
+	ConversationAvatar string           `json:"conversationAvatar"`
 
 	IsMuted   bool `json:"isMuted"`
 	IsPinned  bool `json:"isPinned"`

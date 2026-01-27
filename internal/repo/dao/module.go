@@ -49,9 +49,6 @@ var DaoFxModule = fx.Module(
 		),
 
 		// 消息 Dao ( MongoDB )。
-		fx.Annotate(
-			NewMongoMessageDao,
-			fx.As(new(MessageDao)),
-		),
+		fx.Annotate(NewMongoMessageDao, fx.As(new(MessageDao))),
 	),
 )
