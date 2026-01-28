@@ -35,9 +35,9 @@ type ContactApplication struct {
 type ContactApplicationDao interface {
 	Create(ctx context.Context, ca ContactApplication) (ContactApplication, error)
 
-	UpdateStatus(ctx context.Context, applicationID uint64, status domain.ApplicationStatus) error
+	UpdateStatus(ctx context.Context, id uint64, status domain.ApplicationStatus) error
 
-	FindByID(ctx context.Context, applicationID uint64) (ContactApplication, error)
+	FindByID(ctx context.Context, id uint64) (ContactApplication, error)
 	ListPendingByTargetID(ctx context.Context, targetID uint64) ([]ContactApplication, error)
 }
 
@@ -76,10 +76,10 @@ func (d *DefaultContactApplicationDao) Create(ctx context.Context, ca ContactApp
 	return ca, err
 }
 
-func (d *DefaultContactApplicationDao) UpdateStatus(ctx context.Context, applicationID uint64, status domain.ApplicationStatus) error {
-	dst, err := d.shardHelper.DstFromID(applicationID)
+func (d *DefaultContactApplicationDao) UpdateStatus(ctx context.Context, id uint64, status domain.ApplicationStatus) error {
+	dst, err := d.shardHelper.DstFromID(id)
 	if err != nil {
-		return fmt.Errorf("failed to get shard destination from id [ %d ]", applicationID)
+		return fmt.Errorf("failed to get shard destination from id [ %d ]", id)
 	}
 
 	db, ok := d.dbs.Load(dst.DB)
@@ -87,17 +87,16 @@ func (d *DefaultContactApplicationDao) UpdateStatus(ctx context.Context, applica
 		return fmt.Errorf("failed to load database [ %s ]", dst.DB)
 	}
 
-	err = db.WithContext(ctx).Table(dst.TB).Model(&ContactApplication{}).
-		Where("id = ?", applicationID).
+	return db.WithContext(ctx).Table(dst.TB).Model(&ContactApplication{}).
+		Where("id = ?", id).
 		Update("application_status", string(status)).
 		Update("reviewed_at", time.Now().UnixMilli()).Error
-	return err
 }
 
-func (d *DefaultContactApplicationDao) FindByID(ctx context.Context, applicationID uint64) (ContactApplication, error) {
-	dst, err := d.shardHelper.DstFromID(applicationID)
+func (d *DefaultContactApplicationDao) FindByID(ctx context.Context, id uint64) (ContactApplication, error) {
+	dst, err := d.shardHelper.DstFromID(id)
 	if err != nil {
-		return ContactApplication{}, fmt.Errorf("failed to get shard destination from id [ %d ]", applicationID)
+		return ContactApplication{}, fmt.Errorf("failed to get shard destination from id [ %d ]", id)
 	}
 
 	db, ok := d.dbs.Load(dst.DB)
@@ -107,7 +106,7 @@ func (d *DefaultContactApplicationDao) FindByID(ctx context.Context, application
 
 	var ca ContactApplication
 	err = db.WithContext(ctx).Table(dst.TB).Model(&ContactApplication{}).
-		Where("id = ?", applicationID).
+		Where("id = ?", id).
 		Where("deleted_at = ?", 0).
 		First(&ca).Error
 	return ca, err

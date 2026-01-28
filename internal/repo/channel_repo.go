@@ -10,6 +10,8 @@ import (
 type ChannelRepo interface {
 	Create(ctx context.Context, channel domain.Channel) (domain.Channel, error)
 	CreateWithMembers(ctx context.Context, channel domain.Channel, members []uint64) (domain.Channel, error)
+
+	UpdateStatus(ctx context.Context, id uint64, status string) error
 }
 
 var _ ChannelRepo = (*DefaultChannelRepo)(nil)
@@ -38,6 +40,10 @@ func (r *DefaultChannelRepo) CreateWithMembers(ctx context.Context, channel doma
 		return domain.Channel{}, err
 	}
 	return r.toDomain(entity), nil
+}
+
+func (r *DefaultChannelRepo) UpdateStatus(ctx context.Context, id uint64, status string) error {
+	return r.channelDao.UpdateStatus(ctx, id, status)
 }
 
 func (r *DefaultChannelRepo) toEntity(channel domain.Channel) dao.Channel {

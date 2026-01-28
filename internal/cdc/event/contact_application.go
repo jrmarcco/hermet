@@ -24,7 +24,7 @@ type ContactApplicationCDCEvent struct {
 }
 
 func (e ContactApplicationCDCEvent) IsApproved() bool {
-	if e.Op != "u" {
+	if !e.IsUpdate() {
 		return false
 	}
 	return e.ApplicationStatus == domain.ApplicationStatusApproved

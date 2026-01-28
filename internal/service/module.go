@@ -1,10 +1,13 @@
 package service
 
 import (
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproduce"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/jit/xjwt"
 	authv1 "github.com/jrmarcco/synp-api/api/go/auth/v1"
+	"github.com/spf13/viper"
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
 var ServiceFxModule = fx.Module(
@@ -23,6 +26,9 @@ var ServiceFxModule = fx.Module(
 
 		// Conversation service
 		fx.Annotate(NewDefaultConversationService, fx.As(new(ConversationService))),
+
+		// Channel service
+		fx.Annotate(newChannelService, fx.As(new(ChannelService))),
 	),
 )
 
@@ -42,4 +48,28 @@ func newAuthService(p authServiceFxParams) AuthService {
 		p.AtManager,
 		p.RtManager,
 	)
+}
+
+// newChannelService 创建频道服务。
+// ChannelService 预留了同步创建成员数量阈值的配置项，需要额外封装一个 new 方法。
+func newChannelService(channelRepo repo.ChannelRepo, producer xproduce.Producer, logger *zap.Logger) (ChannelService, error) {
+	type config struct {
+		MemberSyncAddThreshold int    `mapstructure:"member_sync_add_threshold"`
+		MemberSyncAddTopic     string `mapstructure:"member_sync_add_topic"`
+	}
+
+	cfg := config{}
+	if err := viper.UnmarshalKey("business.channel", &cfg); err != nil {
+		return nil, err
+	}
+
+	return NewDefaultChannelService(
+		cfg.MemberSyncAddThreshold,
+		cfg.MemberSyncAddTopic,
+
+		channelRepo,
+		producer,
+
+		logger,
+	), nil
 }

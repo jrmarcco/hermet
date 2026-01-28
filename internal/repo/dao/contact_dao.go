@@ -275,7 +275,6 @@ func (d *DefaultContactDao) FindByUserIDAndContactID(ctx context.Context, userID
 	if err != nil {
 		return Contact{}, err
 	}
-
 	return uc, nil
 }
 

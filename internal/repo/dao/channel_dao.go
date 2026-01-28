@@ -76,6 +76,9 @@ type ChannelDao interface {
 	// CreateWithMembers 创建频道并添加成员。
 	// 用于同步添加成员 ( 适用于小群组 )。
 	CreateWithMembers(ctx context.Context, channel Channel, members []uint64) (Channel, error)
+
+	// UpdateStatus 更新频道状态。
+	UpdateStatus(ctx context.Context, id uint64, status string) error
 }
 
 var _ ChannelDao = (*DefaultChannelDao)(nil)
@@ -193,4 +196,20 @@ func (d *DefaultChannelDao) CreateWithMembers(ctx context.Context, channel Chann
 		return nil
 	})
 	return channel, err
+}
+
+func (d *DefaultChannelDao) UpdateStatus(ctx context.Context, id uint64, status string) error {
+	dst, err := d.shardHelper.DstFromID(id)
+	if err != nil {
+		return fmt.Errorf("failed to get shard destination from id [ %d ]", id)
+	}
+
+	db, ok := d.dbs.Load(dst.DB)
+	if !ok {
+		return fmt.Errorf("failed to load database [ %s ]", dst.DB)
+	}
+
+	return db.WithContext(ctx).Table(dst.TB).Model(&Channel{}).
+		Where("id = ?", id).
+		Update("channel_status", status).Error
 }

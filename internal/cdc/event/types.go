@@ -7,3 +7,15 @@ type CDCEvent struct {
 	Table string `json:"__table"`
 	TSMs  int64  `json:"__ts_ms"`
 }
+
+func (e CDCEvent) IsCreate() bool {
+	return e.Op == "c"
+}
+
+func (e CDCEvent) IsUpdate() bool {
+	return e.Op == "u"
+}
+
+func (e CDCEvent) IsDelete() bool {
+	return e.Op == "d"
+}

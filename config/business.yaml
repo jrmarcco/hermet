@@ -1,0 +1,5 @@
+business:
+  channel:
+    # 成员同步添加阈值 ( 生产环境建议 100 )
+    member_sync_add_threshold: 3
+    member_sync_add_topic: event_channel_member_add
