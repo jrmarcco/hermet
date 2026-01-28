@@ -73,9 +73,8 @@ type ChannelMemberView struct {
 type ChannelDao interface {
 	// Create 创建频道。
 	Create(ctx context.Context, channel Channel) (Channel, error)
-	// CreateWithMembers 创建频道并添加成员。
-	// 用于同步添加成员 ( 适用于小群组 )。
-	CreateWithMembers(ctx context.Context, channel Channel, members []uint64) (Channel, error)
+	// AddMembers 添加成员。
+	AddMembers(ctx context.Context, channelID uint64, memberIDs []uint64) error
 
 	// UpdateStatus 更新频道状态。
 	UpdateStatus(ctx context.Context, id uint64, status string) error
@@ -125,38 +124,31 @@ func (d *DefaultChannelDao) Create(ctx context.Context, channel Channel) (Channe
 	return channel, err
 }
 
-func (d *DefaultChannelDao) CreateWithMembers(ctx context.Context, channel Channel, members []uint64) (Channel, error) {
-	sharder := sharding.NewStringSharder(channel.ChannelName)
-
-	id, dst, err := d.shardHelper.NextIDAndShard(sharder)
+func (d *DefaultChannelDao) AddMembers(ctx context.Context, channelID uint64, memberIDs []uint64) error {
+	sharder := sharding.NewSingleIDSharder(channelID)
+	dst, err := d.memberShardHelper.DstFromSharder(sharder)
 	if err != nil {
-		return Channel{}, fmt.Errorf("failed to get shard destination from channel name [ %s ]", channel.ChannelName)
+		return fmt.Errorf("failed to get shard destination from channel id [ %d ]", channelID)
 	}
 
 	db, ok := d.dbs.Load(dst.DB)
 	if !ok {
-		return Channel{}, fmt.Errorf("failed to load database [ %s ]", dst.DB)
+		return fmt.Errorf("failed to load database [ %s ]", dst.DB)
 	}
 
 	now := time.Now().UnixMilli()
-
-	channel.ID = id
-	channel.CreatedAt = now
-	channel.UpdatedAt = now
-	channel.ChannelMemberCount = len(members)
-
-	channelMembers := make([]ChannelMember, 0, len(members))
-	for _, member := range members {
-		memberID, err := d.memberShardHelper.NextID(sharder)
+	members := make([]ChannelMember, 0, len(memberIDs))
+	for _, memberID := range memberIDs {
+		id, err := d.memberShardHelper.NextID(sharder)
 		if err != nil {
-			return Channel{}, fmt.Errorf("failed to generate id for member [ %d ]: %w", member, err)
+			return fmt.Errorf("failed to generate id for member [ %d ]: %w", memberID, err)
 		}
 
-		channelMember := ChannelMember{
-			ID: memberID,
+		members = append(members, ChannelMember{
+			ID: id,
 
-			ChannelID: channel.ID,
-			UserID:    member,
+			ChannelID: channelID,
+			UserID:    memberID,
 
 			MemberRole: string(domain.ChannelMemberRoleMember),
 
@@ -165,37 +157,16 @@ func (d *DefaultChannelDao) CreateWithMembers(ctx context.Context, channel Chann
 
 			CreatedAt: now,
 			UpdatedAt: now,
-		}
-
-		if member == channel.CreatorID {
-			channelMember.MemberRole = string(domain.ChannelMemberRoleOwner)
-		}
-
-		channelMembers = append(channelMembers, channelMember)
+		})
 	}
 
-	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 1. 写入 channel 表。
-		err = tx.WithContext(ctx).Table(dst.TB).Model(&Channel{}).Create(&channel).Error
-		if err != nil {
-			return fmt.Errorf("failed to save channel: %w", err)
-		}
-
-		// 2. 写入 channel_member 表。
-		memberDst, _ := d.memberShardHelper.DstFromSharder(sharder)
-
-		err = tx.WithContext(ctx).Table(memberDst.TB).Model(&ChannelMember{}).
-			Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "channel_id"}, {Name: "user_id"}},
-				DoNothing: true,
-			}).
-			CreateInBatches(&channelMembers, channelMemberBatchSize).Error
-		if err != nil {
-			return fmt.Errorf("failed to save channel members: %w", err)
-		}
-		return nil
-	})
-	return channel, err
+	// 批量写入频道成员表。
+	return db.WithContext(ctx).Table(dst.TB).Model(&ChannelMember{}).
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "channel_id"}, {Name: "user_id"}},
+			DoNothing: true,
+		}).
+		CreateInBatches(&members, channelMemberBatchSize).Error
 }
 
 func (d *DefaultChannelDao) UpdateStatus(ctx context.Context, id uint64, status string) error {

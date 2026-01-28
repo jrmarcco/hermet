@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproduce"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/jit/xjwt"
@@ -52,10 +53,16 @@ func newAuthService(p authServiceFxParams) AuthService {
 
 // newChannelService 创建频道服务。
 // ChannelService 预留了同步创建成员数量阈值的配置项，需要额外封装一个 new 方法。
-func newChannelService(channelRepo repo.ChannelRepo, producer xproduce.Producer, logger *zap.Logger) (ChannelService, error) {
+func newChannelService(
+	consumerFactory xconsumer.ConsumerFactory,
+	channelRepo repo.ChannelRepo,
+	producer xproduce.Producer,
+	logger *zap.Logger,
+) (ChannelService, error) {
 	type config struct {
-		MemberSyncAddThreshold int    `mapstructure:"member_sync_add_threshold"`
 		MemberSyncAddTopic     string `mapstructure:"member_sync_add_topic"`
+		MemberSyncAddGroupID   string `mapstructure:"member_sync_add_group_id"`
+		MemberSyncAddPartition int    `mapstructure:"member_sync_add_partition"`
 	}
 
 	cfg := config{}
@@ -64,12 +71,14 @@ func newChannelService(channelRepo repo.ChannelRepo, producer xproduce.Producer,
 	}
 
 	return NewDefaultChannelService(
-		cfg.MemberSyncAddThreshold,
+		consumerFactory,
 		cfg.MemberSyncAddTopic,
+		cfg.MemberSyncAddGroupID,
+		cfg.MemberSyncAddPartition,
 
 		channelRepo,
 		producer,
 
 		logger,
-	), nil
+	)
 }

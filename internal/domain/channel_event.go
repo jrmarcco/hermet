@@ -13,12 +13,10 @@ type ChannelCreateEvent struct {
 type ChannelMemberAddEvent struct {
 	CID       uint64   // 频道 ID
 	MemberIDs []uint64 // 添加的成员 ID 列表
-	Operator  uint64   // 操作者
 }
 
-// ChannelMemberRemoveEvent 频道成员移除事件。
-type ChannelMemberRemoveEvent struct {
-	CID       uint64
+// ChannelMemberRmEvent 频道成员移除事件。
+type ChannelMemberRmEvent struct {
+	CID       uint64   // 频道 ID
 	MemberIDs []uint64 // 移除的成员 ID 列表
-	Operator  uint64   // 操作者
 }
