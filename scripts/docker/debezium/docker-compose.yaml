@@ -68,29 +68,28 @@ networks:
     external: true
 
 services:
-  hermet-0-connector:
+  debezium-connect-1:
     <<: *debezium-common
-    hostname: hermet-0-connector
-    container_name: hermet-0-connector
+    hostname: debezium-connect-1
+    container_name: debezium-connect-1
     ports:
-      - "18083:8083"
+      # 主节点，用于 REST API 管理
+      - "8083:8083"
     environment:
       <<: *debezium-common-env
 
-  hermet-1-connector:
+  debezium-connect-2:
     <<: *debezium-common
-    hostname: hermet-1-connector
-    container_name: hermet-1-connector
-    ports:
-      - "28083:8083"
+    hostname: debezium-connect-2
+    container_name: debezium-connect-2
+    # 不暴露端口，仅作为集群成员提供高可用
     environment:
       <<: *debezium-common-env
 
-  mongodb-connector:
+  debezium-connect-3:
     <<: *debezium-common
-    hostname: mongodb-connector
-    container_name: mongodb-connector
-    ports:
-      - "38083:8083"
+    hostname: debezium-connect-3
+    container_name: debezium-connect-3
+    # 不暴露端口，仅作为集群成员提供高可用
     environment:
       <<: *debezium-common-env
