@@ -49,6 +49,8 @@ TEMP_FILE=$(mktemp "${TMPDIR:-/tmp}/replace_imports.XXXXXX")
 while IFS= read -r -d '' go_file; do
     TOTAL_FILES=$((TOTAL_FILES + 1))
 
+    echo -e "${YELLOW}处理: $go_file${NC}"
+
     # 使用 awk 处理文件，只在 import 块内进行替换。
     awk -v old_prefix="$OLD_PREFIX" -v new_prefix="$NEW_PREFIX" '
     BEGIN {
