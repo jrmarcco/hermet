@@ -1,0 +1,33 @@
+{
+  "name": "pgsql-hermet-0",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "tasks.max": "1",
+    "database.hostname": "pgsql-hermet-0",
+    "database.port": "5432",
+    "database.user": "hermet_0",
+    "database.password": "<passwd>",
+    "database.dbname": "hermet_0",
+    "topic.prefix": "pgsql_hermet_0",
+    "schema.include.list": "public",
+    "table.include.list": "public\\.biz_user_.*,public\\.contact_application_.*,public\\.contact_.*,public\\.channel_.*,public\\.channel_member_.*",
+    "include.headers": true,
+    "tombstones.on.delete": true,
+    "plugin.name": "pgoutput",
+    "publication.name": "dbz_publication",
+    "publication.autocreate.mode": "filtered",
+    "slot.name": "debezium_slot",
+    "snapshot.mode": "initial",
+    "time.precision.mode": "adaptive_time_microseconds",
+    "decimal.handling.mode": "precise",
+    "heartbeat.interval.ms": "10000",
+    "heartbeat.topics.prefix": "__debezium_heartbeat",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka-1:9093,kafka-2:9093,kafka-3:9093",
+    "schema.history.internal.kafka.topic": "schema-changes.dbserver1",
+    "transforms": "unwrap",
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.unwrap.drop.tombstones": "false",
+    "transforms.unwrap.delete.handling.mode": "rewrite",
+    "transforms.unwrap.add.fields": "op,db,table,ts_ms"
+  }
+}
