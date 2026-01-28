@@ -13,7 +13,7 @@ import (
 //go:generate mockgen -source=biz_user_repo.go -destination=mock/biz_user_repo.mock.go -package=repomock -typed BizUserRepo
 
 type BizUserRepo interface {
-	Save(ctx context.Context, user domain.BizUser) (domain.BizUser, error)
+	Create(ctx context.Context, user domain.BizUser) (domain.BizUser, error)
 
 	FindByID(ctx context.Context, id uint64) (domain.BizUser, error)
 	FindByEmail(ctx context.Context, email string) (domain.BizUser, error)
@@ -25,8 +25,8 @@ type DefaultBizUserRepo struct {
 	dao dao.BizUserDao
 }
 
-func (r *DefaultBizUserRepo) Save(ctx context.Context, user domain.BizUser) (domain.BizUser, error) {
-	entity, err := r.dao.Save(ctx, r.toEntity(user))
+func (r *DefaultBizUserRepo) Create(ctx context.Context, user domain.BizUser) (domain.BizUser, error) {
+	entity, err := r.dao.Create(ctx, r.toEntity(user))
 	if err != nil {
 		return domain.BizUser{}, err
 	}

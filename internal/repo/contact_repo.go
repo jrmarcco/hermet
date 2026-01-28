@@ -12,7 +12,9 @@ import (
 
 type ContactRepo interface {
 	// Create 创建用户联系人。
-	Create(ctx context.Context, contact domain.Contact) error
+	Create(ctx context.Context, contact domain.Contact) (domain.Contact, error)
+	// Recreate 重新创建用户联系人 ( 用于删除后重新添加 )。
+	Recreate(ctx context.Context, contact domain.Contact) (domain.Contact, error)
 
 	FindByUserIDAndContactID(ctx context.Context, userID, contactID uint64) (domain.Contact, error)
 	ListViewByUserID(ctx context.Context, userID uint64) ([]domain.ContactView, error)
@@ -35,21 +37,29 @@ func NewDefaultContactRepo(
 	}
 }
 
-func (r *DefaultContactRepo) Create(ctx context.Context, contact domain.Contact) error {
+func (r *DefaultContactRepo) Create(ctx context.Context, contact domain.Contact) (domain.Contact, error) {
 	// 查询联系人信息 ( 用于冗余联系人信息 )。
 	user, err := r.bizUserDao.FindByID(ctx, contact.ContactID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errs.ErrRecordNotFound
+			return domain.Contact{}, errs.ErrRecordNotFound
 		}
-		return err
+		return domain.Contact{}, err
 	}
 
-	err = r.userContactDao.Create(ctx, r.toEntity(contact), user)
+	entity, err := r.userContactDao.Create(ctx, r.toEntity(contact), user)
 	if err != nil {
-		return err
+		return domain.Contact{}, err
 	}
-	return nil
+	return r.toDomain(entity), nil
+}
+
+func (r *DefaultContactRepo) Recreate(ctx context.Context, contact domain.Contact) (domain.Contact, error) {
+	entity, err := r.userContactDao.Recreate(ctx, r.toEntity(contact))
+	if err != nil {
+		return domain.Contact{}, err
+	}
+	return r.toDomain(entity), nil
 }
 
 func (r *DefaultContactRepo) FindByUserIDAndContactID(ctx context.Context, userID, contactID uint64) (domain.Contact, error) {
@@ -88,8 +98,8 @@ func (r *DefaultContactRepo) toEntity(uc domain.Contact) dao.Contact {
 
 		Tags: uc.Tags,
 
-		IsStarred: uc.IsStarred,
-		IsBlocked: uc.IsBlocked,
+		IsMuted:  uc.IsMuted,
+		IsPinned: uc.IsPinned,
 
 		AddedAt:   uc.AddedAt,
 		DeletedAt: uc.DeletedAt,
@@ -111,8 +121,8 @@ func (r *DefaultContactRepo) toDomain(uc dao.Contact) domain.Contact {
 
 		Tags: uc.Tags,
 
-		IsStarred: uc.IsStarred,
-		IsBlocked: uc.IsBlocked,
+		IsMuted:  uc.IsMuted,
+		IsPinned: uc.IsPinned,
 
 		AddedAt:   uc.AddedAt,
 		DeletedAt: uc.DeletedAt,
@@ -136,8 +146,8 @@ func (r *DefaultContactRepo) toViewDomain(ucv dao.ContactView) domain.ContactVie
 		RemarkName: ucv.RemarkName,
 		Tags:       ucv.Tags,
 
-		IsStarred: ucv.IsStarred,
-		IsBlocked: ucv.IsBlocked,
+		IsMuted:  ucv.IsMuted,
+		IsPinned: ucv.IsPinned,
 
 		Mobile: ucv.Mobile,
 		Source: domain.ContactSource(ucv.Source),

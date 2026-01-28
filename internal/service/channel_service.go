@@ -11,7 +11,7 @@ import (
 )
 
 type ChannelService interface {
-	CreateGroup(ctx context.Context, event domain.ChannelCreatedEvent) (domain.Channel, error)
+	Create(ctx context.Context, event domain.ChannelCreateEvent) (domain.Channel, error)
 }
 
 var _ ChannelService = (*DefaultChannelService)(nil)
@@ -30,7 +30,7 @@ func NewDefaultChannelService(channelRepo repo.ChannelRepo, logger *zap.Logger) 
 	}
 }
 
-func (s *DefaultChannelService) CreateGroup(ctx context.Context, event domain.ChannelCreatedEvent) (domain.Channel, error) {
+func (s *DefaultChannelService) Create(ctx context.Context, event domain.ChannelCreateEvent) (domain.Channel, error) {
 	memberCnt := len(event.MemberIDs)
 	if memberCnt == 0 {
 		return domain.Channel{}, fmt.Errorf("%w: member is empty", errs.ErrInvalidParam)
@@ -38,19 +38,34 @@ func (s *DefaultChannelService) CreateGroup(ctx context.Context, event domain.Ch
 
 	// 根据成员数量选择创建策略。
 	if memberCnt <= s.asyncThreshold {
-		return s.createGroupSync(ctx, event)
+		s.logger.Debug(
+			"[hermet-channel] create channel sync",
+			zap.String("name", event.Name),
+			zap.Int("member_count", memberCnt),
+		)
+		return s.createSync(ctx, event)
 	}
-	return s.createGroupAsync(ctx, event)
+	return s.createAsync(ctx, event)
 }
 
-// createGroupSync 同步创建群组 ( 适用于小群组 )。
-func (s *DefaultChannelService) createGroupSync(_ context.Context, _ domain.ChannelCreatedEvent) (domain.Channel, error) {
-	// TODO: not implemented
-	panic("not implemented")
+// createSync 同步创建群组 ( 适用于小群组 )。
+func (s *DefaultChannelService) createSync(ctx context.Context, event domain.ChannelCreateEvent) (domain.Channel, error) {
+	channel := domain.Channel{
+		ChannelName:   event.Name,
+		ChannelAvatar: event.Avatar,
+		ChannelStatus: domain.ChannelStatusActive,
+		CreatorID:     event.Creator,
+	}
+
+	_, err := s.channelRepo.CreateWithMembers(ctx, channel, event.MemberIDs)
+	if err != nil {
+		return domain.Channel{}, fmt.Errorf("failed to create channel with members: %w", err)
+	}
+	return channel, nil
 }
 
-// createGroupAsync 异步创建群组 ( 适用于大群组 )。
-func (s *DefaultChannelService) createGroupAsync(_ context.Context, _ domain.ChannelCreatedEvent) (domain.Channel, error) {
+// createAsync 异步创建群组 ( 适用于大群组 )。
+func (s *DefaultChannelService) createAsync(_ context.Context, _ domain.ChannelCreateEvent) (domain.Channel, error) {
 	// TODO: not implemented
 	panic("not implemented")
 }

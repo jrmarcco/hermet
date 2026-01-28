@@ -27,29 +27,29 @@ func (ug UserGender) IsValid() bool {
 
 // BizUser 是业务用户信息。
 type BizUser struct {
-	ID uint64 `json:"id"`
+	ID uint64 // 用户 ID
 
 	// 账号信息。
-	Email  string `json:"email"`
-	Mobile string `json:"mobile"`
-	Passwd string `json:"passwd"`
+	Email  string // 邮箱
+	Mobile string // 手机号
+	Passwd string // 密码
 
 	// 个人信息。
-	Avatar   string     `json:"avatar"`
-	Nickname string     `json:"nickname"`
-	Gender   UserGender `json:"gender"`
-	Region   string     `json:"region"`
-	Birthday int64      `json:"birthday"`
-	Tagline  string     `json:"tagline"`
+	Avatar   string     // 头像
+	Nickname string     // 昵称
+	Gender   UserGender // 性别
+	Region   string     // 地区
+	Birthday int64      // 生日
+	Tagline  string     // 标签
 
 	// 版本控制。
-	InfoVer int `json:"infoVer"`
+	InfoVer int // 信息版本
 
 	// 状态管理。
-	UserStatus UserStatus `json:"userStatus"`
-	DeletedAt  int64      `json:"deletedAt"`
+	UserStatus UserStatus // 用户状态
+	DeletedAt  int64      // 删除时间戳 ( Unix 毫秒值 )
 
 	// 时间戳。
-	CreatedAt int64 `json:"createdAt"`
-	UpdatedAt int64 `json:"updatedAt"`
+	CreatedAt int64
+	UpdatedAt int64
 }

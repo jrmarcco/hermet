@@ -16,7 +16,6 @@ CREATE TABLE contact_view (
     contact_gender VARCHAR(16) NOT NULL DEFAULT 'unknown',      -- 联系人性别 ( unknown=未知 / male=男 / female=女 )
     contact_info_ver INT NOT NULL DEFAULT 1,                    -- 【 CQRS 关键字段 】联系人信息版本号 ( 用于同步检测 )
 
-    -- 好友关系信息 ( 冗余自 user_contact 表 )
     remark_name VARCHAR(64) NOT NULL DEFAULT '',                -- 备注名
     tags VARCHAR(128)[] NOT NULL DEFAULT '{}',                           -- 标签
 
@@ -37,10 +36,6 @@ CREATE TABLE contact_view (
     -- 约束
     -- 唯一约束 - 同一用户在同一联系人中只能有一条记录
     CONSTRAINT uk_contact_view UNIQUE(user_id, contact_id),
-    -- 联系人性别 - 枚举 ( unknown=未知 / male=男 / female=女 )
-    CONSTRAINT chk_contact_gender CHECK (contact_gender IN ('unknown', 'male', 'female')),
-    -- 添加来源 - 枚举 ( search=搜索 / qrcode=扫码 / group=群聊 )
-    CONSTRAINT chk_user_contact_source CHECK (source IN ('search', 'qrcode', 'group'))
 );
 
 COMMENT ON TABLE contact_view IS '【 读取侧 】联系人视图表 ( 用于通讯录展示 )';
@@ -70,13 +65,7 @@ CREATE INDEX idx_cov_list ON contact_view(
     contact_nickname
 ) WHERE deleted_at = 0;
 
--- 2. 星标好友查询
-CREATE INDEX idx_cov_starred ON contact_view(
-    user_id,
-    contact_nickname
-) WHERE is_starred = TRUE AND deleted_at = 0;
-
--- 3. 按首字母查询 ( 如果需要 )
+-- 2. 按首字母查询 ( 如果需要 )
 CREATE INDEX idx_cov_initial ON contact_view(
     user_id,
     LEFT(contact_nickname, 1),
@@ -93,15 +82,14 @@ CREATE TABLE channel_member_view (
     user_id BIGINT NOT NULL,
 
     -- 成员关系信息 ( 冗余自 channel_member 表 )
-    member_role VARCHAR(16) NOT NULL DEFAULT 'member',      -- 成员角色
-    member_nickname VARCHAR(64) NOT NULL DEFAULT '',        -- 群昵称
+    member_role VARCHAR(16) NOT NULL DEFAULT 'member',        -- 成员角色
 
     -- 用户信息 ( 冗余自 biz_user 表 )
-    user_nickname VARCHAR(128) NOT NULL DEFAULT '',         -- 昵称 ( 冗余 )
-    user_avatar VARCHAR(512) NOT NULL DEFAULT '',           -- 头像 ( 冗余 )
-    user_gender VARCHAR(16) NOT NULL DEFAULT 'unknown',     -- 性别
-    user_remark VARCHAR(128) NOT NULL DEFAULT '',           -- 备注名
-    user_info_ver INT NOT NULL DEFAULT 1,                   -- 【 CQRS 关键字段 】用户信息版本号
+    member_nickname VARCHAR(64) NOT NULL DEFAULT '',          -- 昵称 ( 冗余 )
+    member_avatar VARCHAR(256) NOT NULL DEFAULT '',           -- 头像 ( 冗余 )
+    member_gender VARCHAR(16) NOT NULL DEFAULT 'unknown',     -- 性别
+    member_remark VARCHAR(64) NOT NULL DEFAULT '',            -- 备注名
+    member_info_ver INT NOT NULL DEFAULT 1,                   -- 【 CQRS 关键字段 】用户信息版本号
 
     -- 时间信息
     joined_at BIGINT NOT NULL,
@@ -112,12 +100,21 @@ CREATE TABLE channel_member_view (
 
     -- 约束
     CONSTRAINT uk_channel_member_view UNIQUE(channel_id, user_id),
-    CONSTRAINT chk_member_role CHECK (member_role IN ('owner', 'admin', 'member')),
-    CONSTRAINT chk_user_gender CHECK (user_gender IN ('unknown', 'male', 'female'))
 );
 
 COMMENT ON TABLE channel_member_view IS '【 读取侧 】频道成员视图表 ( 用于群成员列表展示 )';
-COMMENT ON COLUMN channel_member_view.user_info_ver IS '【 CQRS 关键字段 】用户信息版本号 ( 用于同步检测 )';
+COMMENT ON COLUMN channel_member_view.channel_id IS '频道 ID';
+COMMENT ON COLUMN channel_member_view.user_id IS '用户 ID';
+COMMENT ON COLUMN channel_member_view.member_role IS '成员角色 ( owner=群主 / admin=管理员 / member=普通成员 )';
+COMMENT ON COLUMN channel_member_view.member_nickname IS '成员昵称 ( 冗余 )';
+COMMENT ON COLUMN channel_member_view.member_avatar IS '成员头像 ( 冗余 )';
+COMMENT ON COLUMN channel_member_view.member_gender IS '成员性别 ( unknown=未知 / male=男 / female=女 )';
+COMMENT ON COLUMN channel_member_view.member_remark IS '成员备注名';
+COMMENT ON COLUMN channel_member_view.member_info_ver IS '【 CQRS 关键字段 】成员信息版本号 ( 用于同步检测 )';
+COMMENT ON COLUMN channel_member_view.joined_at IS '加入时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN channel_member_view.left_at IS '退出时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN channel_member_view.created_at IS '创建时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN channel_member_view.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
 
 -- 索引 ( 针对群成员查询优化 )
 -- 1. 群成员列表查询
@@ -127,14 +124,69 @@ CREATE INDEX idx_cmv_channel_active ON channel_member_view(
     user_nickname
 ) WHERE left_at = 0;
 
--- 2. 用户的所有群聊
-CREATE INDEX idx_cmv_user_channels ON channel_member_view(
+
+-- 用户频道视图表 ( 频道列表专用 - 冗余所有展示字段 )
+DROP TABLE IF EXISTS user_channel_view;
+CREATE TABLE user_channel_view (
+   id BIGINT PRIMARY KEY,
+
+    user_id BIGINT NOT NULL,
+    channel_id BIGINT NOT NULL,
+
+    -- 频道设置 ( 冗余自 channel 表 )
+    channel_name VARCHAR(64) NOT NULL DEFAULT '',       -- 频道名称
+    channel_avatar VARCHAR(256) NOT NULL DEFAULT '',    -- 频道头像
+    channel_status VARCHAR(16) NOT NULL,                -- 频道状态
+    channel_member_count INT NOT NULL DEFAULT 0,        -- 频道成员数量
+    channel_info_ver INT NOT NULL DEFAULT 1,            -- 【 CQRS 关键字段 】频道信息版本号 ( 用于同步检测 )
+
+    remark_name VARCHAR(64) NOT NULL DEFAULT '',       -- 频道备注名
+
+    is_muted BOOLEAN NOT NULL DEFAULT FALSE,            -- 免打扰
+    is_pinned BOOLEAN NOT NULL DEFAULT FALSE,           -- 置顶
+
+    -- 时间信息
+    joined_at BIGINT NOT NULL,
+    left_at BIGINT NOT NULL DEFAULT 0,
+
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+
+    -- 约束
+    CONSTRAINT uk_user_channel_view UNIQUE(user_id, channel_id)
+);
+
+COMMENT ON TABLE user_channel_view IS '【 读取侧 】用户频道视图表 ( 用于频道列表展示 )';
+COMMENT ON COLUMN user_channel_view.id IS '主键 ID';
+COMMENT ON COLUMN user_channel_view.user_id IS '用户 ID';
+COMMENT ON COLUMN user_channel_view.channel_id IS '频道 ID';
+COMMENT ON COLUMN user_channel_view.channel_name IS '频道名称 ( 冗余 )';
+COMMENT ON COLUMN user_channel_view.channel_avatar IS '频道头像 ( 冗余 )';
+COMMENT ON COLUMN user_channel_view.channel_status IS '频道状态 ( 冗余 )';
+COMMENT ON COLUMN user_channel_view.channel_member_count IS '频道成员数量 ( 冗余 )';
+COMMENT ON COLUMN user_channel_view.channel_info_ver IS '【 CQRS 关键字段 】频道信息版本号 ( 用于同步检测 )';
+COMMENT ON COLUMN user_channel_view.remark_name IS '频道备注名';
+COMMENT ON COLUMN user_channel_view.is_muted IS '是否免打扰';
+COMMENT ON COLUMN user_channel_view.is_pinned IS '是否置顶';
+COMMENT ON COLUMN user_channel_view.joined_at IS '加入时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN user_channel_view.left_at IS '退出时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN user_channel_view.created_at IS '创建时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN user_channel_view.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
+
+-- 索引 ( 针对频道列表查询优化 )
+-- 1. 频道列表查询 ( 按时间倒序 )
+CREATE INDEX idx_ucv_list ON user_channel_view(
     user_id,
+    is_pinned DESC,
     joined_at DESC
 ) WHERE left_at = 0;
 
 
 -- 用户会话视图表 ( 会话列表专用 - 冗余所有展示字段 )
+-- 这是一个特殊的聚合视图
+-- 把两种不同的会话类型统一成一个列表 ( single=contact 表 / group=user_channel 表 )
+-- 用于会话列表展示
+-- 因此 write_side 不需要对应的 conversation 表
 DROP TABLE IF EXISTS conversation_view;
 CREATE TABLE conversation_view (
     id BIGINT PRIMARY KEY,
@@ -145,15 +197,13 @@ CREATE TABLE conversation_view (
 
     -- 会话基础信息 ( 冗余 )
     conversation_type VARCHAR(16) NOT NULL,                     -- 会话类型 ( single=单聊 / group=群聊 )
-    conversation_name VARCHAR(128) NOT NULL,                    -- 冗余 ( 群名 或 对方昵称 / 备注名 )
-    conversation_remark VARCHAR(128) NOT NULL DEFAULT '',       -- 冗余 ( 备注名 )
+    conversation_name VARCHAR(64) NOT NULL,                     -- 冗余 ( 群名 或 对方昵称 / 备注名 )
+    conversation_remark VARCHAR(64) NOT NULL DEFAULT '',        -- 冗余 ( 备注名 )
     conversation_avatar VARCHAR(256) NOT NULL DEFAULT '',       -- 冗余 ( 群头像 或 对方头像 )
 
     -- 个性化设置
     is_muted BOOLEAN NOT NULL DEFAULT FALSE,                    -- 免打扰
     is_pinned BOOLEAN NOT NULL DEFAULT FALSE,                   -- 置顶
-    is_hidden BOOLEAN NOT NULL DEFAULT FALSE,                   -- 隐藏
-    is_starred BOOLEAN NOT NULL DEFAULT FALSE,                  -- 星标
 
     -- 最后消息快照 ( 冗余 - 用于会话列表展示 )
     last_message_id BIGINT NOT NULL DEFAULT 0,
@@ -175,7 +225,7 @@ CREATE TABLE conversation_view (
     updated_at BIGINT NOT NULL,
 
     -- 约束
-    -- 唯一约束 - 同一用户在同一会话目标中只能有一条记录（区分单聊和群聊）
+    -- 唯一约束 - 同一用户在同一会话目标中只能有一条记录 ( 区分单聊和群聊 )
     CONSTRAINT uk_conversation_view UNIQUE(user_id, target_id, conversation_type),
     -- 会话类型 - 枚举 ( single=单聊 / group=群聊 )
     CONSTRAINT chk_conversation_type CHECK (conversation_type IN ('single', 'group'))

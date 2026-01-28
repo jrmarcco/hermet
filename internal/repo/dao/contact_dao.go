@@ -24,8 +24,8 @@ type Contact struct {
 
 	Tags []string `gorm:"column:tags"`
 
-	IsStarred bool `gorm:"column:is_starred"`
-	IsBlocked bool `gorm:"column:is_blocked"`
+	IsMuted  bool `gorm:"column:is_muted"`
+	IsPinned bool `gorm:"column:is_pinned"`
 
 	AddedAt   int64 `gorm:"column:added_at"`
 	DeletedAt int64 `gorm:"column:deleted_at"`
@@ -50,8 +50,8 @@ type ContactView struct {
 	RemarkName string   `gorm:"column:remark_name"`
 	Tags       []string `gorm:"column:tags"`
 
-	IsStarred bool `gorm:"column:is_starred"`
-	IsBlocked bool `gorm:"column:is_blocked"`
+	IsMuted  bool `gorm:"column:is_muted"`
+	IsPinned bool `gorm:"column:is_pinned"`
 
 	Mobile string `gorm:"column:mobile"`
 	Source string `gorm:"column:source"`
@@ -75,7 +75,9 @@ type ContactReverseIndex struct {
 
 type ContactDao interface {
 	// Create 创建用户联系人 ( 同时创建视图和反向索引 )。
-	Create(ctx context.Context, contact Contact, user BizUser) error
+	Create(ctx context.Context, contact Contact, user BizUser) (Contact, error)
+	// Recreate 重新创建用户联系人 ( 用于删除后重新添加 )。
+	Recreate(ctx context.Context, contact Contact) (Contact, error)
 
 	FindByUserIDAndContactID(ctx context.Context, userID, contactID uint64) (Contact, error)
 	ListViewByUserID(ctx context.Context, userID uint64) ([]ContactView, error)
@@ -86,33 +88,34 @@ var _ ContactDao = (*DefaultContactDao)(nil)
 type DefaultContactDao struct {
 	dbs *xsync.Map[string, *gorm.DB]
 
-	baseShardHelper         *sharding.ShardHelper
+	shardHelper             *sharding.ShardHelper
 	viewShardHelper         *sharding.ShardHelper
 	reverseIndexShardHelper *sharding.ShardHelper
 }
 
 func NewDefaultContactDao(
 	dbs *xsync.Map[string, *gorm.DB],
-	baseShardHelper, viewShardHelper, reverseIndexShardHelper *sharding.ShardHelper,
+	shardHelper, viewShardHelper, reverseIndexShardHelper *sharding.ShardHelper,
 ) *DefaultContactDao {
 	return &DefaultContactDao{
 		dbs: dbs,
 
-		baseShardHelper:         baseShardHelper,
+		shardHelper:             shardHelper,
 		viewShardHelper:         viewShardHelper,
 		reverseIndexShardHelper: reverseIndexShardHelper,
 	}
 }
 
-func (d *DefaultContactDao) Create(ctx context.Context, contact Contact, user BizUser) error {
-	id, dst, err := d.baseShardHelper.NextIDAndShard(sharding.NewSingleIDSharder(contact.UserID))
+// Create 创建用户联系人 ( 同时创建视图和反向索引 )。
+func (d *DefaultContactDao) Create(ctx context.Context, contact Contact, user BizUser) (Contact, error) {
+	id, dst, err := d.shardHelper.NextIDAndShard(sharding.NewSingleIDSharder(contact.UserID))
 	if err != nil {
-		return fmt.Errorf("failed to get shard destination from user id [ %d ]", contact.UserID)
+		return Contact{}, fmt.Errorf("failed to get shard destination from user id [ %d ]", contact.UserID)
 	}
 
 	db, ok := d.dbs.Load(dst.DB)
 	if !ok {
-		return fmt.Errorf("failed to load database [ %s ]", dst.DB)
+		return Contact{}, fmt.Errorf("failed to load database [ %s ]", dst.DB)
 	}
 
 	now := time.Now().UnixMilli()
@@ -140,10 +143,7 @@ func (d *DefaultContactDao) Create(ctx context.Context, contact Contact, user Bi
 		}
 
 		// 2. 写入 contact_view 表。
-		viewDst, err := d.viewShardHelper.DstFromSharder(sharding.NewSingleIDSharder(contact.UserID))
-		if err != nil {
-			return fmt.Errorf("failed to get shard destination from user id [ %d ]", contact.UserID)
-		}
+		viewDst, _ := d.viewShardHelper.DstFromSharder(sharding.NewSingleIDSharder(contact.UserID))
 		err = tx.WithContext(ctx).Table(viewDst.TB).Model(&ContactView{}).
 			// 唯一索引 ( user_id, contact_id ) 冲突时，不进行任何操作。
 			Clauses(clause.OnConflict{
@@ -151,7 +151,7 @@ func (d *DefaultContactDao) Create(ctx context.Context, contact Contact, user Bi
 				DoNothing: true,
 			}).
 			Create(&ContactView{
-				ID: id,
+				ID: contact.ID,
 
 				UserID:    contact.UserID,
 				ContactID: contact.ContactID,
@@ -175,10 +175,7 @@ func (d *DefaultContactDao) Create(ctx context.Context, contact Contact, user Bi
 		}
 
 		// 3. 写入 contact_reverse_index 表。
-		reverseIndexDst, err := d.reverseIndexShardHelper.DstFromSharder(sharding.NewSingleIDSharder(contact.UserID))
-		if err != nil {
-			return fmt.Errorf("failed to get shard destination from user id [ %d ]", contact.UserID)
-		}
+		reverseIndexDst, _ := d.reverseIndexShardHelper.DstFromSharder(sharding.NewSingleIDSharder(contact.UserID))
 		err = tx.WithContext(ctx).Table(reverseIndexDst.TB).Model(&ContactReverseIndex{}).
 			// 唯一索引 ( user_id, owner_id ) 冲突时，不进行任何操作。
 			Clauses(clause.OnConflict{
@@ -186,7 +183,7 @@ func (d *DefaultContactDao) Create(ctx context.Context, contact Contact, user Bi
 				DoNothing: true,
 			}).
 			Create(&ContactReverseIndex{
-				ID: id,
+				ID: contact.ID,
 				// 这里是反向索引 ( userID 为当前用户 / ownerID 为联系人 ID )。
 				// 即 owner 的联系人中有当前用户。
 				UserID:  contact.UserID,
@@ -197,14 +194,70 @@ func (d *DefaultContactDao) Create(ctx context.Context, contact Contact, user Bi
 		if err != nil {
 			return fmt.Errorf("failed to save contact reverse index: %w", err)
 		}
-
 		return nil
 	})
-	return err
+	return contact, err
+}
+
+// Recreate 重新创建用户联系人 ( 用于删除后重新添加 )。
+func (d *DefaultContactDao) Recreate(ctx context.Context, contact Contact) (Contact, error) {
+	dst, err := d.shardHelper.DstFromID(contact.ID)
+	if err != nil {
+		return Contact{}, fmt.Errorf("failed to get shard destination from id [ %d ]", contact.ID)
+	}
+
+	db, ok := d.dbs.Load(dst.DB)
+	if !ok {
+		return Contact{}, fmt.Errorf("failed to load database [ %s ]", dst.DB)
+	}
+
+	now := time.Now().UnixMilli()
+
+	// 开启事务。
+	// 这里需要将多个数据表的 deleted_at 字段设置为 0 并更新 added_at 和 updated_at 字段:
+	// 	- contact
+	// 	- contact_view
+	// 	- contact_reverse_index
+	// 这 3 张表都是以 user_id 为分片键，因此能确保在同一个数据库分片内进行事务操作。
+	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 1. 更新 contact 表。
+		err = tx.WithContext(ctx).Table(dst.TB).Model(&Contact{}).
+			Where("id = ?", contact.ID).
+			Update("deleted_at", 0).
+			Update("added_at", now).
+			Update("updated_at", now).Error
+		if err != nil {
+			return fmt.Errorf("failed to update user contact: %w", err)
+		}
+
+		// 2. 更新 contact_view 表。
+		viewDst, _ := d.viewShardHelper.DstFromID(contact.ID)
+		err = tx.WithContext(ctx).Table(viewDst.TB).Model(&ContactView{}).
+			Where("id = ?", contact.ID).
+			Update("deleted_at", 0).
+			Update("added_at", now).
+			Update("updated_at", now).Error
+		if err != nil {
+			return fmt.Errorf("failed to update user contact view: %w", err)
+		}
+
+		// 3. 更新 contact_reverse_index 表。
+		reverseIndexDst, _ := d.reverseIndexShardHelper.DstFromSharder(sharding.NewSingleIDSharder(contact.UserID))
+		err = tx.WithContext(ctx).Table(reverseIndexDst.TB).Model(&ContactReverseIndex{}).
+			Where("id = ?", contact.ID).
+			Update("deleted_at", 0).
+			Update("added_at", now).
+			Update("updated_at", now).Error
+		if err != nil {
+			return fmt.Errorf("failed to save contact reverse index: %w", err)
+		}
+		return nil
+	})
+	return contact, err
 }
 
 func (d *DefaultContactDao) FindByUserIDAndContactID(ctx context.Context, userID, contactID uint64) (Contact, error) {
-	dst, err := d.baseShardHelper.DstFromSharder(sharding.NewSingleIDSharder(userID))
+	dst, err := d.shardHelper.DstFromSharder(sharding.NewSingleIDSharder(userID))
 	if err != nil {
 		return Contact{}, err
 	}
@@ -218,7 +271,6 @@ func (d *DefaultContactDao) FindByUserIDAndContactID(ctx context.Context, userID
 	err = db.WithContext(ctx).Table(dst.TB).Model(&Contact{}).
 		Where("user_id = ?", userID).
 		Where("contact_id = ?", contactID).
-		Where("deleted_at = ?", 0).
 		First(&uc).Error
 	if err != nil {
 		return Contact{}, err

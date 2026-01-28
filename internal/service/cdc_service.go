@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jrmarcco/hermet/internal/cdc/event"
 	"github.com/jrmarcco/hermet/internal/domain"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/repo"
@@ -55,7 +56,7 @@ func NewDefaultCDCService(
 }
 
 func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message) error {
-	var event domain.ContactApplicationCDCEvent
+	var event event.ContactApplicationCDCEvent
 	if err := json.Unmarshal(msg.Val, &event); err != nil {
 		return fmt.Errorf("failed to unmarshal contact application cdc event: %w", err)
 	}
@@ -76,24 +77,22 @@ func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message
 
 	// 创建 A -> B 的联系人关系。
 	eg.Go(func() error {
-		err := s.contactRepo.Create(ctx, domain.Contact{
+		return s.createContactAsync(ctx, domain.Contact{
 			UserID:    event.ApplicantID,
 			ContactID: event.TargetID,
 			Source:    event.Source,
 			AddedAt:   event.CreatedAt,
 		})
-		return err
 	})
 
 	// 创建 B -> A 的联系人关系。
 	eg.Go(func() error {
-		err := s.contactRepo.Create(ctx, domain.Contact{
+		return s.createContactAsync(ctx, domain.Contact{
 			UserID:    event.TargetID,
 			ContactID: event.ApplicantID,
 			Source:    event.Source,
 			AddedAt:   event.ReviewedAt,
 		})
-		return err
 	})
 
 	if err := eg.Wait(); err != nil {
@@ -106,8 +105,35 @@ func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message
 	return nil
 }
 
+// createContactAsync 创建联系人关系 ( 异步 )。
+// 如果联系人关系已经存在但被删除了，则重新添加。
+// 如果联系人关系不存在，则创建。
+func (s *DefaultCDCService) createContactAsync(ctx context.Context, contact domain.Contact) error {
+	// 查询联系人关系。
+	contact, err := s.contactRepo.FindByUserIDAndContactID(ctx, contact.UserID, contact.ContactID)
+	if err != nil {
+		return err
+	}
+
+	if contact.ID != 0 && contact.DeletedAt != 0 {
+		// 以前添加过联系人但被删除了，现在重新添加。
+		_, err = s.contactRepo.Recreate(ctx, contact)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = s.contactRepo.Create(ctx, contact)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// createContactSync 创建联系人关系。
+// TODO: 需要考虑联系人删除后重新添加的情况。
 func (s *DefaultCDCService) ProcessConversation(ctx context.Context, msg *xmq.Message) error {
-	var event domain.UserContactCDCEvent
+	var event event.ContactCDCEvent
 	if err := json.Unmarshal(msg.Val, &event); err != nil {
 		return fmt.Errorf("failed to unmarshal user contact cdc event: %w", err)
 	}

@@ -9,35 +9,35 @@ const (
 
 // ConversationView 会话视图。
 type ConversationView struct {
-	ID uint64 `json:"id"`
+	ID uint64 // 会话 ID
 
-	UserID        uint64 `json:"userId"`
-	TargetID      uint64 `json:"targetId"`
-	TargetInfoVer int    `json:"targetInfoVer"`
+	UserID        uint64 // 用户 ID
+	TargetID      uint64 // 目标用户 ID
+	TargetInfoVer int    // 目标用户信息版本
 
-	ConversationType   ConversationType `json:"conversationType"`
-	ConversationName   string           `json:"conversationName"`
-	ConversationRemark string           `json:"conversationRemark"`
-	ConversationAvatar string           `json:"conversationAvatar"`
+	ConversationType   ConversationType // 会话类型
+	ConversationName   string           // 会话名称
+	ConversationRemark string           // 会话备注
+	ConversationAvatar string           // 会话头像
 
-	IsMuted   bool `json:"isMuted"`
-	IsPinned  bool `json:"isPinned"`
-	IsHidden  bool `json:"isHidden"`
-	IsStarred bool `json:"isStarred"`
+	IsMuted   bool // 是否免打扰
+	IsPinned  bool // 是否置顶
+	IsHidden  bool // 是否隐藏
+	IsStarred bool // 是否星标
 
-	LastMessageID         uint64 `json:"lastMessageId"`
-	LastMessageType       string `json:"lastMessageType"`
-	LastMessageContent    string `json:"lastMessageContent"`
-	LastMessageSenderID   uint64 `json:"lastMessageSenderId"`
-	LastMessageSenderName string `json:"lastMessageSenderName"`
-	LastMessageTime       int64  `json:"lastMessageTime"`
+	LastMessageID         uint64
+	LastMessageType       string
+	LastMessageContent    string
+	LastMessageSenderID   uint64 // 最后消息发送者 ID
+	LastMessageSenderName string // 最后消息发送者昵称
+	LastMessageTime       int64  // 最后消息时间戳 ( Unix 毫秒值 )
 
-	UnreadCount  int `json:"unreadCount"`
-	MentionCount int `json:"mentionCount"`
+	UnreadCount  int
+	MentionCount int
 
-	OpenedAt int64 `json:"openedAt"`
-	ClosedAt int64 `json:"closedAt"`
+	OpenedAt int64
+	ClosedAt int64
 
-	CreatedAt int64 `json:"createdAt"`
-	UpdatedAt int64 `json:"updatedAt"`
+	CreatedAt int64
+	UpdatedAt int64
 }

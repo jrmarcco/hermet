@@ -1,9 +1,12 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jrmarcco/hermet/internal/domain"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin"
 	"github.com/jrmarcco/hermet/internal/service"
 	"go.uber.org/zap"
@@ -31,6 +34,15 @@ func (h *ConversationHandler) Register(engine *gin.Engine) {
 
 type getConversationResp struct {
 	ID uint64 `json:"id"`
+
+	// 关系 ID ( 用于唯一标识一个会话 )。
+	// 取值规则:
+	//
+	//  - ConversationType = single
+	// 	  RelationID = min(UserID, TargetID):max(UserID, TargetID)。
+	//  - ConversationType = group
+	// 	  RelationID = TargetID。
+	RelationID string `json:"relationId"`
 
 	UserID        uint64 `json:"userId"`
 	TargetID      uint64 `json:"targetId"`
@@ -63,10 +75,11 @@ func (h *ConversationHandler) GetConversations(ctx *gin.Context, au xgin.Context
 		return xgin.R{}, err
 	}
 
-	resps := make([]getConversationResp, 0, len(conversations))
+	data := make([]getConversationResp, 0, len(conversations))
 	for i := range conversations {
-		resps = append(resps, getConversationResp{
-			ID: conversations[i].ID,
+		data = append(data, getConversationResp{
+			ID:         conversations[i].ID,
+			RelationID: relationID(conversations[i].UserID, conversations[i].TargetID, conversations[i].ConversationType),
 
 			UserID:        conversations[i].UserID,
 			TargetID:      conversations[i].TargetID,
@@ -96,6 +109,16 @@ func (h *ConversationHandler) GetConversations(ctx *gin.Context, au xgin.Context
 
 	return xgin.R{
 		Code: http.StatusOK,
-		Data: resps,
+		Data: data,
 	}, nil
+}
+
+func relationID(userID, targetID uint64, conversationType domain.ConversationType) string {
+	if conversationType == domain.ConversationTypeSingle {
+		if userID < targetID {
+			return fmt.Sprintf("%d:%d", userID, targetID)
+		}
+		return fmt.Sprintf("%d:%d", targetID, userID)
+	}
+	return strconv.FormatUint(targetID, 10)
 }

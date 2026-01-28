@@ -51,7 +51,7 @@ func (s *DefaultUserService) AddUser(ctx context.Context, user domain.BizUser) e
 	user.UpdatedAt = user.CreatedAt
 
 	// 添加用户。
-	_, err = s.bizUserRepo.Save(ctx, user)
+	_, err = s.bizUserRepo.Create(ctx, user)
 	if err != nil {
 		return err
 	}

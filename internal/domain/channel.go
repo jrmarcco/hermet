@@ -1,46 +1,64 @@
 package domain
 
-type ChannelType string
+type ChannelStatus string
 
 const (
-	ChannelTypeSingle = ChannelType("single")
-	ChannelTypeGroup  = ChannelType("group")
+	ChannelStatusCreating ChannelStatus = "creating"
+	ChannelStatusActive   ChannelStatus = "active"
+	ChannelStatusFailed   ChannelStatus = "failed"
+	ChannelStatusArchived ChannelStatus = "archived"
 )
 
-// Channel 是整个 im 的核心抽象，表示一个聊天频道。
-// 频道可以是单聊/群聊。
-// 所有的通信都可以看作是发送到特定的频道，频道中的所有人都会收到消息。
+// Channel 表示一个聊天频道。
 type Channel struct {
-	ID          uint64      `json:"id"`
-	Avatar      string      `json:"avatar"`
-	ChannelName string      `json:"channelName"`
-	ChannelType ChannelType `json:"channelType"`
+	ID uint64 // 频道 ID
 
-	Self ChannelMember `json:"self"` // 当前用户在频道中的成员信息
+	ChannelName        string        // 频道名称
+	ChannelAvatar      string        // 频道头像
+	ChannelStatus      ChannelStatus // 频道状态
+	ChannelMemberCount int           // 频道成员数量
+
+	InfoVer int // 信息版本
+
+	LastMessageAt int64 // 最后消息时间戳 ( Unix 毫秒值 )
+
+	CreatorID uint64 // 创建者 ID
+
+	CreatedAt int64 // 创建时间戳 ( Unix 毫秒值 )
+	UpdatedAt int64 // 更新时间戳 ( Unix 毫秒值 )
+
+	Self ChannelMember // 当前用户在频道中的成员信息
 }
+
+type ChannelMemberRole string
+
+const (
+	ChannelMemberRoleOwner  ChannelMemberRole = "owner"
+	ChannelMemberRoleAdmin  ChannelMemberRole = "admin"
+	ChannelMemberRoleMember ChannelMemberRole = "member"
+)
 
 // ChannelMember 是频道中的成员。
 type ChannelMember struct {
-	CID uint64 `json:"cid"`
-	UID uint64 `json:"uid"`
+	ID uint64 // 成员 ID
 
-	UserRole       string `json:"userRole"`
-	UserProfileVer int    `json:"userProfileVer"`
+	CID uint64 // 频道 ID
+	UID uint64 // 用户 ID
 
-	Avatar        string `json:"avatar"`
-	Alias         string `json:"alias"`
-	Nickname      string `json:"nickname"`
-	PriorityOrder int    `json:"priorityOrder"`
+	MemberRole ChannelMemberRole // 成员角色
 
-	Mute   bool  `json:"mute"`
-	JoinAt int64 `json:"joinAt"`
+	JoinedAt int64 // 加入时间戳 ( Unix 毫秒值 )
+	LeftAt   int64 // 退出时间戳 ( Unix 毫秒值 )
+
+	CreatedAt int64 // 创建时间戳 ( Unix 毫秒值 )
+	UpdatedAt int64 // 更新时间戳 ( Unix 毫秒值 )
 }
 
 // ChannelReadRecord 是频道中消息阅读记录。
 // 记录了当前频道阅读到的最后一条消息的 ID。
 type ChannelReadRecord struct {
-	CID           uint64 `json:"cid"`
-	LastMessageID uint64 `json:"lastMessageId"`
+	CID           uint64 // 频道 ID
+	LastMessageID uint64 // 最后一条消息 ID
 }
 
 // ChannelReadRecords 是用户所有频道的消息阅读记录。

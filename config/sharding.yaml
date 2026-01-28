@@ -61,3 +61,31 @@ sharding:
     tb_prefix: conversation_reverse_index
     db_shard_count: 2
     tb_shard_count: 4
+
+  # 频道表
+  channel:
+    db_prefix: hermet
+    tb_prefix: channel
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 频道成员表
+  channel_member:
+    db_prefix: hermet
+    tb_prefix: channel_member
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 频道成员视图表
+  channel_member_view:
+    db_prefix: hermet
+    tb_prefix: channel_member_view
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 频道成员反向索引表
+  channel_member_reverse_index:
+    db_prefix: hermet
+    tb_prefix: channel_member_reverse_index
+    db_shard_count: 2
+    tb_shard_count: 4

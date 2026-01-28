@@ -11,7 +11,7 @@ CREATE TABLE contact_application (
     applicant_id BIGINT NOT NULL,
 
     -- 申请用户信息。
-    applicant_name VARCHAR(128) NOT NULL DEFAULT '',
+    applicant_name VARCHAR(64) NOT NULL DEFAULT '',
     applicant_avatar VARCHAR(256) NOT NULL DEFAULT '',
     application_status VARCHAR(16) NOT NULL DEFAULT 'pending',
     application_message VARCHAR(256) NOT NULL DEFAULT '',
@@ -58,7 +58,7 @@ CREATE TABLE channel_application (
 
     -- 目标渠道信息。
     channel_id BIGINT NOT NULL,
-    channel_name VARCHAR(128) NOT NULL DEFAULT '',
+    channel_name VARCHAR(64) NOT NULL DEFAULT '',
     channel_avatar VARCHAR(256) NOT NULL DEFAULT '',
 
     application_status VARCHAR(16) NOT NULL DEFAULT 'pending',

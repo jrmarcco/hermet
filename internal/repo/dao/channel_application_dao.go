@@ -32,7 +32,7 @@ type ChannelApplication struct {
 }
 
 type ChannelApplicationDao interface {
-	Save(ctx context.Context, ca ChannelApplication) (ChannelApplication, error)
+	Create(ctx context.Context, ca ChannelApplication) (ChannelApplication, error)
 }
 
 var _ ChannelApplicationDao = (*DefaultChannelApplicationDao)(nil)
@@ -49,7 +49,7 @@ func NewDefaultChannelApplicationDao(dbs *xsync.Map[string, *gorm.DB], shardHelp
 	}
 }
 
-func (d *DefaultChannelApplicationDao) Save(ctx context.Context, ca ChannelApplication) (ChannelApplication, error) {
+func (d *DefaultChannelApplicationDao) Create(ctx context.Context, ca ChannelApplication) (ChannelApplication, error) {
 	id, dst, err := d.shardHelper.NextIDAndShard(sharding.NewSingleIDSharder(ca.ChannelID))
 	if err != nil {
 		return ChannelApplication{}, fmt.Errorf("failed to get shard destination from channel id [ %d ]", ca.ChannelID)

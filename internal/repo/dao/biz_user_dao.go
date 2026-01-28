@@ -42,7 +42,7 @@ type BizUser struct {
 //go:generate mockgen -source=biz_user_dao.go -destination=mock/biz_user_dao.mock.go -package=daomock -typed BizUserDao
 
 type BizUserDao interface {
-	Save(ctx context.Context, user BizUser) (BizUser, error)
+	Create(ctx context.Context, user BizUser) (BizUser, error)
 
 	FindByID(ctx context.Context, id uint64) (BizUser, error)
 	FindByEmail(ctx context.Context, email string) (BizUser, error)
@@ -62,7 +62,7 @@ func NewDefaultBizUserDao(dbs *xsync.Map[string, *gorm.DB], shardHelper *shardin
 	}
 }
 
-func (d *DefaultBizUserDao) Save(ctx context.Context, user BizUser) (BizUser, error) {
+func (d *DefaultBizUserDao) Create(ctx context.Context, user BizUser) (BizUser, error) {
 	id, dst, err := d.shardHelper.NextIDAndShard(sharding.NewStringSharder(user.Email))
 	if err != nil {
 		return BizUser{}, fmt.Errorf("failed to get shard destination from email [ %s ]", user.Email)

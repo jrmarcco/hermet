@@ -112,6 +112,26 @@ var ShardingFxModule = fx.Module(
 			newConversationViewShardHelper,
 			fx.ResultTags(`name:"conversation_view_shard_helper"`),
 		),
+		// 频道。
+		fx.Annotate(
+			newChannelShardHelper,
+			fx.ResultTags(`name:"channel_shard_helper"`),
+		),
+		// 频道成员。
+		fx.Annotate(
+			newChannelMemberShardHelper,
+			fx.ResultTags(`name:"channel_member_shard_helper"`),
+		),
+		// 频道成员视图。
+		fx.Annotate(
+			newChannelMemberViewShardHelper,
+			fx.ResultTags(`name:"channel_member_view_shard_helper"`),
+		),
+		// 频道成员反向索引。
+		fx.Annotate(
+			newChannelMemberReverseIndexShardHelper,
+			fx.ResultTags(`name:"channel_member_reverse_index_shard_helper"`),
+		),
 		// 会话反向索引。
 		fx.Annotate(
 			newConversationReverseIndexShardHelper,

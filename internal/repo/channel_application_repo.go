@@ -8,7 +8,7 @@ import (
 )
 
 type ChannelApplicationRepo interface {
-	Save(ctx context.Context, application domain.ChannelApplication) (domain.ChannelApplication, error)
+	Create(ctx context.Context, application domain.ChannelApplication) (domain.ChannelApplication, error)
 }
 
 var _ ChannelApplicationRepo = (*DefaultChannelApplicationRepo)(nil)
@@ -25,11 +25,8 @@ func NewDefaultChannelApplicationRepo(
 	}
 }
 
-func (r *DefaultChannelApplicationRepo) Save(
-	ctx context.Context,
-	application domain.ChannelApplication,
-) (domain.ChannelApplication, error) {
-	entity, err := r.channelApplicationDao.Save(ctx, r.toEntity(application))
+func (r *DefaultChannelApplicationRepo) Create(ctx context.Context, application domain.ChannelApplication) (domain.ChannelApplication, error) {
+	entity, err := r.channelApplicationDao.Create(ctx, r.toEntity(application))
 	if err != nil {
 		return domain.ChannelApplication{}, err
 	}

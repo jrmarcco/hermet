@@ -33,7 +33,7 @@ type ContactApplication struct {
 }
 
 type ContactApplicationDao interface {
-	Save(ctx context.Context, ca ContactApplication) (ContactApplication, error)
+	Create(ctx context.Context, ca ContactApplication) (ContactApplication, error)
 
 	UpdateStatus(ctx context.Context, applicationID uint64, status domain.ApplicationStatus) error
 
@@ -55,7 +55,7 @@ func NewDefaultContactApplicationDao(dbs *xsync.Map[string, *gorm.DB], shardHelp
 	}
 }
 
-func (d *DefaultContactApplicationDao) Save(ctx context.Context, ca ContactApplication) (ContactApplication, error) {
+func (d *DefaultContactApplicationDao) Create(ctx context.Context, ca ContactApplication) (ContactApplication, error) {
 	id, dst, err := d.shardHelper.NextIDAndShard(sharding.NewSingleIDSharder(ca.TargetID))
 	if err != nil {
 		return ContactApplication{}, err

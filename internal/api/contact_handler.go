@@ -152,9 +152,6 @@ type getContactsResp struct {
 	RemarkName string   `json:"remarkName"`
 	Tags       []string `json:"tags"`
 
-	IsStarred bool `json:"isStarred"`
-	IsBlocked bool `json:"isBlocked"`
-
 	Mobile string `json:"mobile"`
 	Source string `json:"source"`
 
@@ -182,9 +179,6 @@ func (h *ContactHandler) GetContacts(ctx *gin.Context, au xgin.ContextUser) (xgi
 
 			RemarkName: contacts[i].RemarkName,
 			Tags:       contacts[i].Tags,
-
-			IsStarred: contacts[i].IsStarred,
-			IsBlocked: contacts[i].IsBlocked,
 
 			Mobile: contacts[i].Mobile,
 			Source: string(contacts[i].Source),

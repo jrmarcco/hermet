@@ -49,13 +49,13 @@ func NewDefaultContactService(
 
 func (s *DefaultContactService) Apply(ctx context.Context, event domain.ContactApplyEvent) error {
 	// 判断是否已经存在联系人。
-	uc, err := s.contactRepo.FindByUserIDAndContactID(ctx, event.ApplicantID, event.TargetID)
+	contact, err := s.contactRepo.FindByUserIDAndContactID(ctx, event.ApplicantID, event.TargetID)
 	if err != nil && !errors.Is(err, errs.ErrRecordNotFound) {
 		return err
 	}
 
 	// 已经存在联系人。
-	if uc.ID != 0 {
+	if contact.ID != 0 && contact.DeletedAt == 0 {
 		return fmt.Errorf("%w: contact already exists", errs.ErrInvalidParam)
 	}
 
@@ -79,7 +79,7 @@ func (s *DefaultContactService) Apply(ctx context.Context, event domain.ContactA
 		Source:             event.Source,
 	}
 
-	_, err = s.contactApplicationRepo.Save(ctx, ca)
+	_, err = s.contactApplicationRepo.Create(ctx, ca)
 	if err != nil {
 		return err
 	}

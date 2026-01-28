@@ -72,7 +72,7 @@ CREATE TABLE channel (
     id BIGINT PRIMARY KEY,
 
     -- 频道基础信息
-    channel_name VARCHAR(128) NOT NULL DEFAULT '',
+    channel_name VARCHAR(64) NOT NULL DEFAULT '',
     channel_avatar VARCHAR(256) NOT NULL DEFAULT '',
     channel_status VARCHAR(16) NOT NULL,
     channel_member_count INT NOT NULL DEFAULT 0,
@@ -113,8 +113,11 @@ CREATE INDEX idx_channel_status ON channel(channel_status);
 DROP TABLE IF EXISTS channel_member;
 CREATE TABLE channel_member (
     id BIGINT PRIMARY KEY,
+
     channel_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
+
+    member_role VARCHAR(16) NOT NULL DEFAULT 'member',
 
     -- 加入 / 退出时间
     joined_at BIGINT NOT NULL,
@@ -134,6 +137,7 @@ COMMENT ON TABLE channel_member IS '【 写入侧 】频道成员表 ( 群聊成
 COMMENT ON COLUMN channel_member.id IS '主键 ID';
 COMMENT ON COLUMN channel_member.channel_id IS '频道 ID';
 COMMENT ON COLUMN channel_member.user_id IS '用户 ID';
+COMMENT ON COLUMN channel_member.member_role IS '成员角色 ( owner=群主 / admin=管理员 / member=普通成员 )';
 COMMENT ON COLUMN channel_member.joined_at IS '加入时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN channel_member.left_at IS '退出时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN channel_member.created_at IS '创建时间戳 ( Unix 毫秒值 )';
@@ -187,8 +191,8 @@ CREATE TABLE contact (
     tags VARCHAR(128)[] DEFAULT '{}',                               -- 联系人标签
 
     -- 状态标记
-    is_starred BOOLEAN NOT NULL DEFAULT FALSE,  -- 星标
-    is_blocked BOOLEAN NOT NULL DEFAULT FALSE,  -- 黑名单
+    is_muted BOOLEAN NOT NULL DEFAULT FALSE,            -- 免打扰
+    is_pinned BOOLEAN NOT NULL DEFAULT FALSE,           -- 置顶
 
     added_at BIGINT NOT NULL,
     deleted_at BIGINT NOT NULL DEFAULT 0,
@@ -210,13 +214,54 @@ COMMENT ON COLUMN contact.contact_id IS '联系人 ID';
 COMMENT ON COLUMN contact.remark_name IS '联系人备注名';
 COMMENT ON COLUMN contact.source IS '添加来源 ( search=搜索 / qrcode=扫码 / group=群聊 )';
 COMMENT ON COLUMN contact.tags IS '联系人标签数组';
-COMMENT ON COLUMN contact.is_starred IS '是否星标联系人';
-COMMENT ON COLUMN contact.is_blocked IS '是否黑名单联系人';
+COMMENT ON COLUMN contact.is_muted IS '是否免打扰';
+COMMENT ON COLUMN contact.is_pinned IS '是否置顶';
 COMMENT ON COLUMN contact.added_at IS '添加时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN contact.deleted_at IS '删除时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN contact.created_at IS '创建时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN contact.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
+
 -- 索引
 CREATE INDEX idx_contact_user ON contact(user_id);
-CREATE INDEX idx_contact_user_active ON contact(user_id, deleted_at) WHERE deleted_at = 0;
-CREATE INDEX idx_contact_user_starred ON contact(user_id, is_starred) WHERE is_starred = TRUE AND deleted_at = 0;
+
+
+-- 用户频道表
+DROP TABLE IF EXISTS user_channel;
+CREATE TABLE user_channel (
+    id BIGINT PRIMARY KEY,
+
+    user_id BIGINT NOT NULL,
+    channel_id BIGINT NOT NULL,
+
+    -- 个性化设置
+    remark_name VARCHAR(64) NOT NULL DEFAULT '',       -- 频道备注名
+
+    is_muted BOOLEAN NOT NULL DEFAULT FALSE,            -- 免打扰
+    is_pinned BOOLEAN NOT NULL DEFAULT FALSE,           -- 置顶
+
+    -- 时间信息
+    joined_at BIGINT NOT NULL,
+    left_at BIGINT NOT NULL DEFAULT 0,
+
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+
+    -- 约束
+    CONSTRAINT uk_user_channel UNIQUE(user_id, channel_id)
+);
+
+
+COMMENT ON TABLE user_channel IS '【 写入侧 】用户频道表';
+COMMENT ON COLUMN user_channel.id IS '主键 ID';
+COMMENT ON COLUMN user_channel.user_id IS '用户 ID';
+COMMENT ON COLUMN user_channel.channel_id IS '频道 ID';
+COMMENT ON COLUMN user_channel.remark_name IS '频道备注名';
+COMMENT ON COLUMN user_channel.is_muted IS '是否免打扰';
+COMMENT ON COLUMN user_channel.is_pinned IS '是否置顶';
+COMMENT ON COLUMN user_channel.joined_at IS '加入时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN user_channel.left_at IS '退出时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN user_channel.created_at IS '创建时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN user_channel.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
+
+-- 索引
+CREATE INDEX idx_user_channel_user ON user_channel(user_id);

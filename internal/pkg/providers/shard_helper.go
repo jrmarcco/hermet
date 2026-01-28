@@ -89,6 +89,38 @@ func newConversationViewShardHelper(gen idgen.Generator, extractor sharding.Shar
 	return newShardHelper(gen, extractor, cfg)
 }
 
+func newChannelShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
+	cfg := shardingConfig{}
+	if err := viper.UnmarshalKey("sharding.channel", &cfg); err != nil {
+		return nil, err
+	}
+	return newShardHelper(gen, extractor, cfg)
+}
+
+func newChannelMemberShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
+	cfg := shardingConfig{}
+	if err := viper.UnmarshalKey("sharding.channel_member", &cfg); err != nil {
+		return nil, err
+	}
+	return newShardHelper(gen, extractor, cfg)
+}
+
+func newChannelMemberViewShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
+	cfg := shardingConfig{}
+	if err := viper.UnmarshalKey("sharding.channel_member_view", &cfg); err != nil {
+		return nil, err
+	}
+	return newShardHelper(gen, extractor, cfg)
+}
+
+func newChannelMemberReverseIndexShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
+	cfg := shardingConfig{}
+	if err := viper.UnmarshalKey("sharding.channel_member_reverse_index", &cfg); err != nil {
+		return nil, err
+	}
+	return newShardHelper(gen, extractor, cfg)
+}
+
 func newConversationReverseIndexShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
 	cfg := shardingConfig{}
 	if err := viper.UnmarshalKey("sharding.conversation_reverse_index", &cfg); err != nil {
