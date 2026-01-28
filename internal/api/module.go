@@ -22,6 +22,13 @@ var APIFxModule = fx.Module(
 			fx.ResultTags(`group:"api_registry"`),
 		),
 
+		// 频道 ( Channel ) API。
+		fx.Annotate(
+			NewChannelHandler,
+			fx.As(new(xgin.RouteRegistry)),
+			fx.ResultTags(`group:"api_registry"`),
+		),
+
 		// 会话 ( Conversation ) API。
 		fx.Annotate(
 			NewConversationHandler,

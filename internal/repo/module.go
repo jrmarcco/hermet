@@ -30,6 +30,11 @@ var RepoFxModule = fx.Module(
 			NewDefaultChannelApplicationRepo,
 			fx.As(new(ChannelApplicationRepo)),
 		),
+		// channel repo ( 频道 )
+		fx.Annotate(
+			NewDefaultChannelRepo,
+			fx.As(new(ChannelRepo)),
+		),
 
 		// user conversation repo ( 用户会话 )
 		fx.Annotate(

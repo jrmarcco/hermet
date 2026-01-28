@@ -203,3 +203,8 @@ func (s *DefaultChannelService) addMembers(ctx context.Context, channelID uint64
 	}
 	return nil
 }
+
+func (s *DefaultChannelService) Stop() error {
+	s.cancelFunc()
+	return nil
+}
