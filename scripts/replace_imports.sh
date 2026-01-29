@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 if [ $# -ne 3 ]; then
     echo -e "${RED}错误: 参数不足${NC}"
     echo "用法: $0 <目录路径> <原前缀> <新前缀>"
-    echo "示例: $0 . github.com/jrmarcco/hermet gitee.com/xmszfc/hermet"
+    echo "示例: $0 . github.com/jrmarcco/hermet gitee.com/jrmarcco/hermet-go"
     exit 1
 fi
 
