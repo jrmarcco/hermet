@@ -27,7 +27,7 @@ CREATE INDEX idx_cori_contact ON contact_reverse_index(user_id);
 
 -- 使用场景示例
 -- 用户 A 修改了昵称/头像，需要更新哪些人的联系人视图？
--- SELECT owner_user_id FROM contact_reverse_index WHERE contact_user_id = A
+-- SELECT owner_id FROM contact_reverse_index WHERE user_id = A
 
 
 -- 频道反向索引表 ( 用于快速查询 - "谁的频道中有某个用户" )
@@ -61,4 +61,4 @@ CREATE INDEX idx_cri_channel ON channel_reverse_index(user_id);
 
 -- 使用场景示例：
 -- 用户 A 修改了昵称/头像，需要更新哪些人的会话视图？
--- SELECT user_id, target_id FROM conversation_reverse_index WHERE user_id = A
+-- SELECT user_id, target_id FROM channel_reverse_index WHERE user_id = A
