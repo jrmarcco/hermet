@@ -48,6 +48,8 @@ type ConversationView struct {
 
 // ConversationReverseIndex 会话反向索引表。
 type ConversationReverseIndex struct {
+	ID uint64 `gorm:"column:id"`
+
 	UserID   uint64 `gorm:"column:user_id"`
 	TargetID uint64 `gorm:"column:target_id"`
 
@@ -58,7 +60,7 @@ type ConversationReverseIndex struct {
 
 type ConversationDao interface {
 	// CreateView 创建用户会话视图。
-	CreateView(ctx context.Context, userConversation ConversationView) error
+	CreateView(ctx context.Context, conversation ConversationView) error
 
 	ListViewByUserID(ctx context.Context, userID uint64) ([]ConversationView, error)
 }
@@ -82,10 +84,12 @@ func NewDefaultConversationDao(
 	}
 }
 
-func (d *DefaultConversationDao) CreateView(ctx context.Context, userConversation ConversationView) error {
-	id, dst, err := d.viewShardHelper.NextIDAndShard(sharding.NewSingleIDSharder(userConversation.UserID))
+func (d *DefaultConversationDao) CreateView(ctx context.Context, conversation ConversationView) error {
+	sharder := sharding.NewSingleIDSharder(conversation.UserID)
+
+	id, dst, err := d.viewShardHelper.NextIDAndShard(sharder)
 	if err != nil {
-		return fmt.Errorf("failed to get shard destination from user id [ %d ]", userConversation.UserID)
+		return fmt.Errorf("failed to get shard destination from user id [ %d ]", conversation.UserID)
 	}
 
 	db, ok := d.dbs.Load(dst.DB)
@@ -99,12 +103,12 @@ func (d *DefaultConversationDao) CreateView(ctx context.Context, userConversatio
 	// 这里需要写入多个数据表:
 	// 	- conversation_view
 	// 	- conversation_reverse_index
-	// 这 2 张表都是以 ConversationUserID 为分片键，因此能确保在同一个数据库分片内进行事务操作。
+	// 这 2 张表都是以 user_id 为分片键，因此能确保在同一个数据库分片内进行事务操作。
 	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 1. 写入 conversation_view 表。
-		userConversation.ID = id
-		userConversation.CreatedAt = now
-		userConversation.UpdatedAt = now
+		conversation.ID = id
+		conversation.CreatedAt = now
+		conversation.UpdatedAt = now
 		err = tx.WithContext(ctx).Table(dst.TB).Model(&ConversationView{}).
 			Clauses(clause.OnConflict{
 				// 唯一索引 ( user_id, target_id, conversation_type ) 冲突时，不进行任何操作。
@@ -115,15 +119,15 @@ func (d *DefaultConversationDao) CreateView(ctx context.Context, userConversatio
 				},
 				DoNothing: true,
 			}).
-			Create(&userConversation).Error
+			Create(&conversation).Error
 		if err != nil {
 			return fmt.Errorf("failed to save user conversation view: %w", err)
 		}
 
 		// 2. 写入 conversation_reverse_index 表。
-		reverseIndexDst, err := d.reverseIndexShardHelper.DstFromSharder(sharding.NewSingleIDSharder(userConversation.UserID))
+		reverseIndexDst, err := d.reverseIndexShardHelper.DstFromSharder(sharder)
 		if err != nil {
-			return fmt.Errorf("failed to get shard destination from user id [ %d ]", userConversation.UserID)
+			return fmt.Errorf("failed to get shard destination from user id [ %d ]", conversation.UserID)
 		}
 		err = tx.WithContext(ctx).Table(reverseIndexDst.TB).Model(&ConversationReverseIndex{}).
 			Clauses(clause.OnConflict{
@@ -136,10 +140,12 @@ func (d *DefaultConversationDao) CreateView(ctx context.Context, userConversatio
 				DoNothing: true,
 			}).
 			Create(&ConversationReverseIndex{
-				UserID:   userConversation.UserID,
-				TargetID: userConversation.TargetID,
+				ID: id,
 
-				ConversationType: userConversation.ConversationType,
+				UserID:   conversation.UserID,
+				TargetID: conversation.TargetID,
+
+				ConversationType: conversation.ConversationType,
 
 				CreatedAt: now,
 			}).Error

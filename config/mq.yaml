@@ -11,13 +11,13 @@ mq:
       handle_timeout: 10s
       db_shard_count: 2
       tb_shard_count: 4
-    contact_processor:
-      group_id: hermet-contact-processor
+    contact_review_processor:
+      group_id: hermet-contact-review-processor
       handle_timeout: 10s
       db_shard_count: 2
       tb_shard_count: 4
-    conversation_processor:
-      group_id: hermet-conversation-processor
+    contact_processor:
+      group_id: hermet-contact-processor
       handle_timeout: 10s
       db_shard_count: 2
       tb_shard_count: 4

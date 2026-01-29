@@ -33,6 +33,8 @@ CREATE INDEX idx_cori_contact ON contact_reverse_index(user_id);
 -- 会话反向索引表 ( 用于快速查询 - "谁的会话中有某个用户" )
 DROP TABLE IF EXISTS conversation_reverse_index;
 CREATE TABLE conversation_reverse_index (
+    id BIGINT PRIMARY KEY,
+
     user_id BIGINT NOT NULL,                       -- 会话用户 ID
     target_id BIGINT NOT NULL,                     -- 会话目标 ID
 
@@ -48,6 +50,7 @@ CREATE TABLE conversation_reverse_index (
 );
 
 COMMENT ON TABLE conversation_reverse_index IS '【 反向索引 】会话反向索引表 ( 用于用户资料变更时，快速查询 "谁的会话中有某个用户" )';
+COMMENT ON COLUMN conversation_reverse_index.id IS '主键 ID';
 COMMENT ON COLUMN conversation_reverse_index.user_id IS '会话用户 ID';
 COMMENT ON COLUMN conversation_reverse_index.target_id IS '会话目标 ID';
 COMMENT ON COLUMN conversation_reverse_index.conversation_type IS '会话类型';

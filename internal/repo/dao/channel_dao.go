@@ -29,6 +29,8 @@ type Channel struct {
 
 	CreatorID uint64 `gorm:"column:creator_id"`
 
+	DeletedAt int64 `gorm:"column:deleted_at"`
+
 	CreatedAt int64 `gorm:"column:created_at"`
 	UpdatedAt int64 `gorm:"column:updated_at"`
 }
@@ -73,11 +75,15 @@ type ChannelMemberView struct {
 type ChannelDao interface {
 	// Create 创建频道。
 	Create(ctx context.Context, channel Channel) (Channel, error)
+	// CreateMemberView 创建频道成员视图。
+	CreateMemberView(ctx context.Context, cmv ChannelMemberView) (ChannelMemberView, error)
 	// AddMembers 添加成员。
 	AddMembers(ctx context.Context, channelID uint64, memberIDs []uint64) error
 
 	// UpdateStatus 更新频道状态。
 	UpdateStatus(ctx context.Context, id uint64, status string) error
+
+	FindByID(ctx context.Context, id uint64) (Channel, error)
 }
 
 var _ ChannelDao = (*DefaultChannelDao)(nil)
@@ -122,6 +128,31 @@ func (d *DefaultChannelDao) Create(ctx context.Context, channel Channel) (Channe
 
 	err = db.WithContext(ctx).Table(dst.TB).Model(&Channel{}).Create(&channel).Error
 	return channel, err
+}
+
+func (d *DefaultChannelDao) CreateMemberView(ctx context.Context, cmv ChannelMemberView) (ChannelMemberView, error) {
+	dst, err := d.memberViewShardHelper.DstFromID(cmv.ID)
+	if err != nil {
+		return ChannelMemberView{}, fmt.Errorf("failed to get shard destination from id [ %d ]", cmv.ID)
+	}
+
+	db, ok := d.dbs.Load(dst.DB)
+	if !ok {
+		return ChannelMemberView{}, fmt.Errorf("failed to load database [ %s ]", dst.DB)
+	}
+
+	now := time.Now().UnixMilli()
+
+	cmv.CreatedAt = now
+	cmv.UpdatedAt = now
+
+	err = db.WithContext(ctx).Table(dst.TB).Model(&ChannelMemberView{}).
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "channel_id"}, {Name: "user_id"}},
+			DoNothing: true,
+		}).
+		Create(&cmv).Error
+	return cmv, err
 }
 
 func (d *DefaultChannelDao) AddMembers(ctx context.Context, channelID uint64, memberIDs []uint64) error {
@@ -183,4 +214,23 @@ func (d *DefaultChannelDao) UpdateStatus(ctx context.Context, id uint64, status 
 	return db.WithContext(ctx).Table(dst.TB).Model(&Channel{}).
 		Where("id = ?", id).
 		Update("channel_status", status).Error
+}
+
+func (d *DefaultChannelDao) FindByID(ctx context.Context, id uint64) (Channel, error) {
+	dst, err := d.shardHelper.DstFromID(id)
+	if err != nil {
+		return Channel{}, fmt.Errorf("failed to get shard destination from id [ %d ]", id)
+	}
+
+	db, ok := d.dbs.Load(dst.DB)
+	if !ok {
+		return Channel{}, fmt.Errorf("failed to load database [ %s ]", dst.DB)
+	}
+
+	var channel Channel
+	err = db.WithContext(ctx).Table(dst.TB).Model(&Channel{}).
+		Where("id = ?", id).
+		Where("deleted_at = ?", 0).
+		First(&channel).Error
+	return channel, err
 }

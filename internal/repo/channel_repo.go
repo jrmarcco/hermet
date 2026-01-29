@@ -9,6 +9,7 @@ import (
 
 type ChannelRepo interface {
 	Create(ctx context.Context, channel domain.Channel) (domain.Channel, error)
+	CreateMemberView(ctx context.Context, cmv domain.ChannelMemberView) (domain.ChannelMemberView, error)
 	AddMembers(ctx context.Context, channelID uint64, memberIDs []uint64) error
 
 	UpdateStatus(ctx context.Context, id uint64, status string) error
@@ -32,6 +33,14 @@ func (r *DefaultChannelRepo) Create(ctx context.Context, channel domain.Channel)
 		return domain.Channel{}, err
 	}
 	return r.toDomain(entity), nil
+}
+
+func (r *DefaultChannelRepo) CreateMemberView(ctx context.Context, cmv domain.ChannelMemberView) (domain.ChannelMemberView, error) {
+	entity, err := r.channelDao.CreateMemberView(ctx, r.toViewEntity(cmv))
+	if err != nil {
+		return domain.ChannelMemberView{}, err
+	}
+	return r.toViewDomain(entity), nil
 }
 
 func (r *DefaultChannelRepo) AddMembers(ctx context.Context, channelID uint64, memberIDs []uint64) error {
@@ -79,5 +88,51 @@ func (r *DefaultChannelRepo) toDomain(channel dao.Channel) domain.Channel {
 
 		CreatedAt: channel.CreatedAt,
 		UpdatedAt: channel.UpdatedAt,
+	}
+}
+
+func (r *DefaultChannelRepo) toViewEntity(mv domain.ChannelMemberView) dao.ChannelMemberView {
+	return dao.ChannelMemberView{
+		ID: mv.ID,
+
+		ChannelID: mv.CID,
+		UserID:    mv.UID,
+
+		MemberRole: string(mv.MemberRole),
+
+		MemberNickname: mv.MemberNickname,
+		MemberAvatar:   mv.MemberAvatar,
+		MemberGender:   string(mv.MemberGender),
+		MemberRemark:   mv.MemberRemark,
+		MemberInfoVer:  mv.MemberInfoVer,
+
+		JoinedAt: mv.JoinedAt,
+		LeftAt:   mv.LeftAt,
+
+		CreatedAt: mv.CreatedAt,
+		UpdatedAt: mv.UpdatedAt,
+	}
+}
+
+func (r *DefaultChannelRepo) toViewDomain(mv dao.ChannelMemberView) domain.ChannelMemberView {
+	return domain.ChannelMemberView{
+		ID: mv.ID,
+
+		CID: mv.ChannelID,
+		UID: mv.UserID,
+
+		MemberRole: domain.ChannelMemberRole(mv.MemberRole),
+
+		MemberNickname: mv.MemberNickname,
+		MemberAvatar:   mv.MemberAvatar,
+		MemberGender:   domain.UserGender(mv.MemberGender),
+		MemberRemark:   mv.MemberRemark,
+		MemberInfoVer:  mv.MemberInfoVer,
+
+		JoinedAt: mv.JoinedAt,
+		LeftAt:   mv.LeftAt,
+
+		CreatedAt: mv.CreatedAt,
+		UpdatedAt: mv.UpdatedAt,
 	}
 }

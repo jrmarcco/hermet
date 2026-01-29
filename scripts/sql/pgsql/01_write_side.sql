@@ -84,6 +84,8 @@ CREATE TABLE channel (
 
     creator_id BIGINT NOT NULL,
 
+    deleted_at BIGINT NOT NULL DEFAULT 0,              -- 软删除 ( 0 表示未删除 )
+
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL,
 
@@ -101,6 +103,7 @@ COMMENT ON COLUMN channel.channel_member_count IS '频道成员数量';
 COMMENT ON COLUMN channel.info_ver IS '【 CQRS 关键字段 】信息版本号 ( 用于同步检测 )';
 COMMENT ON COLUMN channel.last_message_at IS '最后消息时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN channel.creator_id IS '创建者 ID';
+COMMENT ON COLUMN channel.deleted_at IS '软删除时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN channel.created_at IS '创建时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN channel.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
 

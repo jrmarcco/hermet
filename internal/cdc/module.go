@@ -13,8 +13,9 @@ import (
 
 var CdcFxModule = fx.Module(
 	"cdc",
+	fx.Invoke(newContactReviewProcessor),
 	fx.Invoke(newContactProcessor),
-	fx.Invoke(newConversationProcessor),
+	fx.Invoke(newChannelMemberProcessor),
 )
 
 type cdcProcessorConfig struct {
@@ -25,13 +26,48 @@ type cdcProcessorConfig struct {
 	TBShardCount int `mapstructure:"tb_shard_count"`
 }
 
+func newContactReviewProcessor(
+	cdcService service.CDCService,
+	factory xconsume.ConsumerFactory,
+	zapLogger *zap.Logger,
+	lifecycle fx.Lifecycle,
+) (*ContactReviewProcessor, error) {
+	cfg, err := loadCdcProcessorConfig("mq.cdc.contact_review_processor")
+	if err != nil {
+		return nil, err
+	}
+
+	processor := NewContactReviewProcessor(
+		cfg.DBShardCount,
+		cfg.TBShardCount,
+		cfg.GroupID,
+		cfg.HandleTimeout,
+
+		factory,
+		cdcService.ProcessContactReview,
+	)
+	lifecycle.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			if err := processor.Start(ctx); err != nil {
+				zapLogger.Error("failed to start contact review processor", zap.Error(err))
+				return err
+			}
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			return processor.Stop(ctx)
+		},
+	})
+	return processor, nil
+}
+
 func newContactProcessor(
 	cdcService service.CDCService,
 	factory xconsume.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
 ) (*ContactProcessor, error) {
-	cfg, err := loadCdcProcessorConfig("mq.cdc.contact_processor")
+	cfg, err := loadCdcProcessorConfig("mq.cdc.contact")
 	if err != nil {
 		return nil, err
 	}
@@ -41,6 +77,7 @@ func newContactProcessor(
 		cfg.TBShardCount,
 		cfg.GroupID,
 		cfg.HandleTimeout,
+
 		factory,
 		cdcService.ProcessContact,
 	)
@@ -59,35 +96,33 @@ func newContactProcessor(
 	return processor, nil
 }
 
-func newConversationProcessor(
+func newChannelMemberProcessor(
 	cdcService service.CDCService,
 	factory xconsume.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
-) (*ConversationProcessor, error) {
-	cfg, err := loadCdcProcessorConfig("mq.cdc.conversation_processor")
+) (*ChannelMemberProcessor, error) {
+	cfg, err := loadCdcProcessorConfig("mq.cdc.channel_member_processor")
 	if err != nil {
 		return nil, err
 	}
 
-	processor := NewConversationProcessor(
+	processor := NewChannelMemberProcessor(
 		cfg.DBShardCount,
 		cfg.TBShardCount,
 		cfg.GroupID,
 		cfg.HandleTimeout,
-		cdcService.ProcessConversation,
+
 		factory,
+		cdcService.ProcessChannelMember,
 	)
 	lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if err := processor.Start(ctx); err != nil {
-				zapLogger.Error("failed to start conversation processor", zap.Error(err))
+				zapLogger.Error("failed to start channel member processor", zap.Error(err))
 				return err
 			}
 			return nil
-		},
-		OnStop: func(ctx context.Context) error {
-			return processor.Stop(ctx)
 		},
 	})
 	return processor, nil
