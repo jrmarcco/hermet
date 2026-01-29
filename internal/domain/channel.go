@@ -1,97 +1,43 @@
 package domain
 
-type ChannelStatus string
+type ChannelType string
 
 const (
-	ChannelStatusCreating ChannelStatus = "creating"
-	ChannelStatusActive   ChannelStatus = "active"
-	ChannelStatusFailed   ChannelStatus = "failed"
-	ChannelStatusArchived ChannelStatus = "archived"
+	ChannelTypeSingle ChannelType = "single"
+	ChannelTypeGroup  ChannelType = "group"
 )
 
-// Channel 表示一个聊天频道。
+// Channel 聊天频道。
 type Channel struct {
 	ID uint64 // 频道 ID
 
-	ChannelName        string        // 频道名称
-	ChannelAvatar      string        // 频道头像
-	ChannelStatus      ChannelStatus // 频道状态
-	ChannelMemberCount int           // 频道成员数量
+	UserID        uint64 // 用户 ID
+	TargetID      uint64 // 目标 ID ( 用户 ID or 频道 ID )
+	TargetInfoVer int    // 【 CQRS 关键字段 】目标信息版本号 ( 用于检测 channel / user 信息变更 )
 
-	InfoVer int // 信息版本
+	ChannelType   ChannelType // 频道类型
+	ChannelName   string      // 频道名称
+	ChannelRemark string      // 频道备注
+	ChannelAvatar string      // 频道头像
 
-	LastMessageAt int64 // 最后消息时间戳 ( Unix 毫秒值 )
+	IsMuted   bool // 是否免打扰
+	IsPinned  bool // 是否置顶
+	IsHidden  bool // 是否隐藏
+	IsStarred bool // 是否星标
 
-	CreatorID uint64 // 创建者 ID
+	LastMessageID         uint64
+	LastMessageType       string
+	LastMessageContent    string
+	LastMessageSenderID   uint64 // 最后消息发送者 ID
+	LastMessageSenderName string // 最后消息发送者昵称
+	LastMessageTime       int64  // 最后消息时间戳 ( Unix 毫秒值 )
 
-	DeletedAt int64 // 软删除时间戳 ( Unix 毫秒值 )
+	UnreadCount  int
+	MentionCount int
 
-	CreatedAt int64 // 创建时间戳 ( Unix 毫秒值 )
-	UpdatedAt int64 // 更新时间戳 ( Unix 毫秒值 )
+	OpenedAt int64
+	ClosedAt int64
 
-	Self ChannelMember // 当前用户在频道中的成员信息
-}
-
-type ChannelMemberRole string
-
-const (
-	ChannelMemberRoleOwner  ChannelMemberRole = "owner"
-	ChannelMemberRoleAdmin  ChannelMemberRole = "admin"
-	ChannelMemberRoleMember ChannelMemberRole = "member"
-)
-
-// ChannelMember 是频道中的成员。
-type ChannelMember struct {
-	ID uint64 // 成员 ID
-
-	CID uint64 // 频道 ID
-	UID uint64 // 用户 ID
-
-	MemberRole ChannelMemberRole // 成员角色
-
-	JoinedAt int64 // 加入时间戳 ( Unix 毫秒值 )
-	LeftAt   int64 // 退出时间戳 ( Unix 毫秒值 )
-
-	CreatedAt int64 // 创建时间戳 ( Unix 毫秒值 )
-	UpdatedAt int64 // 更新时间戳 ( Unix 毫秒值 )
-}
-
-type ChannelMemberView struct {
-	ID uint64 // 成员 ID
-
-	CID uint64 // 频道 ID
-	UID uint64 // 用户 ID
-
-	MemberRole ChannelMemberRole // 成员角色
-
-	MemberNickname string     // 成员昵称
-	MemberAvatar   string     // 成员头像
-	MemberGender   UserGender // 成员性别
-	MemberRemark   string     // 成员备注
-	MemberInfoVer  int        // 成员信息版本
-
-	JoinedAt int64 // 加入时间戳 ( Unix 毫秒值 )
-	LeftAt   int64 // 退出时间戳 ( Unix 毫秒值 )
-
-	CreatedAt int64 // 创建时间戳 ( Unix 毫秒值 )
-	UpdatedAt int64 // 更新时间戳 ( Unix 毫秒值 )
-}
-
-// ChannelReadRecord 是频道中消息阅读记录。
-// 记录了当前频道阅读到的最后一条消息的 ID。
-type ChannelReadRecord struct {
-	CID           uint64 // 频道 ID
-	LastMessageID uint64 // 最后一条消息 ID
-}
-
-// ChannelReadRecords 是用户所有频道的消息阅读记录。
-type ChannelReadRecords []ChannelReadRecord
-
-func (crr ChannelReadRecords) GetLastMessageID(cid uint64) uint64 {
-	for _, r := range crr {
-		if r.CID == cid {
-			return r.LastMessageID
-		}
-	}
-	return 0
+	CreatedAt int64
+	UpdatedAt int64
 }

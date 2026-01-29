@@ -23,12 +23,12 @@ type ContactRepo interface {
 var _ ContactRepo = (*DefaultContactRepo)(nil)
 
 type DefaultContactRepo struct {
-	bizUserDao     dao.BizUserDao
+	bizUserDao     dao.UserDao
 	userContactDao dao.ContactDao
 }
 
 func NewDefaultContactRepo(
-	bizUserDao dao.BizUserDao,
+	bizUserDao dao.UserDao,
 	userContactDao dao.ContactDao,
 ) *DefaultContactRepo {
 	return &DefaultContactRepo{

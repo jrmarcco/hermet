@@ -6,9 +6,9 @@ var DaoFxModule = fx.Module(
 	"dao",
 	fx.Provide(
 		fx.Annotate(
-			NewDefaultBizUserDao,
-			fx.As(new(BizUserDao)),
-			fx.ParamTags(`name:"db_sharding_clients"`, `name:"biz_user_shard_helper"`),
+			NewDefaultUserDao,
+			fx.As(new(UserDao)),
+			fx.ParamTags(`name:"db_sharding_clients"`, `name:"user_shard_helper"`),
 		),
 
 		// 联系人申请。
@@ -19,9 +19,9 @@ var DaoFxModule = fx.Module(
 		),
 		// 频道申请。
 		fx.Annotate(
-			NewDefaultChannelApplicationDao,
-			fx.As(new(ChannelApplicationDao)),
-			fx.ParamTags(`name:"db_sharding_clients"`, `name:"channel_application_shard_helper"`),
+			NewDefaultGroupApplicationDao,
+			fx.As(new(GroupApplicationDao)),
+			fx.ParamTags(`name:"db_sharding_clients"`, `name:"group_application_shard_helper"`),
 		),
 
 		// 联系人。
@@ -35,6 +35,19 @@ var DaoFxModule = fx.Module(
 				`name:"contact_reverse_index_shard_helper"`,
 			),
 		),
+		// 聊天群。
+		fx.Annotate(
+			NewDefaultGroupDao,
+			fx.As(new(GroupDao)),
+			fx.ParamTags(
+				`name:"db_sharding_clients"`,
+				`name:"group_shard_helper"`,
+				`name:"group_member_shard_helper"`,
+				`name:"group_member_view_shard_helper"`,
+				`name:"group_member_reverse_index_shard_helper"`,
+			),
+		),
+
 		// 频道。
 		fx.Annotate(
 			NewDefaultChannelDao,
@@ -42,20 +55,7 @@ var DaoFxModule = fx.Module(
 			fx.ParamTags(
 				`name:"db_sharding_clients"`,
 				`name:"channel_shard_helper"`,
-				`name:"channel_member_shard_helper"`,
-				`name:"channel_member_view_shard_helper"`,
-				`name:"channel_member_reverse_index_shard_helper"`,
-			),
-		),
-
-		// 会话。
-		fx.Annotate(
-			NewDefaultConversationDao,
-			fx.As(new(ConversationDao)),
-			fx.ParamTags(
-				`name:"db_sharding_clients"`,
-				`name:"conversation_view_shard_helper"`,
-				`name:"conversation_reverse_index_shard_helper"`,
+				`name:"channel_reverse_index_shard_helper"`,
 			),
 		),
 

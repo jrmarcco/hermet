@@ -10,10 +10,10 @@ import (
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproduce"
 )
 
-var _ Processor = (*ChannelMemberProcessor)(nil)
+var _ Processor = (*GroupMemberProcessor)(nil)
 
-// ChannelMemberProcessor 是频道成员业务消息处理器。
-type ChannelMemberProcessor struct {
+// GroupMemberProcessor 是聊天群成员业务消息处理器。
+type GroupMemberProcessor struct {
 	consumeProcessor *xprocess.ConsumeProcessor
 	produceProcessor *xprocess.ProduceProcessor
 
@@ -25,14 +25,14 @@ type ChannelMemberProcessor struct {
 	handleTimeout time.Duration
 }
 
-// NewChannelMemberProcessor 创建一个新的频道成员处理器。
-func NewChannelMemberProcessor(
+// NewGroupMemberProcessor 创建一个新的聊天群成员处理器。
+func NewGroupMemberProcessor(
 	producer xproduce.Producer,
 	factory xconsume.ConsumerFactory,
 	topic, groupID string,
 	partitions int32,
 	handleTimeout time.Duration,
-) (*ChannelMemberProcessor, error) {
+) (*GroupMemberProcessor, error) {
 	if topic == "" || groupID == "" || partitions <= 0 {
 		return nil, fmt.Errorf("topic, groupID and partitions are required")
 	}
@@ -43,7 +43,7 @@ func NewChannelMemberProcessor(
 		return nil, err
 	}
 
-	return &ChannelMemberProcessor{
+	return &GroupMemberProcessor{
 		produceProcessor: produceProcessor,
 
 		factory: factory,
@@ -56,7 +56,7 @@ func NewChannelMemberProcessor(
 }
 
 // StartConsumer 启动消费者，需要传入消息处理函数。
-func (p *ChannelMemberProcessor) StartConsumer(ctx context.Context, handler xprocess.MsgHandler) error {
+func (p *GroupMemberProcessor) StartConsumer(ctx context.Context, handler xprocess.MsgHandler) error {
 	if handler == nil {
 		return fmt.Errorf("handler is required")
 	}
@@ -84,7 +84,7 @@ func (p *ChannelMemberProcessor) StartConsumer(ctx context.Context, handler xpro
 }
 
 // Start 启动处理器 ( 仅用于兼容 xprocess.Processor 接口)。
-func (p *ChannelMemberProcessor) Start(ctx context.Context) error {
+func (p *GroupMemberProcessor) Start(ctx context.Context) error {
 	if p.consumeProcessor != nil {
 		return p.consumeProcessor.Start(ctx)
 	}
@@ -92,7 +92,7 @@ func (p *ChannelMemberProcessor) Start(ctx context.Context) error {
 }
 
 // Stop 停止处理器。
-func (p *ChannelMemberProcessor) Stop(ctx context.Context) error {
+func (p *GroupMemberProcessor) Stop(ctx context.Context) error {
 	if p.consumeProcessor != nil {
 		return p.consumeProcessor.Stop(ctx)
 	}
@@ -100,6 +100,6 @@ func (p *ChannelMemberProcessor) Stop(ctx context.Context) error {
 }
 
 // Produce 发送消息到主题。
-func (p *ChannelMemberProcessor) Produce(ctx context.Context, key, val []byte) error {
+func (p *GroupMemberProcessor) Produce(ctx context.Context, key, val []byte) error {
 	return p.produceProcessor.Produce(ctx, key, val)
 }

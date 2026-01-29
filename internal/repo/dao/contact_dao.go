@@ -88,21 +88,21 @@ var _ ContactDao = (*DefaultContactDao)(nil)
 type DefaultContactDao struct {
 	dbs *xsync.Map[string, *gorm.DB]
 
-	shardHelper             *sharding.ShardHelper
-	viewShardHelper         *sharding.ShardHelper
-	reverseIndexShardHelper *sharding.ShardHelper
+	shardHelper    *sharding.ShardHelper
+	cvShardHelper  *sharding.ShardHelper
+	criShardHelper *sharding.ShardHelper
 }
 
 func NewDefaultContactDao(
 	dbs *xsync.Map[string, *gorm.DB],
-	shardHelper, viewShardHelper, reverseIndexShardHelper *sharding.ShardHelper,
+	shardHelper, cvShardHelper, criShardHelper *sharding.ShardHelper,
 ) *DefaultContactDao {
 	return &DefaultContactDao{
 		dbs: dbs,
 
-		shardHelper:             shardHelper,
-		viewShardHelper:         viewShardHelper,
-		reverseIndexShardHelper: reverseIndexShardHelper,
+		shardHelper:    shardHelper,
+		cvShardHelper:  cvShardHelper,
+		criShardHelper: criShardHelper,
 	}
 }
 
@@ -145,8 +145,8 @@ func (d *DefaultContactDao) Create(ctx context.Context, contact Contact, user Bi
 		}
 
 		// 2. 写入 contact_view 表。
-		viewDst, _ := d.viewShardHelper.DstFromSharder(sharder)
-		err = tx.WithContext(ctx).Table(viewDst.TB).Model(&ContactView{}).
+		cvDst, _ := d.cvShardHelper.DstFromSharder(sharder)
+		err = tx.WithContext(ctx).Table(cvDst.TB).Model(&ContactView{}).
 			// 唯一索引 ( user_id, contact_id ) 冲突时，不进行任何操作。
 			Clauses(clause.OnConflict{
 				Columns:   []clause.Column{{Name: "user_id"}, {Name: "contact_id"}},
@@ -177,8 +177,8 @@ func (d *DefaultContactDao) Create(ctx context.Context, contact Contact, user Bi
 		}
 
 		// 3. 写入 contact_reverse_index 表。
-		reverseIndexDst, _ := d.reverseIndexShardHelper.DstFromSharder(sharder)
-		err = tx.WithContext(ctx).Table(reverseIndexDst.TB).Model(&ContactReverseIndex{}).
+		criDst, _ := d.criShardHelper.DstFromSharder(sharder)
+		err = tx.WithContext(ctx).Table(criDst.TB).Model(&ContactReverseIndex{}).
 			// 唯一索引 ( user_id, owner_id ) 冲突时，不进行任何操作。
 			Clauses(clause.OnConflict{
 				Columns:   []clause.Column{{Name: "user_id"}, {Name: "owner_id"}},
@@ -233,8 +233,8 @@ func (d *DefaultContactDao) Recreate(ctx context.Context, contact Contact) (Cont
 		}
 
 		// 2. 更新 contact_view 表。
-		viewDst, _ := d.viewShardHelper.DstFromID(contact.ID)
-		err = tx.WithContext(ctx).Table(viewDst.TB).Model(&ContactView{}).
+		cvDst, _ := d.cvShardHelper.DstFromID(contact.ID)
+		err = tx.WithContext(ctx).Table(cvDst.TB).Model(&ContactView{}).
 			Where("id = ?", contact.ID).
 			Update("deleted_at", 0).
 			Update("added_at", now).
@@ -244,8 +244,8 @@ func (d *DefaultContactDao) Recreate(ctx context.Context, contact Contact) (Cont
 		}
 
 		// 3. 更新 contact_reverse_index 表。
-		reverseIndexDst, _ := d.reverseIndexShardHelper.DstFromID(contact.ID)
-		err = tx.WithContext(ctx).Table(reverseIndexDst.TB).Model(&ContactReverseIndex{}).
+		criDst, _ := d.criShardHelper.DstFromID(contact.ID)
+		err = tx.WithContext(ctx).Table(criDst.TB).Model(&ContactReverseIndex{}).
 			Where("id = ?", contact.ID).
 			Update("deleted_at", 0).
 			Update("added_at", now).
@@ -281,7 +281,7 @@ func (d *DefaultContactDao) FindByUserIDAndContactID(ctx context.Context, userID
 }
 
 func (d *DefaultContactDao) ListViewByUserID(ctx context.Context, userID uint64) ([]ContactView, error) {
-	dst, err := d.viewShardHelper.DstFromSharder(sharding.NewSingleIDSharder(userID))
+	dst, err := d.cvShardHelper.DstFromSharder(sharding.NewSingleIDSharder(userID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get shard destination from user id [ %d ]", userID)
 	}

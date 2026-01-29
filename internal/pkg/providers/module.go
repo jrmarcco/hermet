@@ -77,8 +77,8 @@ var ShardingFxModule = fx.Module(
 	fx.Provide(
 		newIDGen,
 		fx.Annotate(
-			newBizUserShardHelper,
-			fx.ResultTags(`name:"biz_user_shard_helper"`),
+			newUserShardHelper,
+			fx.ResultTags(`name:"user_shard_helper"`),
 		),
 
 		// 联系人申请。
@@ -88,8 +88,8 @@ var ShardingFxModule = fx.Module(
 		),
 		// 频道申请。
 		fx.Annotate(
-			newChannelApplicationShardHelper,
-			fx.ResultTags(`name:"channel_application_shard_helper"`),
+			newGroupApplicationShardHelper,
+			fx.ResultTags(`name:"group_application_shard_helper"`),
 		),
 
 		// 用户联系人。
@@ -107,35 +107,35 @@ var ShardingFxModule = fx.Module(
 			newContactReverseIndexShardHelper,
 			fx.ResultTags(`name:"contact_reverse_index_shard_helper"`),
 		),
-		// 用户会话。
-		fx.Annotate(
-			newConversationViewShardHelper,
-			fx.ResultTags(`name:"conversation_view_shard_helper"`),
-		),
 		// 频道。
+		fx.Annotate(
+			newGroupShardHelper,
+			fx.ResultTags(`name:"group_shard_helper"`),
+		),
+		// 频道成员。
+		fx.Annotate(
+			newGroupMemberShardHelper,
+			fx.ResultTags(`name:"group_member_shard_helper"`),
+		),
+		// 频道成员视图。
+		fx.Annotate(
+			newGroupMemberViewShardHelper,
+			fx.ResultTags(`name:"group_member_view_shard_helper"`),
+		),
+		// 频道成员反向索引。
+		fx.Annotate(
+			newGroupMemberReverseIndexShardHelper,
+			fx.ResultTags(`name:"group_member_reverse_index_shard_helper"`),
+		),
+		// 聊天频道。
 		fx.Annotate(
 			newChannelShardHelper,
 			fx.ResultTags(`name:"channel_shard_helper"`),
 		),
-		// 频道成员。
+		// 聊天频道反向索引。
 		fx.Annotate(
-			newChannelMemberShardHelper,
-			fx.ResultTags(`name:"channel_member_shard_helper"`),
-		),
-		// 频道成员视图。
-		fx.Annotate(
-			newChannelMemberViewShardHelper,
-			fx.ResultTags(`name:"channel_member_view_shard_helper"`),
-		),
-		// 频道成员反向索引。
-		fx.Annotate(
-			newChannelMemberReverseIndexShardHelper,
-			fx.ResultTags(`name:"channel_member_reverse_index_shard_helper"`),
-		),
-		// 会话反向索引。
-		fx.Annotate(
-			newConversationReverseIndexShardHelper,
-			fx.ResultTags(`name:"conversation_reverse_index_shard_helper"`),
+			newChannelReverseIndexShardHelper,
+			fx.ResultTags(`name:"channel_reverse_index_shard_helper"`),
 		),
 	),
 )

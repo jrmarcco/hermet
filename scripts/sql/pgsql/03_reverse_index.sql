@@ -30,34 +30,34 @@ CREATE INDEX idx_cori_contact ON contact_reverse_index(user_id);
 -- SELECT owner_user_id FROM contact_reverse_index WHERE contact_user_id = A
 
 
--- 会话反向索引表 ( 用于快速查询 - "谁的会话中有某个用户" )
-DROP TABLE IF EXISTS conversation_reverse_index;
-CREATE TABLE conversation_reverse_index (
+-- 频道反向索引表 ( 用于快速查询 - "谁的频道中有某个用户" )
+DROP TABLE IF EXISTS channel_reverse_index;
+CREATE TABLE channel_reverse_index (
     id BIGINT PRIMARY KEY,
 
-    user_id BIGINT NOT NULL,                       -- 会话用户 ID
-    target_id BIGINT NOT NULL,                     -- 会话目标 ID
+    user_id BIGINT NOT NULL,                       -- 频道用户 ID
+    target_id BIGINT NOT NULL,                     -- 频道目标 ID
 
-    conversation_type VARCHAR(16) NOT NULL,        -- 会话类型
+    channel_type VARCHAR(16) NOT NULL,        -- 频道类型
 
     created_at BIGINT NOT NULL,
 
-    PRIMARY KEY(user_id, target_id, conversation_type),
+    PRIMARY KEY(user_id, target_id, channel_type),
 
     -- 约束
-    -- 会话类型 - 枚举 ( single=单聊 / group=群聊 )
-    CONSTRAINT chk_conversation_type CHECK (conversation_type IN ('single', 'group'))
+    -- 频道类型 - 枚举 ( single=单聊 / group=群聊 )
+    CONSTRAINT chk_channel_type CHECK (channel_type IN ('single', 'group'))
 );
 
-COMMENT ON TABLE conversation_reverse_index IS '【 反向索引 】会话反向索引表 ( 用于用户资料变更时，快速查询 "谁的会话中有某个用户" )';
-COMMENT ON COLUMN conversation_reverse_index.id IS '主键 ID';
-COMMENT ON COLUMN conversation_reverse_index.user_id IS '会话用户 ID';
-COMMENT ON COLUMN conversation_reverse_index.target_id IS '会话目标 ID';
-COMMENT ON COLUMN conversation_reverse_index.conversation_type IS '会话类型';
-COMMENT ON COLUMN conversation_reverse_index.created_at IS '创建时间戳 ( Unix 毫秒值 )';
+COMMENT ON TABLE channel_reverse_index IS '【 反向索引 】频道反向索引表 ( 用于用户资料变更时，快速查询 "谁的频道中有某个用户" )';
+COMMENT ON COLUMN channel_reverse_index.id IS '主键 ID';
+COMMENT ON COLUMN channel_reverse_index.user_id IS '频道用户 ID';
+COMMENT ON COLUMN channel_reverse_index.target_id IS '频道目标 ID';
+COMMENT ON COLUMN channel_reverse_index.channel_type IS '频道类型';
+COMMENT ON COLUMN channel_reverse_index.created_at IS '创建时间戳 ( Unix 毫秒值 )';
 
 -- 索引
-CREATE INDEX idx_cri_conversation ON conversation_reverse_index(user_id);
+CREATE INDEX idx_cri_channel ON channel_reverse_index(user_id);
 
 -- 使用场景示例：
 -- 用户 A 修改了昵称/头像，需要更新哪些人的会话视图？

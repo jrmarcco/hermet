@@ -1,7 +1,8 @@
 -- ============================================================================
 -- 写入侧 ( Write Side ) - 标准化设计
 -- ============================================================================
--- 业务用户信息表
+
+-- 用户信息表 ( user 是 pgsql 关键字，所以用 biz_user 作为表名 )
 DROP TABLE IF EXISTS biz_user;
 CREATE TABLE biz_user (
     id BIGINT PRIMARY KEY,
@@ -66,16 +67,16 @@ CREATE INDEX idx_biz_user_nickname ON biz_user(nickname) WHERE deleted_at = 0;
 CREATE INDEX idx_biz_user_status ON biz_user(user_status, deleted_at);
 
 
--- 频道表 ( 群聊 )
-DROP TABLE IF EXISTS channel;
-CREATE TABLE channel (
+-- 聊天组表 ( 聊天群 )
+DROP TABLE IF EXISTS chat_group;
+CREATE TABLE chat_group (
     id BIGINT PRIMARY KEY,
 
     -- 频道基础信息
-    channel_name VARCHAR(64) NOT NULL DEFAULT '',
-    channel_avatar VARCHAR(256) NOT NULL DEFAULT '',
-    channel_status VARCHAR(16) NOT NULL,
-    channel_member_count INT NOT NULL DEFAULT 0,
+    group_name VARCHAR(64) NOT NULL DEFAULT '',
+    group_avatar VARCHAR(256) NOT NULL DEFAULT '',
+    group_status VARCHAR(16) NOT NULL,
+    group_member_count INT NOT NULL DEFAULT 0,
 
     info_ver INT NOT NULL DEFAULT 1,                   -- 【 CQRS 关键字段 】信息版本号
 
@@ -91,33 +92,32 @@ CREATE TABLE channel (
 
     -- 约束
     -- 频道状态 - 枚举 ( creating=创建中 / active=活跃 / failed=失败 / archived=已归档 )
-    CONSTRAINT chk_channel_status CHECK (channel_status IN ('creating', 'active', 'failed','archived'))
+    CONSTRAINT chk_group_status CHECK (group_status IN ('creating', 'active', 'failed','archived'))
 );
 
-COMMENT ON TABLE channel IS '【写入侧】频道表 ( 群聊 )';
-COMMENT ON COLUMN channel.id IS '频道 ID';
-COMMENT ON COLUMN channel.channel_name IS '频道名称 ( 单聊为空 )';
-COMMENT ON COLUMN channel.channel_avatar IS '频道头像';
-COMMENT ON COLUMN channel.channel_status IS '频道状态 ( creating=创建中 / active=活跃 / failed=失败 / archived=已归档 )';
-COMMENT ON COLUMN channel.channel_member_count IS '频道成员数量';
-COMMENT ON COLUMN channel.info_ver IS '【 CQRS 关键字段 】信息版本号 ( 用于同步检测 )';
-COMMENT ON COLUMN channel.last_message_at IS '最后消息时间戳 ( Unix 毫秒值 )';
-COMMENT ON COLUMN channel.creator_id IS '创建者 ID';
-COMMENT ON COLUMN channel.deleted_at IS '软删除时间戳 ( Unix 毫秒值 )';
-COMMENT ON COLUMN channel.created_at IS '创建时间戳 ( Unix 毫秒值 )';
-COMMENT ON COLUMN channel.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
-
+COMMENT ON TABLE chat_group IS '【写入侧】聊天组表 ( 聊天群 )';
+COMMENT ON COLUMN chat_group.id IS '聊天组 ID';
+COMMENT ON COLUMN chat_group.group_name IS '聊天组名称';
+COMMENT ON COLUMN chat_group.group_avatar IS '聊天组头像';
+COMMENT ON COLUMN chat_group.group_status IS '聊天组状态 ( creating=创建中 / active=活跃 / failed=失败 / archived=已归档 )';
+COMMENT ON COLUMN chat_group.group_member_count IS '聊天组成员数量';
+COMMENT ON COLUMN chat_group.info_ver IS '【 CQRS 关键字段 】信息版本号 ( 用于同步检测 )';
+COMMENT ON COLUMN chat_group.last_message_at IS '最后消息时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN chat_group.creator_id IS '创建者 ID';
+COMMENT ON COLUMN chat_group.deleted_at IS '软删除时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN chat_group.created_at IS '创建时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN chat_group.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
 -- 索引
-CREATE INDEX idx_channel_creator ON channel(creator_id);
-CREATE INDEX idx_channel_status ON channel(channel_status);
+CREATE INDEX idx_chat_group_creator ON chat_group(creator_id);
+CREATE INDEX idx_chat_group_status ON chat_group(group_status);
 
 
--- 频道成员表 ( 群聊成员 )
-DROP TABLE IF EXISTS channel_member;
-CREATE TABLE channel_member (
+-- 聊天群成员成员表
+DROP TABLE IF EXISTS group_member;
+CREATE TABLE group_member (
     id BIGINT PRIMARY KEY,
 
-    channel_id BIGINT NOT NULL,
+    group_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
 
     member_role VARCHAR(16) NOT NULL DEFAULT 'member',
@@ -131,53 +131,25 @@ CREATE TABLE channel_member (
 
     -- 约束
     -- 唯一约束 - 同一用户在同一频道中只能有一条记录
-    CONSTRAINT uk_channel_member_channel_user UNIQUE(channel_id, user_id),
+    CONSTRAINT uk_group_member_group_user UNIQUE(group_id, user_id),
     -- 成员角色 - 枚举 ( owner=群主 / admin=管理员 / member=普通成员 )
-    CONSTRAINT chk_channel_member_role CHECK (member_role IN ('owner', 'admin', 'member'))
+    CONSTRAINT chk_group_member_role CHECK (member_role IN ('owner', 'admin', 'member'))
 );
 
-COMMENT ON TABLE channel_member IS '【 写入侧 】频道成员表 ( 群聊成员 )';
-COMMENT ON COLUMN channel_member.id IS '主键 ID';
-COMMENT ON COLUMN channel_member.channel_id IS '频道 ID';
-COMMENT ON COLUMN channel_member.user_id IS '用户 ID';
-COMMENT ON COLUMN channel_member.member_role IS '成员角色 ( owner=群主 / admin=管理员 / member=普通成员 )';
+COMMENT ON TABLE group_member IS '【 写入侧 】聊天群成员表';
+COMMENT ON COLUMN group_member.id IS '主键 ID';
+COMMENT ON COLUMN group_member.group_id IS '聊天群 ID';
+COMMENT ON COLUMN group_member.user_id IS '用户 ID';
+COMMENT ON COLUMN group_member.member_role IS '成员角色 ( owner=群主 / admin=管理员 / member=普通成员 )';
 COMMENT ON COLUMN channel_member.joined_at IS '加入时间戳 ( Unix 毫秒值 )';
-COMMENT ON COLUMN channel_member.left_at IS '退出时间戳 ( Unix 毫秒值 )';
-COMMENT ON COLUMN channel_member.created_at IS '创建时间戳 ( Unix 毫秒值 )';
-COMMENT ON COLUMN channel_member.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN group_member.left_at IS '退出时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN group_member.created_at IS '创建时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN group_member.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
 
 -- 索引
-CREATE INDEX idx_channel_member_channel ON channel_member(channel_id);
-CREATE INDEX idx_channel_member_user ON channel_member(user_id);
-CREATE INDEX idx_channel_member_active ON channel_member(channel_id, left_at) WHERE left_at = 0;
-
-
--- 频道消息已读记录表 ( 群聊消息已读记录 )
-DROP TABLE IF EXISTS channel_read_record;
-CREATE TABLE channel_read_record (
-    id BIGINT PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    channel_id BIGINT NOT NULL,
-    last_read_message_id BIGINT NOT NULL DEFAULT 0,
-
-    created_at BIGINT NOT NULL,
-    updated_at BIGINT NOT NULL,
-
-    -- 约束
-    -- 唯一约束 - 一个用户在一个频道中只有一条已读记录
-    CONSTRAINT uk_read_record_user_channel UNIQUE(user_id, channel_id)
-);
-
-COMMENT ON TABLE channel_read_record IS '【 写入侧 】频道消息已读记录表 ( 群聊消息已读记录 )';
-COMMENT ON COLUMN channel_read_record.id IS '主键 ID';
-COMMENT ON COLUMN channel_read_record.user_id IS '用户 ID';
-COMMENT ON COLUMN channel_read_record.channel_id IS '频道 ID';
-COMMENT ON COLUMN channel_read_record.last_read_message_id IS '最后已读消息 ID';
-COMMENT ON COLUMN channel_read_record.created_at IS '创建时间戳 ( Unix 毫秒值 )';
-COMMENT ON COLUMN channel_read_record.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
-
--- 索引
-CREATE INDEX idx_channel_read_user_channel ON channel_read_record(user_id, channel_id);
+CREATE INDEX idx_group_member_group ON group_member(group_id);
+CREATE INDEX idx_group_member_user ON group_member(user_id);
+CREATE INDEX idx_group_member_active ON group_member(group_id, left_at) WHERE left_at = 0;
 
 
 -- 联系人表
@@ -228,16 +200,16 @@ COMMENT ON COLUMN contact.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
 CREATE INDEX idx_contact_user ON contact(user_id);
 
 
--- 用户频道表
-DROP TABLE IF EXISTS user_channel;
-CREATE TABLE user_channel (
+-- 用户聊天群表
+DROP TABLE IF EXISTS user_group;
+CREATE TABLE user_group (
     id BIGINT PRIMARY KEY,
 
     user_id BIGINT NOT NULL,
-    channel_id BIGINT NOT NULL,
+    group_id BIGINT NOT NULL,
 
     -- 个性化设置
-    remark_name VARCHAR(64) NOT NULL DEFAULT '',       -- 频道备注名
+    remark_name VARCHAR(64) NOT NULL DEFAULT '',        -- 群组备注名
 
     is_muted BOOLEAN NOT NULL DEFAULT FALSE,            -- 免打扰
     is_pinned BOOLEAN NOT NULL DEFAULT FALSE,           -- 置顶
@@ -250,21 +222,21 @@ CREATE TABLE user_channel (
     updated_at BIGINT NOT NULL,
 
     -- 约束
-    CONSTRAINT uk_user_channel UNIQUE(user_id, channel_id)
+    CONSTRAINT uk_user_group UNIQUE(user_id, group_id)
 );
 
 
-COMMENT ON TABLE user_channel IS '【 写入侧 】用户频道表';
-COMMENT ON COLUMN user_channel.id IS '主键 ID';
-COMMENT ON COLUMN user_channel.user_id IS '用户 ID';
-COMMENT ON COLUMN user_channel.channel_id IS '频道 ID';
-COMMENT ON COLUMN user_channel.remark_name IS '频道备注名';
-COMMENT ON COLUMN user_channel.is_muted IS '是否免打扰';
-COMMENT ON COLUMN user_channel.is_pinned IS '是否置顶';
-COMMENT ON COLUMN user_channel.joined_at IS '加入时间戳 ( Unix 毫秒值 )';
-COMMENT ON COLUMN user_channel.left_at IS '退出时间戳 ( Unix 毫秒值 )';
-COMMENT ON COLUMN user_channel.created_at IS '创建时间戳 ( Unix 毫秒值 )';
-COMMENT ON COLUMN user_channel.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
+COMMENT ON TABLE user_group IS '【 写入侧 】用户群组表';
+COMMENT ON COLUMN user_group.id IS '主键 ID';
+COMMENT ON COLUMN user_group.user_id IS '用户 ID';
+COMMENT ON COLUMN user_group.group_id IS '聊天群 ID';
+COMMENT ON COLUMN user_group.remark_name IS '聊天群备注名';
+COMMENT ON COLUMN user_group.is_muted IS '是否免打扰';
+COMMENT ON COLUMN user_group.is_pinned IS '是否置顶';
+COMMENT ON COLUMN user_group.joined_at IS '加入时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN user_group.left_at IS '退出时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN user_group.created_at IS '创建时间戳 ( Unix 毫秒值 )';
+COMMENT ON COLUMN user_group.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
 
 -- 索引
-CREATE INDEX idx_user_channel_user ON user_channel(user_id);
+CREATE INDEX idx_user_group_user ON user_group(user_id);

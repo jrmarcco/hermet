@@ -39,30 +39,30 @@ type BizUser struct {
 	UpdatedAt int64 `gorm:"column:updated_at"`
 }
 
-//go:generate mockgen -source=biz_user_dao.go -destination=mock/biz_user_dao.mock.go -package=daomock -typed BizUserDao
+//go:generate mockgen -source=user_dao.go -destination=mock/user_dao.mock.go -package=daomock -typed UserDao
 
-type BizUserDao interface {
+type UserDao interface {
 	Create(ctx context.Context, user BizUser) (BizUser, error)
 
 	FindByID(ctx context.Context, id uint64) (BizUser, error)
 	FindByEmail(ctx context.Context, email string) (BizUser, error)
 }
 
-var _ BizUserDao = (*DefaultBizUserDao)(nil)
+var _ UserDao = (*DefaultUserDao)(nil)
 
-type DefaultBizUserDao struct {
+type DefaultUserDao struct {
 	dbs         *xsync.Map[string, *gorm.DB]
 	shardHelper *sharding.ShardHelper
 }
 
-func NewDefaultBizUserDao(dbs *xsync.Map[string, *gorm.DB], shardHelper *sharding.ShardHelper) *DefaultBizUserDao {
-	return &DefaultBizUserDao{
+func NewDefaultUserDao(dbs *xsync.Map[string, *gorm.DB], shardHelper *sharding.ShardHelper) *DefaultUserDao {
+	return &DefaultUserDao{
 		dbs:         dbs,
 		shardHelper: shardHelper,
 	}
 }
 
-func (d *DefaultBizUserDao) Create(ctx context.Context, user BizUser) (BizUser, error) {
+func (d *DefaultUserDao) Create(ctx context.Context, user BizUser) (BizUser, error) {
 	id, dst, err := d.shardHelper.NextIDAndShard(sharding.NewStringSharder(user.Email))
 	if err != nil {
 		return BizUser{}, fmt.Errorf("failed to get shard destination from email [ %s ]", user.Email)
@@ -83,7 +83,7 @@ func (d *DefaultBizUserDao) Create(ctx context.Context, user BizUser) (BizUser, 
 	return user, err
 }
 
-func (d *DefaultBizUserDao) FindByID(ctx context.Context, id uint64) (BizUser, error) {
+func (d *DefaultUserDao) FindByID(ctx context.Context, id uint64) (BizUser, error) {
 	var user BizUser
 
 	dst, err := d.shardHelper.DstFromID(id)
@@ -103,7 +103,7 @@ func (d *DefaultBizUserDao) FindByID(ctx context.Context, id uint64) (BizUser, e
 	return user, err
 }
 
-func (d *DefaultBizUserDao) FindByEmail(ctx context.Context, email string) (BizUser, error) {
+func (d *DefaultUserDao) FindByEmail(ctx context.Context, email string) (BizUser, error) {
 	var user BizUser
 
 	dst, err := d.shardHelper.DstFromSharder(sharding.NewStringSharder(email))

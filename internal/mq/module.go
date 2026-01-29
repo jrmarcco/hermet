@@ -15,17 +15,16 @@ import (
 var MqFxModule = fx.Module(
 	"mq",
 	fx.Provide(
-		newChannelMemberProcessor,
-		// 将 ChannelMemberProcessor 作为 ChannelMessageProducer 提供给 service 包。
+		newGroupMemberProcessor,
 		fx.Annotate(
-			newChannelMemberProcessor,
-			fx.As(new(service.ChannelMsgProducer)),
+			newGroupMemberProcessor,
+			fx.As(new(service.GroupMemberMsgProducer)),
 		),
 	),
-	fx.Invoke(startChannelMemberConsumer),
+	fx.Invoke(startGroupMemberConsumer),
 )
 
-func newChannelMemberProcessor(producer xproduce.Producer, factory xconsume.ConsumerFactory) (*ChannelMemberProcessor, error) {
+func newGroupMemberProcessor(producer xproduce.Producer, factory xconsume.ConsumerFactory) (*GroupMemberProcessor, error) {
 	type config struct {
 		Topic         string        `mapstructure:"topic"`
 		GroupID       string        `mapstructure:"group_id"`
@@ -34,11 +33,11 @@ func newChannelMemberProcessor(producer xproduce.Producer, factory xconsume.Cons
 	}
 
 	cfg := config{}
-	if err := viper.UnmarshalKey("mq.channel_member_add", &cfg); err != nil {
+	if err := viper.UnmarshalKey("mq.group_member_add", &cfg); err != nil {
 		return nil, err
 	}
 
-	processor, err := NewChannelMemberProcessor(
+	processor, err := NewGroupMemberProcessor(
 		producer,
 		factory,
 
@@ -53,17 +52,17 @@ func newChannelMemberProcessor(producer xproduce.Producer, factory xconsume.Cons
 	return processor, nil
 }
 
-// startChannelMemberConsumer 启动频道成员消费者 ( fx Invoke 函数 )。
-func startChannelMemberConsumer(
-	processor *ChannelMemberProcessor,
-	channelService service.ChannelService,
+// startGroupMemberConsumer 启动聊天群成员消费者 ( fx Invoke 函数 )。
+func startGroupMemberConsumer(
+	processor *GroupMemberProcessor,
+	groupService service.GroupService,
 	lifecycle fx.Lifecycle,
 	logger *zap.Logger,
 ) {
 	lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			if err := processor.StartConsumer(ctx, channelService.ProcessAddMembersMsg); err != nil {
-				logger.Error("failed to start channel member consumer", zap.Error(err))
+			if err := processor.StartConsumer(ctx, groupService.ProcessAddMembersMsg); err != nil {
+				logger.Error("failed to start group member consumer", zap.Error(err))
 				return err
 			}
 			return nil

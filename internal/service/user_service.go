@@ -17,12 +17,12 @@ type UserService interface {
 var _ UserService = (*DefaultUserService)(nil)
 
 type DefaultUserService struct {
-	bizUserRepo     repo.BizUserRepo
+	bizUserRepo     repo.UserRepo
 	userContactRepo repo.ContactRepo
 }
 
 func NewDefaultUserService(
-	bizUserRepo repo.BizUserRepo,
+	bizUserRepo repo.UserRepo,
 	userContactRepo repo.ContactRepo,
 ) *DefaultUserService {
 	return &DefaultUserService{

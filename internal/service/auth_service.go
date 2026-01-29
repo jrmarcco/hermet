@@ -23,14 +23,14 @@ const accountTypeEmail = "email"
 var _ AuthService = (*DefaultAuthService)(nil)
 
 type DefaultAuthService struct {
-	repo repo.BizUserRepo
+	repo repo.UserRepo
 
 	atManager xjwt.Manager[authv1.JwtPayload]
 	rtManager xjwt.Manager[authv1.JwtPayload]
 }
 
 func NewDefaultAuthService(
-	repo repo.BizUserRepo,
+	repo repo.UserRepo,
 
 	atManager xjwt.Manager[authv1.JwtPayload],
 	rtManager xjwt.Manager[authv1.JwtPayload],

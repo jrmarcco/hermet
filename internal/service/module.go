@@ -21,18 +21,18 @@ var ServiceFxModule = fx.Module(
 		// Contact service
 		fx.Annotate(NewDefaultContactService, fx.As(new(ContactService))),
 
-		// Conversation service
-		fx.Annotate(NewDefaultConversationService, fx.As(new(ConversationService))),
-
 		// Channel service
 		fx.Annotate(NewDefaultChannelService, fx.As(new(ChannelService))),
+
+		// Channel service
+		fx.Annotate(NewDefaultGroupService, fx.As(new(GroupService))),
 	),
 )
 
 type authServiceFxParams struct {
 	fx.In
 
-	Repo repo.BizUserRepo
+	Repo repo.UserRepo
 
 	AtManager xjwt.Manager[authv1.JwtPayload] `name:"access-token-manager"`
 	RtManager xjwt.Manager[authv1.JwtPayload] `name:"refresh-token-manager"`

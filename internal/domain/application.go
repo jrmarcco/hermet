@@ -37,15 +37,15 @@ type ContactApplication struct {
 	UpdatedAt int64 // 更新时间戳 ( Unix 毫秒值 )
 }
 
-// ChannelApplication 频道申请 ( 入群申请 )。
-type ChannelApplication struct {
+// GroupApplication 聊天群申请 ( 入群申请 )。
+type GroupApplication struct {
 	ID uint64
 
 	ApplicantID uint64 // 申请人 ID
 
-	ChannelID     uint64 // 频道 ID
-	ChannelName   string // 频道名称
-	ChannelAvatar string // 频道头像
+	GroupID     uint64 // 聊天群 ID
+	GroupName   string // 聊天群名称
+	GroupAvatar string // 聊天群头像
 
 	ApplicationStatus  ApplicationStatus // 申请状态 ( pending=待处理 / approved=已批准 / rejected=已拒绝 )
 	ApplicationMessage string            // 申请消息

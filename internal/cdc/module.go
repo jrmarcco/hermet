@@ -15,7 +15,7 @@ var CdcFxModule = fx.Module(
 	"cdc",
 	fx.Invoke(newContactReviewProcessor),
 	fx.Invoke(newContactProcessor),
-	fx.Invoke(newChannelMemberProcessor),
+	fx.Invoke(newGroupMemberProcessor),
 )
 
 type cdcProcessorConfig struct {
@@ -32,7 +32,7 @@ func newContactReviewProcessor(
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
 ) (*ContactReviewProcessor, error) {
-	cfg, err := loadCdcProcessorConfig("mq.cdc.contact_review_processor")
+	cfg, err := loadCdcProcessorConfig("mq.cdc.contact_review")
 	if err != nil {
 		return nil, err
 	}
@@ -96,30 +96,30 @@ func newContactProcessor(
 	return processor, nil
 }
 
-func newChannelMemberProcessor(
+func newGroupMemberProcessor(
 	cdcService service.CDCService,
 	factory xconsume.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
-) (*ChannelMemberProcessor, error) {
-	cfg, err := loadCdcProcessorConfig("mq.cdc.channel_member_processor")
+) (*GroupMemberProcessor, error) {
+	cfg, err := loadCdcProcessorConfig("mq.cdc.group_member")
 	if err != nil {
 		return nil, err
 	}
 
-	processor := NewChannelMemberProcessor(
+	processor := NewGroupMemberProcessor(
 		cfg.DBShardCount,
 		cfg.TBShardCount,
 		cfg.GroupID,
 		cfg.HandleTimeout,
 
 		factory,
-		cdcService.ProcessChannelMember,
+		cdcService.ProcessGroupMember,
 	)
 	lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if err := processor.Start(ctx); err != nil {
-				zapLogger.Error("failed to start channel member processor", zap.Error(err))
+				zapLogger.Error("failed to start group member processor", zap.Error(err))
 				return err
 			}
 			return nil

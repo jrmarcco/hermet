@@ -2,69 +2,98 @@ package repo
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jrmarcco/hermet/internal/domain"
+	"github.com/jrmarcco/hermet/internal/errs"
 	"github.com/jrmarcco/hermet/internal/repo/dao"
+	"gorm.io/gorm"
 )
 
 type ChannelRepo interface {
-	Create(ctx context.Context, channel domain.Channel) (domain.Channel, error)
-	CreateMemberView(ctx context.Context, cmv domain.ChannelMemberView) (domain.ChannelMemberView, error)
-	AddMembers(ctx context.Context, channelID uint64, memberIDs []uint64) error
+	// Create 创建用户会话。
+	Create(ctx context.Context, channel domain.Channel) error
 
-	UpdateStatus(ctx context.Context, id uint64, status string) error
+	ListByUserID(ctx context.Context, userID uint64) ([]domain.Channel, error)
 }
 
 var _ ChannelRepo = (*DefaultChannelRepo)(nil)
 
 type DefaultChannelRepo struct {
+	userDao    dao.UserDao
 	channelDao dao.ChannelDao
 }
 
-func NewDefaultChannelRepo(channelDao dao.ChannelDao) *DefaultChannelRepo {
+func NewDefaultChannelRepo(userDao dao.UserDao, channelDao dao.ChannelDao) *DefaultChannelRepo {
 	return &DefaultChannelRepo{
+		userDao:    userDao,
 		channelDao: channelDao,
 	}
 }
 
-func (r *DefaultChannelRepo) Create(ctx context.Context, channel domain.Channel) (domain.Channel, error) {
-	entity, err := r.channelDao.Create(ctx, r.toEntity(channel))
+func (r *DefaultChannelRepo) Create(ctx context.Context, channel domain.Channel) error {
+	user, err := r.userDao.FindByID(ctx, channel.TargetID)
 	if err != nil {
-		return domain.Channel{}, err
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errs.ErrRecordNotFound
+		}
+		return err
 	}
-	return r.toDomain(entity), nil
-}
 
-func (r *DefaultChannelRepo) CreateMemberView(ctx context.Context, cmv domain.ChannelMemberView) (domain.ChannelMemberView, error) {
-	entity, err := r.channelDao.CreateMemberView(ctx, r.toViewEntity(cmv))
+	channel.TargetInfoVer = user.InfoVer
+	channel.ChannelName = user.Nickname
+	channel.ChannelAvatar = user.Avatar
+
+	err = r.channelDao.Create(ctx, r.toEntity(channel))
 	if err != nil {
-		return domain.ChannelMemberView{}, err
+		return err
 	}
-	return r.toViewDomain(entity), nil
+	return nil
 }
 
-func (r *DefaultChannelRepo) AddMembers(ctx context.Context, channelID uint64, memberIDs []uint64) error {
-	return r.channelDao.AddMembers(ctx, channelID, memberIDs)
-}
+func (r *DefaultChannelRepo) ListByUserID(ctx context.Context, userID uint64) ([]domain.Channel, error) {
+	entities, err := r.channelDao.ListByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
 
-func (r *DefaultChannelRepo) UpdateStatus(ctx context.Context, id uint64, status string) error {
-	return r.channelDao.UpdateStatus(ctx, id, status)
+	domains := make([]domain.Channel, 0, len(entities))
+	for i := range entities {
+		domains = append(domains, r.toDomain(entities[i]))
+	}
+	return domains, nil
 }
 
 func (r *DefaultChannelRepo) toEntity(channel domain.Channel) dao.Channel {
 	return dao.Channel{
 		ID: channel.ID,
 
-		ChannelName:        channel.ChannelName,
-		ChannelAvatar:      channel.ChannelAvatar,
-		ChannelStatus:      string(channel.ChannelStatus),
-		ChannelMemberCount: channel.ChannelMemberCount,
+		UserID:        channel.UserID,
+		TargetID:      channel.TargetID,
+		TargetInfoVer: channel.TargetInfoVer,
 
-		InfoVer: channel.InfoVer,
+		ChannelType:   string(channel.ChannelType),
+		ChannelName:   channel.ChannelName,
+		ChannelRemark: channel.ChannelRemark,
+		ChannelAvatar: channel.ChannelAvatar,
 
-		LastMessageAt: channel.LastMessageAt,
+		IsMuted:   channel.IsMuted,
+		IsPinned:  channel.IsPinned,
+		IsHidden:  channel.IsHidden,
+		IsStarred: channel.IsStarred,
 
-		CreatorID: channel.CreatorID,
+		LastMessageID:         channel.LastMessageID,
+		LastMessageType:       channel.LastMessageType,
+		LastMessageContent:    channel.LastMessageContent,
+		LastMessageSenderID:   channel.LastMessageSenderID,
+		LastMessageSenderName: channel.LastMessageSenderName,
+		LastMessageTime:       channel.LastMessageTime,
+
+		UnreadCount:  channel.UnreadCount,
+		MentionCount: channel.MentionCount,
+
+		OpenedAt: channel.OpenedAt,
+		ClosedAt: channel.ClosedAt,
 
 		CreatedAt: channel.CreatedAt,
 		UpdatedAt: channel.UpdatedAt,
@@ -75,64 +104,34 @@ func (r *DefaultChannelRepo) toDomain(channel dao.Channel) domain.Channel {
 	return domain.Channel{
 		ID: channel.ID,
 
-		ChannelName:        channel.ChannelName,
-		ChannelAvatar:      channel.ChannelAvatar,
-		ChannelStatus:      domain.ChannelStatus(channel.ChannelStatus),
-		ChannelMemberCount: channel.ChannelMemberCount,
+		UserID:        channel.UserID,
+		TargetID:      channel.TargetID,
+		TargetInfoVer: channel.TargetInfoVer,
 
-		InfoVer: channel.InfoVer,
+		ChannelType:   domain.ChannelType(channel.ChannelType),
+		ChannelName:   channel.ChannelName,
+		ChannelRemark: channel.ChannelRemark,
+		ChannelAvatar: channel.ChannelAvatar,
 
-		LastMessageAt: channel.LastMessageAt,
+		IsMuted:   channel.IsMuted,
+		IsPinned:  channel.IsPinned,
+		IsHidden:  channel.IsHidden,
+		IsStarred: channel.IsStarred,
 
-		CreatorID: channel.CreatorID,
+		LastMessageID:         channel.LastMessageID,
+		LastMessageType:       channel.LastMessageType,
+		LastMessageContent:    channel.LastMessageContent,
+		LastMessageSenderID:   channel.LastMessageSenderID,
+		LastMessageSenderName: channel.LastMessageSenderName,
+		LastMessageTime:       channel.LastMessageTime,
+
+		UnreadCount:  channel.UnreadCount,
+		MentionCount: channel.MentionCount,
+
+		OpenedAt: channel.OpenedAt,
+		ClosedAt: channel.ClosedAt,
 
 		CreatedAt: channel.CreatedAt,
 		UpdatedAt: channel.UpdatedAt,
-	}
-}
-
-func (r *DefaultChannelRepo) toViewEntity(mv domain.ChannelMemberView) dao.ChannelMemberView {
-	return dao.ChannelMemberView{
-		ID: mv.ID,
-
-		ChannelID: mv.CID,
-		UserID:    mv.UID,
-
-		MemberRole: string(mv.MemberRole),
-
-		MemberNickname: mv.MemberNickname,
-		MemberAvatar:   mv.MemberAvatar,
-		MemberGender:   string(mv.MemberGender),
-		MemberRemark:   mv.MemberRemark,
-		MemberInfoVer:  mv.MemberInfoVer,
-
-		JoinedAt: mv.JoinedAt,
-		LeftAt:   mv.LeftAt,
-
-		CreatedAt: mv.CreatedAt,
-		UpdatedAt: mv.UpdatedAt,
-	}
-}
-
-func (r *DefaultChannelRepo) toViewDomain(mv dao.ChannelMemberView) domain.ChannelMemberView {
-	return domain.ChannelMemberView{
-		ID: mv.ID,
-
-		CID: mv.ChannelID,
-		UID: mv.UserID,
-
-		MemberRole: domain.ChannelMemberRole(mv.MemberRole),
-
-		MemberNickname: mv.MemberNickname,
-		MemberAvatar:   mv.MemberAvatar,
-		MemberGender:   domain.UserGender(mv.MemberGender),
-		MemberRemark:   mv.MemberRemark,
-		MemberInfoVer:  mv.MemberInfoVer,
-
-		JoinedAt: mv.JoinedAt,
-		LeftAt:   mv.LeftAt,
-
-		CreatedAt: mv.CreatedAt,
-		UpdatedAt: mv.UpdatedAt,
 	}
 }

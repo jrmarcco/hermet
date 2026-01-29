@@ -1,15 +1,15 @@
 package event
 
-// ChannelMemberCDCEvent 是频道成员添加 CDC 事件。
+// GroupMemberCDCEvent 是聊天群成员添加 CDC 事件。
 //
 //nolint:tagliatelle // Debezium 内容字段于数据库字段保持一致。
-type ChannelMemberCDCEvent struct {
+type GroupMemberCDCEvent struct {
 	CDCEvent
 
 	ID uint64 `json:"id"`
 
-	UserID    uint64 `json:"user_id"`
-	ChannelID uint64 `json:"channel_id"`
+	UserID  uint64 `json:"user_id"`
+	GroupID uint64 `json:"group_id"`
 
 	MemberRole string `json:"member_role"`
 

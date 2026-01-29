@@ -13,13 +13,6 @@ sharding:
     db_shard_count: 2
     tb_shard_count: 4
 
-  # 频道申请表
-  channel_application:
-    db_prefix: hermet
-    tb_prefix: channel_application
-    db_shard_count: 2
-    tb_shard_count: 4
-
   # 联系人表
   contact:
     db_prefix: hermet
@@ -41,51 +34,51 @@ sharding:
     db_shard_count: 2
     tb_shard_count: 4
 
-  # 会话表
-  conversation:
+  # 聊天群申请表
+  group_application:
     db_prefix: hermet
-    tb_prefix: conversation
+    tb_prefix: group_application
     db_shard_count: 2
     tb_shard_count: 4
 
-  # 会话视图表
-  conversation_view:
+  # 聊天群表
+  chat_group:
     db_prefix: hermet
-    tb_prefix: conversation_view
+    tb_prefix: chat_group
     db_shard_count: 2
     tb_shard_count: 4
 
-  # 会话反向索引表
-  conversation_reverse_index:
+  # 聊天群成员表
+  group_member:
     db_prefix: hermet
-    tb_prefix: conversation_reverse_index
+    tb_prefix: group_member
     db_shard_count: 2
     tb_shard_count: 4
 
-  # 频道表
+  # 聊天群成员视图表
+  group_member_view:
+    db_prefix: hermet
+    tb_prefix: group_member_view
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 聊天群成员反向索引表
+  group_member_reverse_index:
+    db_prefix: hermet
+    tb_prefix: group_member_reverse_index
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 聊天频道表 ( 会话 )
   channel:
     db_prefix: hermet
     tb_prefix: channel
     db_shard_count: 2
     tb_shard_count: 4
 
-  # 频道成员表
-  channel_member:
+  # 会话反向索引表
+  channel_reverse_index:
     db_prefix: hermet
-    tb_prefix: channel_member
-    db_shard_count: 2
-    tb_shard_count: 4
-
-  # 频道成员视图表
-  channel_member_view:
-    db_prefix: hermet
-    tb_prefix: channel_member_view
-    db_shard_count: 2
-    tb_shard_count: 4
-
-  # 频道成员反向索引表
-  channel_member_reverse_index:
-    db_prefix: hermet
-    tb_prefix: channel_member_reverse_index
+    tb_prefix: channel_reverse_index
     db_shard_count: 2
     tb_shard_count: 4

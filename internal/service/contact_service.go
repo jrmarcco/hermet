@@ -23,7 +23,7 @@ type ContactService interface {
 var _ ContactService = (*DefaultContactService)(nil)
 
 type DefaultContactService struct {
-	bizUserRepo repo.BizUserRepo
+	bizUserRepo repo.UserRepo
 
 	contactRepo            repo.ContactRepo
 	contactApplicationRepo repo.ContactApplicationRepo
@@ -32,7 +32,7 @@ type DefaultContactService struct {
 }
 
 func NewDefaultContactService(
-	bizUserRepo repo.BizUserRepo,
+	bizUserRepo repo.UserRepo,
 	contactRepo repo.ContactRepo,
 	contactApplicationRepo repo.ContactApplicationRepo,
 	logger *zap.Logger,

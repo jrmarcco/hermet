@@ -9,8 +9,8 @@ var RepoFxModule = fx.Module(
 	fx.Provide(
 		// biz user repo ( 用户 )
 		fx.Annotate(
-			NewDefaultBizUserRepo,
-			fx.As(new(BizUserRepo)),
+			NewDefaultUserRepo,
+			fx.As(new(UserRepo)),
 		),
 
 		// contact application repo ( 联系人申请 )
@@ -25,21 +25,21 @@ var RepoFxModule = fx.Module(
 			fx.As(new(ContactRepo)),
 		),
 
-		// channel application repo ( 频道申请 )
+		// group application repo ( 聊天群申请 )
 		fx.Annotate(
-			NewDefaultChannelApplicationRepo,
-			fx.As(new(ChannelApplicationRepo)),
+			NewDefaultGroupApplicationRepo,
+			fx.As(new(GroupApplicationRepo)),
 		),
-		// channel repo ( 频道 )
+		// group repo ( 聊天群 )
+		fx.Annotate(
+			NewDefaultGroupRepo,
+			fx.As(new(GroupRepo)),
+		),
+
+		// channel repo ( 用户频道 )
 		fx.Annotate(
 			NewDefaultChannelRepo,
 			fx.As(new(ChannelRepo)),
-		),
-
-		// user conversation repo ( 用户会话 )
-		fx.Annotate(
-			NewDefaultConversationRepo,
-			fx.As(new(ConversationRepo)),
 		),
 
 		// message repo ( 消息 )

@@ -5,161 +5,90 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jrmarcco/hermet/internal/domain"
 	"github.com/jrmarcco/hermet/internal/pkg/sharding"
 	"github.com/jrmarcco/jit/xsync"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-const channelMemberBatchSize = 500
-
-// Channel 频道表。
+// Channel 聊天频道表 ( 用来表示聊天会话 )。
 type Channel struct {
 	ID uint64 `gorm:"column:id"`
 
-	ChannelName        string `gorm:"column:channel_name"`
-	ChannelAvatar      string `gorm:"column:channel_avatar"`
-	ChannelStatus      string `gorm:"column:channel_status"`
-	ChannelMemberCount int    `gorm:"column:channel_member_count"`
+	UserID        uint64 `gorm:"column:user_id"`
+	TargetID      uint64 `gorm:"column:target_id"`
+	TargetInfoVer int    `gorm:"column:target_info_ver"`
 
-	InfoVer int `gorm:"column:info_ver"`
+	ChannelType   string `gorm:"column:channel_type"`
+	ChannelName   string `gorm:"column:channel_name"`
+	ChannelRemark string `gorm:"column:channel_remark"`
+	ChannelAvatar string `gorm:"column:channel_avatar"`
 
-	LastMessageAt int64 `gorm:"column:last_message_at"`
+	IsMuted   bool `gorm:"column:is_muted"`
+	IsPinned  bool `gorm:"column:is_pinned"`
+	IsHidden  bool `gorm:"column:is_hidden"`
+	IsStarred bool `gorm:"column:is_starred"`
 
-	CreatorID uint64 `gorm:"column:creator_id"`
+	LastMessageID         uint64 `gorm:"column:last_message_id"`
+	LastMessageType       string `gorm:"column:last_message_type"`
+	LastMessageContent    string `gorm:"column:last_message_content"`
+	LastMessageSenderID   uint64 `gorm:"column:last_message_sender_id"`
+	LastMessageSenderName string `gorm:"column:last_message_sender_name"`
+	LastMessageTime       int64  `gorm:"column:last_message_time"`
 
-	DeletedAt int64 `gorm:"column:deleted_at"`
+	UnreadCount  int `gorm:"column:unread_count"`
+	MentionCount int `gorm:"column:mention_count"`
 
-	CreatedAt int64 `gorm:"column:created_at"`
-	UpdatedAt int64 `gorm:"column:updated_at"`
-}
-
-// ChannelMember 频道成员表。
-type ChannelMember struct {
-	ID uint64 `gorm:"column:id"`
-
-	ChannelID uint64 `gorm:"column:channel_id"`
-	UserID    uint64 `gorm:"column:user_id"`
-
-	MemberRole string `gorm:"column:member_role"`
-
-	JoinedAt int64 `gorm:"column:joined_at"`
-	LeftAt   int64 `gorm:"column:left_at"`
+	OpenedAt int64 `gorm:"column:opened_at"`
+	ClosedAt int64 `gorm:"column:closed_at"`
 
 	CreatedAt int64 `gorm:"column:created_at"`
 	UpdatedAt int64 `gorm:"column:updated_at"`
 }
 
-type ChannelMemberView struct {
+// ChannelReverseIndex 频道反向索引表。
+type ChannelReverseIndex struct {
 	ID uint64 `gorm:"column:id"`
 
-	ChannelID uint64 `gorm:"column:channel_id"`
-	UserID    uint64 `gorm:"column:user_id"`
+	UserID   uint64 `gorm:"column:user_id"`
+	TargetID uint64 `gorm:"column:target_id"`
 
-	MemberRole string `gorm:"column:member_role"`
-
-	MemberNickname string `gorm:"column:member_nickname"`
-	MemberAvatar   string `gorm:"column:member_avatar"`
-	MemberGender   string `gorm:"column:member_gender"`
-	MemberRemark   string `gorm:"column:member_remark"`
-	MemberInfoVer  int    `gorm:"column:member_info_ver"`
-
-	JoinedAt int64 `gorm:"column:joined_at"`
-	LeftAt   int64 `gorm:"column:left_at"`
+	ChannelType string `gorm:"column:channel_type"`
 
 	CreatedAt int64 `gorm:"column:created_at"`
-	UpdatedAt int64 `gorm:"column:updated_at"`
 }
 
 type ChannelDao interface {
-	// Create 创建频道。
-	Create(ctx context.Context, channel Channel) (Channel, error)
-	// CreateMemberView 创建频道成员视图。
-	CreateMemberView(ctx context.Context, cmv ChannelMemberView) (ChannelMemberView, error)
-	// AddMembers 添加成员。
-	AddMembers(ctx context.Context, channelID uint64, memberIDs []uint64) error
+	Create(ctx context.Context, channel Channel) error
 
-	// UpdateStatus 更新频道状态。
-	UpdateStatus(ctx context.Context, id uint64, status string) error
-
-	FindByID(ctx context.Context, id uint64) (Channel, error)
+	ListByUserID(ctx context.Context, userID uint64) ([]Channel, error)
 }
 
 var _ ChannelDao = (*DefaultChannelDao)(nil)
 
 type DefaultChannelDao struct {
-	dbs                           *xsync.Map[string, *gorm.DB]
-	shardHelper                   *sharding.ShardHelper
-	memberShardHelper             *sharding.ShardHelper
-	memberViewShardHelper         *sharding.ShardHelper
-	memberReverseIndexShardHelper *sharding.ShardHelper
+	dbs            *xsync.Map[string, *gorm.DB]
+	shardHelper    *sharding.ShardHelper
+	criShardHelper *sharding.ShardHelper
 }
 
 func NewDefaultChannelDao(
 	dbs *xsync.Map[string, *gorm.DB],
-	shardHelper, memberShardHelper, memberViewShardHelper, memberReverseIndexShardHelper *sharding.ShardHelper,
+	shardHelper, criShardHelper *sharding.ShardHelper,
 ) *DefaultChannelDao {
 	return &DefaultChannelDao{
-		dbs:                           dbs,
-		shardHelper:                   shardHelper,
-		memberShardHelper:             memberShardHelper,
-		memberViewShardHelper:         memberViewShardHelper,
-		memberReverseIndexShardHelper: memberReverseIndexShardHelper,
+		dbs:            dbs,
+		shardHelper:    shardHelper,
+		criShardHelper: criShardHelper,
 	}
 }
 
-func (d *DefaultChannelDao) Create(ctx context.Context, channel Channel) (Channel, error) {
-	id, dst, err := d.shardHelper.NextIDAndShard(sharding.NewStringSharder(channel.ChannelName))
+func (d *DefaultChannelDao) Create(ctx context.Context, channel Channel) error {
+	sharder := sharding.NewSingleIDSharder(channel.UserID)
+
+	id, dst, err := d.shardHelper.NextIDAndShard(sharder)
 	if err != nil {
-		return Channel{}, fmt.Errorf("failed to get shard destination from channel name [ %s ]", channel.ChannelName)
-	}
-
-	now := time.Now().UnixMilli()
-
-	channel.ID = id
-	channel.CreatedAt = now
-	channel.UpdatedAt = now
-
-	db, ok := d.dbs.Load(dst.DB)
-	if !ok {
-		return Channel{}, fmt.Errorf("failed to load database [ %s ]", dst.DB)
-	}
-
-	err = db.WithContext(ctx).Table(dst.TB).Model(&Channel{}).Create(&channel).Error
-	return channel, err
-}
-
-func (d *DefaultChannelDao) CreateMemberView(ctx context.Context, cmv ChannelMemberView) (ChannelMemberView, error) {
-	dst, err := d.memberViewShardHelper.DstFromID(cmv.ID)
-	if err != nil {
-		return ChannelMemberView{}, fmt.Errorf("failed to get shard destination from id [ %d ]", cmv.ID)
-	}
-
-	db, ok := d.dbs.Load(dst.DB)
-	if !ok {
-		return ChannelMemberView{}, fmt.Errorf("failed to load database [ %s ]", dst.DB)
-	}
-
-	now := time.Now().UnixMilli()
-
-	cmv.CreatedAt = now
-	cmv.UpdatedAt = now
-
-	err = db.WithContext(ctx).Table(dst.TB).Model(&ChannelMemberView{}).
-		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "channel_id"}, {Name: "user_id"}},
-			DoNothing: true,
-		}).
-		Create(&cmv).Error
-	return cmv, err
-}
-
-func (d *DefaultChannelDao) AddMembers(ctx context.Context, channelID uint64, memberIDs []uint64) error {
-	sharder := sharding.NewSingleIDSharder(channelID)
-	dst, err := d.memberShardHelper.DstFromSharder(sharder)
-	if err != nil {
-		return fmt.Errorf("failed to get shard destination from channel id [ %d ]", channelID)
+		return fmt.Errorf("failed to get shard destination from user id [ %d ]", channel.UserID)
 	}
 
 	db, ok := d.dbs.Load(dst.DB)
@@ -168,69 +97,82 @@ func (d *DefaultChannelDao) AddMembers(ctx context.Context, channelID uint64, me
 	}
 
 	now := time.Now().UnixMilli()
-	members := make([]ChannelMember, 0, len(memberIDs))
-	for _, memberID := range memberIDs {
-		id, err := d.memberShardHelper.NextID(sharder)
+
+	// 开启事务。
+	// 这里需要写入多个数据表:
+	// 	- channel_view
+	// 	- channel_reverse_index
+	// 这 2 张表都是以 user_id 为分片键，因此能确保在同一个数据库分片内进行事务操作。
+	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 1. 写入 channel 表。
+		channel.ID = id
+		channel.CreatedAt = now
+		channel.UpdatedAt = now
+		err = tx.WithContext(ctx).Table(dst.TB).Model(&Channel{}).
+			Clauses(clause.OnConflict{
+				// 唯一索引 ( user_id, target_id, channel_type ) 冲突时，不进行任何操作。
+				Columns: []clause.Column{
+					{Name: "user_id"},
+					{Name: "target_id"},
+					{Name: "channel_type"},
+				},
+				DoNothing: true,
+			}).
+			Create(&channel).Error
 		if err != nil {
-			return fmt.Errorf("failed to generate id for member [ %d ]: %w", memberID, err)
+			return fmt.Errorf("failed to save user channel view: %w", err)
 		}
 
-		members = append(members, ChannelMember{
-			ID: id,
+		// 2. 写入 channel_reverse_index 表。
+		reverseIndexDst, err := d.criShardHelper.DstFromSharder(sharder)
+		if err != nil {
+			return fmt.Errorf("failed to get shard destination from user id [ %d ]", channel.UserID)
+		}
+		err = tx.WithContext(ctx).Table(reverseIndexDst.TB).Model(&ChannelReverseIndex{}).
+			Clauses(clause.OnConflict{
+				// 唯一索引 ( user_id, target_id, channel_type ) 冲突时，不进行任何操作。
+				Columns: []clause.Column{
+					{Name: "user_id"},
+					{Name: "target_id"},
+					{Name: "channel_type"},
+				},
+				DoNothing: true,
+			}).
+			Create(&ChannelReverseIndex{
+				ID: id,
 
-			ChannelID: channelID,
-			UserID:    memberID,
+				UserID:   channel.UserID,
+				TargetID: channel.TargetID,
 
-			MemberRole: string(domain.ChannelMemberRoleMember),
+				ChannelType: channel.ChannelType,
 
-			JoinedAt: now,
-			LeftAt:   0,
+				CreatedAt: now,
+			}).Error
+		if err != nil {
+			return fmt.Errorf("failed to save conversation reverse index: %w", err)
+		}
 
-			CreatedAt: now,
-			UpdatedAt: now,
-		})
-	}
-
-	// 批量写入频道成员表。
-	return db.WithContext(ctx).Table(dst.TB).Model(&ChannelMember{}).
-		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "channel_id"}, {Name: "user_id"}},
-			DoNothing: true,
-		}).
-		CreateInBatches(&members, channelMemberBatchSize).Error
+		return nil
+	})
+	return err
 }
 
-func (d *DefaultChannelDao) UpdateStatus(ctx context.Context, id uint64, status string) error {
-	dst, err := d.shardHelper.DstFromID(id)
+func (d *DefaultChannelDao) ListByUserID(ctx context.Context, userID uint64) ([]Channel, error) {
+	dst, err := d.shardHelper.DstFromSharder(sharding.NewSingleIDSharder(userID))
 	if err != nil {
-		return fmt.Errorf("failed to get shard destination from id [ %d ]", id)
+		return nil, fmt.Errorf("failed to get shard destination from user id [ %d ]", userID)
 	}
 
 	db, ok := d.dbs.Load(dst.DB)
 	if !ok {
-		return fmt.Errorf("failed to load database [ %s ]", dst.DB)
+		return nil, fmt.Errorf("failed to load database [ %s ]", dst.DB)
 	}
 
-	return db.WithContext(ctx).Table(dst.TB).Model(&Channel{}).
-		Where("id = ?", id).
-		Update("channel_status", status).Error
-}
-
-func (d *DefaultChannelDao) FindByID(ctx context.Context, id uint64) (Channel, error) {
-	dst, err := d.shardHelper.DstFromID(id)
-	if err != nil {
-		return Channel{}, fmt.Errorf("failed to get shard destination from id [ %d ]", id)
-	}
-
-	db, ok := d.dbs.Load(dst.DB)
-	if !ok {
-		return Channel{}, fmt.Errorf("failed to load database [ %s ]", dst.DB)
-	}
-
-	var channel Channel
+	var channels []Channel
 	err = db.WithContext(ctx).Table(dst.TB).Model(&Channel{}).
-		Where("id = ?", id).
-		Where("deleted_at = ?", 0).
-		First(&channel).Error
-	return channel, err
+		Where("user_id = ?", userID).
+		Where("closed_at = ?", 0).
+		Order("last_message_time DESC").
+		Find(&channels).Error
+	return channels, err
 }
