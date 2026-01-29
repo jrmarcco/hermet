@@ -1,8 +1,10 @@
 package cdc
 
 import (
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
-	"go.uber.org/zap"
+	"time"
+
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocess"
 )
 
 var _ Processor = (*ConversationProcessor)(nil)
@@ -13,18 +15,27 @@ type ConversationProcessor struct {
 	*BaseProcessor
 }
 
+// NewConversationProcessor 创建一个新的会话 CDC 处理器。
 func NewConversationProcessor(
 	dbShardCount, tbShardCount int,
 	groupID string,
-	consumerFactory xconsumer.ConsumerFactory,
-	zapLogger *zap.Logger,
+	handleTimeout time.Duration,
+	handler xprocess.MsgHandler,
+	factory xconsume.ConsumerFactory,
 ) *ConversationProcessor {
 	return &ConversationProcessor{
-		BaseProcessor: NewBaseProcessor(ProcessorConfig{
-			DBShardCount: dbShardCount,
-			TBShardCount: tbShardCount,
-			GroupID:      groupID,
-			TopicPattern: "pgsql_hermet_%d.public.conversation_%d",
-		}, consumerFactory, zapLogger),
+		BaseProcessor: NewBaseProcessor(
+			ProcessorConfig{
+				DBShardCount: dbShardCount,
+				TBShardCount: tbShardCount,
+
+				GroupID:      groupID,
+				TopicPattern: "pgsql_hermet_%d.public.conversation_%d",
+
+				HandleTimeout: handleTimeout,
+			},
+			handler,
+			factory,
+		),
 	}
 }

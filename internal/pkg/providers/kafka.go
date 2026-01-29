@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl"
 	"github.com/segmentio/kafka-go/sasl/scram"
@@ -21,7 +21,7 @@ type kafkaFxResult struct {
 	fx.Out
 
 	Writer           *kafka.Writer
-	ReaderCreateFunc xconsumer.KafkaReaderCreateFunc
+	ReaderCreateFunc xconsume.KafkaReaderCreateFunc
 }
 
 type kafkaConfig struct {
@@ -41,19 +41,19 @@ type kafkaProducerConfig struct {
 	MaxMessageBytes   int           `mapstructure:"max_message_bytes"`  // 最大消息大小，默认 1MB
 	RetryMax          int           `mapstructure:"retry_max"`          // 最大重试次数
 	BatchSize         int           `mapstructure:"batch_size"`         // 批量大小
-	BatchTimeout      time.Duration `mapstructure:"batch_timeout"`      // 批量超时时间（毫秒）
-	WriteTimeout      time.Duration `mapstructure:"write_timeout"`      // 写入超时（毫秒）
+	BatchTimeout      time.Duration `mapstructure:"batch_timeout"`      // 批量超时时间
+	WriteTimeout      time.Duration `mapstructure:"write_timeout"`      // 写入超时
 	IdempotentEnabled bool          `mapstructure:"idempotent_enabled"` // 是否启用幂等性
 }
 
 type kafkaConsumerConfig struct {
 	// Consumer 配置
-	ReadTimeout    time.Duration `mapstructure:"read_timeout"`    // 读取超时（毫秒）
-	CommitInterval time.Duration `mapstructure:"commit_interval"` // 提交间隔（毫秒）
+	ReadTimeout    time.Duration `mapstructure:"read_timeout"`    // 读取超时
+	CommitInterval time.Duration `mapstructure:"commit_interval"` // 提交间隔
 	StartOffset    int64         `mapstructure:"start_offset"`    // 起始 offset，-1=newest, -2=oldest
 	MinBytes       int           `mapstructure:"min_bytes"`       // 最小字节数
 	MaxBytes       int           `mapstructure:"max_bytes"`       // 最大字节数
-	MaxWait        time.Duration `mapstructure:"max_wait"`        // 最大等待时间（毫秒）
+	MaxWait        time.Duration `mapstructure:"max_wait"`        // 最大等待时间
 }
 
 type kafkaTLSConfig struct {
@@ -134,7 +134,7 @@ func newKafkaClient(zapLogger *zap.Logger, lifecycle fx.Lifecycle) (kafkaFxResul
 		writer.RequiredAcks = kafka.RequireAll
 	}
 	zapLogger.Info(
-		"[synp-ioc-kafka] successfully created kafka writer",
+		"[ioc-kafka] successfully created kafka writer",
 		zap.Strings("brokers", cfg.Brokers),
 		zap.String("compression", cfg.Producer.Compression),
 		zap.Int("required_acks", cfg.Producer.RequiredAcks),
@@ -160,7 +160,7 @@ func newKafkaClient(zapLogger *zap.Logger, lifecycle fx.Lifecycle) (kafkaFxResul
 		})
 
 		zapLogger.Info(
-			"[synp-ioc-kafka] created kafka reader",
+			"[ioc-kafka] created kafka reader",
 			zap.Strings("brokers", cfg.Brokers),
 			zap.String("topic", topic),
 			zap.String("group_id", groupId),
@@ -173,10 +173,10 @@ func newKafkaClient(zapLogger *zap.Logger, lifecycle fx.Lifecycle) (kafkaFxResul
 	lifecycle.Append(fx.Hook{
 		OnStop: func(_ context.Context) error {
 			if err := writer.Close(); err != nil {
-				zapLogger.Error("[synp-ioc-kafka] failed to close kafka writer", zap.Error(err))
+				zapLogger.Error("[ioc-kafka] failed to close kafka writer", zap.Error(err))
 				return fmt.Errorf("failed to close kafka writer: %w", err)
 			}
-			zapLogger.Info("[synp-ioc-kafka] kafka writer closed")
+			zapLogger.Info("[ioc-kafka] kafka writer closed")
 			return nil
 		},
 	})
@@ -200,17 +200,17 @@ func loadKafkaConfig() (*kafkaConfig, error) {
 func configureKafkaTLS(tlsCfg kafkaTLSConfig, logger *zap.Logger) (*tls.Config, error) {
 	caCertPool := x509.NewCertPool()
 	if ok := caCertPool.AppendCertsFromPEM([]byte(tlsCfg.CaCert)); !ok {
-		logger.Error("[synp-ioc-kafka] failed to append CA certificate to pool for kafka")
+		logger.Error("[ioc-kafka] failed to append CA certificate to pool for kafka")
 		return nil, fmt.Errorf("failed to append CA certificate to pool for kafka")
 	}
 
 	clientCert, err := tls.X509KeyPair([]byte(tlsCfg.CertPem), []byte(tlsCfg.CertKey))
 	if err != nil {
-		logger.Error("[synp-ioc-kafka] failed to create certificate key pair for kafka", zap.Error(err))
+		logger.Error("[ioc-kafka] failed to create certificate key pair for kafka", zap.Error(err))
 		return nil, fmt.Errorf("failed to create certificate key pair for kafka: %w", err)
 	}
 
-	logger.Info("[synp-ioc-kafka] successfully configured TLS for kafka")
+	logger.Info("[ioc-kafka] successfully configured TLS for kafka")
 	return &tls.Config{
 		MinVersion:         tls.VersionTLS13,
 		InsecureSkipVerify: false, // 强制要求 TLS 认证
@@ -241,7 +241,7 @@ func configureKafkaSaslScram(saslCfg kafkaSaslConfig, logger *zap.Logger) (sasl.
 	mechanism, err := scram.Mechanism(scram.SHA256, saslCfg.Username, saslCfg.Password)
 	if err != nil {
 		logger.Error(
-			"[synp-ioc-kafka] failed to create SASL/SCRAM mechanism",
+			"[ioc-kafka] failed to create SASL/SCRAM mechanism",
 			zap.String("username", saslCfg.Username),
 			zap.Error(err),
 		)
@@ -249,7 +249,7 @@ func configureKafkaSaslScram(saslCfg kafkaSaslConfig, logger *zap.Logger) (sasl.
 	}
 
 	logger.Info(
-		"[synp-ioc-kafka] successfully configured SASL/SCRAM-SHA-256 for kafka",
+		"[ioc-kafka] successfully configured SASL/SCRAM-SHA-256 for kafka",
 		zap.String("username", saslCfg.Username),
 	)
 
@@ -269,7 +269,7 @@ func configureKafkaSaslOAuth(oauthCfg kafkaOAuthConfig, logger *zap.Logger) (sas
 	)
 
 	logger.Info(
-		"[synp-ioc-kafka] successfully configured SASL/OAUTHBEARER for kafka",
+		"[ioc-kafka] successfully configured SASL/OAUTHBEARER for kafka",
 		zap.String("token_endpoint", oauthCfg.Endpoint),
 		zap.String("client_id", oauthCfg.ClientID),
 	)

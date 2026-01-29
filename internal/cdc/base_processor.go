@@ -1,110 +1,57 @@
 package cdc
 
 import (
-	"context"
 	"fmt"
+	"time"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmq"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
-	"go.uber.org/zap"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocess"
 )
 
+// ProcessorConfig 是 CDC 处理器的配置。
 type ProcessorConfig struct {
-	DBShardCount int
-	TBShardCount int
+	DBShardCount int // 数据库分片数量
+	TBShardCount int // 表分片数量
 
-	GroupID      string
-	TopicPattern string
+	GroupID      string // 消费者组 ID
+	TopicPattern string // 主题名称模式 ( 例如 "pgsql_db_%d.public.table_%d" )
+
+	HandleTimeout time.Duration // 消息处理超时时间
 }
 
 var _ Processor = (*BaseProcessor)(nil)
 
+// BaseProcessor 是 CDC 基础处理器，封装了分片消费的逻辑。
 type BaseProcessor struct {
-	cfg ProcessorConfig
-
-	consumerFactory xconsumer.ConsumerFactory
-
-	ctx        context.Context
-	cancelFunc context.CancelFunc
-
-	logger *zap.Logger
+	*xprocess.ConsumeProcessor
 }
 
+// NewBaseProcessor 创建一个新的 CDC 基础处理器。
 func NewBaseProcessor(
 	cfg ProcessorConfig,
-	consumerFactory xconsumer.ConsumerFactory,
-	logger *zap.Logger,
+	handler xprocess.MsgHandler,
+	factory xconsume.ConsumerFactory,
 ) *BaseProcessor {
-	ctx, cancel := context.WithCancel(context.Background())
+	topics := make([]xprocess.TopicConfig, 0, cfg.DBShardCount*cfg.TBShardCount)
+	for i := 0; i < cfg.DBShardCount; i++ {
+		for j := 0; j < cfg.TBShardCount; j++ {
+			topics = append(topics, xprocess.TopicConfig{
+				Topic:   fmt.Sprintf(cfg.TopicPattern, i, j),
+				GroupID: cfg.GroupID,
+			})
+		}
+	}
+
+	consumerProcessor := xprocess.NewConsumeProcessor(
+		xprocess.ConsumeProcessorConfig{
+			Topics:        topics,
+			Handler:       handler,
+			HandleTimeout: cfg.HandleTimeout,
+		},
+		factory,
+	)
 
 	return &BaseProcessor{
-		cfg: cfg,
-
-		consumerFactory: consumerFactory,
-
-		ctx:        ctx,
-		cancelFunc: cancel,
-		logger:     logger,
+		ConsumeProcessor: consumerProcessor,
 	}
-}
-
-func (p *BaseProcessor) Start(processFunc ProcessFunc) error {
-	// 对每个数据库分片和表分片，创建一个消费者，并消费消息。
-	for i := 0; i < p.cfg.DBShardCount; i++ {
-		for j := 0; j < p.cfg.TBShardCount; j++ {
-			topic := fmt.Sprintf(p.cfg.TopicPattern, i, j)
-			consumer, err := p.consumerFactory.NewConsumer(topic, p.cfg.GroupID)
-			if err != nil {
-				p.logger.Error(
-					"[hermet-cdc-base-processor] failed to create consumer",
-					zap.String("topic", topic),
-					zap.String("groupID", p.cfg.GroupID),
-					zap.Error(err),
-				)
-				return err
-			}
-
-			msgChan, err := consumer.ConsumeChan(p.ctx)
-			if err != nil {
-				p.logger.Error(
-					"[hermet-cdc-base-processor] failed to get message channel",
-					zap.String("topic", topic),
-					zap.String("groupID", p.cfg.GroupID),
-					zap.Error(err),
-				)
-				return err
-			}
-			go p.consume(msgChan, processFunc)
-		}
-	}
-	return nil
-}
-
-func (p *BaseProcessor) consume(msgChan <-chan *xmq.Message, processFunc ProcessFunc) {
-	for {
-		select {
-		case <-p.ctx.Done():
-			p.logger.Info("[hermet-cdc-base-processor] processor context done")
-			return
-		case msg, ok := <-msgChan:
-			if !ok {
-				return
-			}
-			if err := processFunc(p.ctx, msg); err != nil {
-				p.logger.Error(
-					"[hermet-cdc-base-processor] failed to process message",
-					zap.String("topic", msg.Topic),
-					zap.Int64("offset", msg.Offset),
-					zap.Int("partition", msg.Partition),
-					zap.String("message", string(msg.Val)),
-					zap.Error(err),
-				)
-			}
-		}
-	}
-}
-
-func (p *BaseProcessor) Stop() error {
-	p.cancelFunc()
-	return nil
 }

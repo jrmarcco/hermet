@@ -6,6 +6,7 @@ import (
 	"github.com/jrmarcco/hermet/internal/api"
 	"github.com/jrmarcco/hermet/internal/app"
 	"github.com/jrmarcco/hermet/internal/cdc"
+	"github.com/jrmarcco/hermet/internal/mq"
 	"github.com/jrmarcco/hermet/internal/pkg/providers"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/hermet/internal/repo/dao"
@@ -70,6 +71,9 @@ func main() {
 		// 初始化 cdc。
 		cdc.CdcFxModule,
 
+		// 初始化 mq。
+		mq.MqFxModule,
+
 		// 初始化 app。
 		app.AppFxModule,
 	).Run()
@@ -85,7 +89,7 @@ func loadConfig() error {
 		return fmt.Errorf("failed to read base config: %w", err)
 	}
 
-	subConfigNames := []string{"redis", "db", "mongodb", "kafka", "sharding", "cdc", "business"}
+	subConfigNames := []string{"redis", "db", "mongodb", "kafka", "sharding", "mq"}
 	for _, subConfigName := range subConfigNames {
 		viper.SetConfigName(subConfigName)
 		if err := viper.MergeInConfig(); err != nil {

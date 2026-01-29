@@ -1,13 +1,8 @@
 package cdc
 
-import (
-	"context"
+import "github.com/jrmarcco/hermet/internal/pkg/xmq/xprocess"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmq"
-)
-
-type ProcessFunc func(ctx context.Context, msg *xmq.Message) error
-
+// Processor 是 CDC 处理器接口。
 type Processor interface {
-	Start(processFunc ProcessFunc) error
+	xprocess.Processor
 }

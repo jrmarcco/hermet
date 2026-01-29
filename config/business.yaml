@@ -1,5 +1,0 @@
-business:
-  channel:
-    member_sync_add_topic: event_channel_member_add
-    member_sync_add_group_id: hermet-channel-member-add-group
-    member_sync_add_partition: 6

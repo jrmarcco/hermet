@@ -68,7 +68,7 @@ func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message
 	// 幂等性判断 ( 防止重复处理相同的联系人申请事件 )。
 	cacheKey := fmt.Sprintf("contact:application:%d", event.ID)
 	if exists, _ := s.rdb.Exists(ctx, cacheKey).Result(); exists > 0 {
-		s.logger.Debug("[hermet-cdc-contact] contact application already processed", zap.Uint64("application_id", event.ID))
+		s.logger.Debug("[cdc-contact] contact application already processed", zap.Uint64("application_id", event.ID))
 		return nil
 	}
 
@@ -96,7 +96,7 @@ func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message
 	})
 
 	if err := eg.Wait(); err != nil {
-		s.logger.Error("[hermet-cdc-contact] failed to create contact relation", zap.Uint64("application_id", event.ID), zap.Error(err))
+		s.logger.Error("[cdc-contact] failed to create contact relation", zap.Uint64("application_id", event.ID), zap.Error(err))
 		return err
 	}
 
@@ -138,7 +138,7 @@ func (s *DefaultCDCService) ProcessConversation(ctx context.Context, msg *xmq.Me
 	}
 
 	if !event.IsUpdate() {
-		s.logger.Debug("[hermet-cdc-conversation] conversation event is not update", zap.Any("event", event))
+		s.logger.Debug("[cdc-conversation] conversation event is not update", zap.Any("event", event))
 		return nil
 	}
 
@@ -161,7 +161,7 @@ func (s *DefaultCDCService) createConversation(ctx context.Context, conversation
 	cacheKey := fmt.Sprintf("conversation:relation:%d-%d", conversation.UserID, conversation.TargetID)
 	if exists, _ := s.rdb.Exists(ctx, cacheKey).Result(); exists > 0 {
 		s.logger.Debug(
-			"[hermet-cdc-conversation] conversation already processed",
+			"[cdc-conversation] conversation already processed",
 			zap.Uint64("user_id", conversation.UserID),
 			zap.Uint64("contact_id", conversation.TargetID),
 		)
@@ -171,7 +171,7 @@ func (s *DefaultCDCService) createConversation(ctx context.Context, conversation
 	// 创建会话 ( 这里消费的是联系人关系建立事件，只需要创建会话即可 )。
 	err := s.conversationRepo.Create(ctx, conversation)
 	if err != nil {
-		s.logger.Error("[hermet-cdc-conversation] failed to create conversation", zap.Error(err))
+		s.logger.Error("[cdc-conversation] failed to create conversation", zap.Error(err))
 		return err
 	}
 

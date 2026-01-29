@@ -2,8 +2,9 @@ package cdc
 
 import (
 	"context"
+	"time"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
 	"github.com/jrmarcco/hermet/internal/service"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
@@ -17,33 +18,42 @@ var CdcFxModule = fx.Module(
 )
 
 type cdcProcessorConfig struct {
-	GroupID      string `mapstructure:"group_id"`
-	DBShardCount int    `mapstructure:"db_shard_count"`
-	TBShardCount int    `mapstructure:"tb_shard_count"`
+	GroupID       string        `mapstructure:"group_id"`
+	HandleTimeout time.Duration `mapstructure:"handle_timeout"`
+
+	DBShardCount int `mapstructure:"db_shard_count"`
+	TBShardCount int `mapstructure:"tb_shard_count"`
 }
 
 func newContactProcessor(
 	cdcService service.CDCService,
-	consumerFactory xconsumer.ConsumerFactory,
+	factory xconsume.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
 ) (*ContactProcessor, error) {
-	cfg, err := loadCdcProcessorConfig("cdc.contact_processor")
+	cfg, err := loadCdcProcessorConfig("mq.cdc.contact_processor")
 	if err != nil {
 		return nil, err
 	}
 
-	processor := NewContactProcessor(cfg.DBShardCount, cfg.TBShardCount, cfg.GroupID, consumerFactory, zapLogger)
+	processor := NewContactProcessor(
+		cfg.DBShardCount,
+		cfg.TBShardCount,
+		cfg.GroupID,
+		cfg.HandleTimeout,
+		factory,
+		cdcService.ProcessContact,
+	)
 	lifecycle.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			if err := processor.Start(cdcService.ProcessContact); err != nil {
+		OnStart: func(ctx context.Context) error {
+			if err := processor.Start(ctx); err != nil {
 				zapLogger.Error("failed to start contact processor", zap.Error(err))
 				return err
 			}
 			return nil
 		},
-		OnStop: func(_ context.Context) error {
-			return processor.Stop()
+		OnStop: func(ctx context.Context) error {
+			return processor.Stop(ctx)
 		},
 	})
 	return processor, nil
@@ -51,26 +61,33 @@ func newContactProcessor(
 
 func newConversationProcessor(
 	cdcService service.CDCService,
-	consumerFactory xconsumer.ConsumerFactory,
+	factory xconsume.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
 ) (*ConversationProcessor, error) {
-	cfg, err := loadCdcProcessorConfig("cdc.conversation_processor")
+	cfg, err := loadCdcProcessorConfig("mq.cdc.conversation_processor")
 	if err != nil {
 		return nil, err
 	}
 
-	processor := NewConversationProcessor(cfg.DBShardCount, cfg.TBShardCount, cfg.GroupID, consumerFactory, zapLogger)
+	processor := NewConversationProcessor(
+		cfg.DBShardCount,
+		cfg.TBShardCount,
+		cfg.GroupID,
+		cfg.HandleTimeout,
+		cdcService.ProcessConversation,
+		factory,
+	)
 	lifecycle.Append(fx.Hook{
-		OnStart: func(_ context.Context) error {
-			if err := processor.Start(cdcService.ProcessConversation); err != nil {
+		OnStart: func(ctx context.Context) error {
+			if err := processor.Start(ctx); err != nil {
 				zapLogger.Error("failed to start conversation processor", zap.Error(err))
 				return err
 			}
 			return nil
 		},
-		OnStop: func(_ context.Context) error {
-			return processor.Stop()
+		OnStop: func(ctx context.Context) error {
+			return processor.Stop(ctx)
 		},
 	})
 	return processor, nil

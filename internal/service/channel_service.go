@@ -8,133 +8,42 @@ import (
 
 	"github.com/jrmarcco/hermet/internal/domain"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproduce"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"go.uber.org/zap"
 )
 
+// ChannelMsgProducer 是频道消息生产者接口。
+type ChannelMsgProducer interface {
+	Produce(ctx context.Context, key []byte, val []byte) error
+}
+
 type ChannelService interface {
 	Create(ctx context.Context, event domain.ChannelCreateEvent) (domain.Channel, error)
-
 	AddMembers(ctx context.Context, event domain.ChannelMemberAddEvent) error
+
+	ProcessAddMembersMsg(ctx context.Context, msg *xmq.Message) error
 }
 
 var _ ChannelService = (*DefaultChannelService)(nil)
 
 type DefaultChannelService struct {
-	memberSyncAddTopic string // 成员同步添加主题
-
+	msgProducer ChannelMsgProducer
 	channelRepo repo.ChannelRepo
-	producer    xproduce.Producer
-
-	ctx        context.Context
-	cancelFunc context.CancelFunc
 
 	logger *zap.Logger
 }
 
 func NewDefaultChannelService(
-	consumerFactory xconsumer.ConsumerFactory,
-	memberSyncAddTopic string,
-	memberSyncAddGroupID string,
-	memberSyncAddPartition int,
+	msgProducer ChannelMsgProducer,
 	channelRepo repo.ChannelRepo,
-	producer xproduce.Producer,
 	logger *zap.Logger,
 ) (*DefaultChannelService, error) {
-	if memberSyncAddTopic == "" {
-		return nil, fmt.Errorf("member sync add topic is required")
-	}
-	if memberSyncAddGroupID == "" {
-		return nil, fmt.Errorf("member sync add group id is required")
-	}
-	if memberSyncAddPartition < 1 {
-		return nil, fmt.Errorf("member sync add partition must be greater than 0")
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	svc := &DefaultChannelService{
-		memberSyncAddTopic: memberSyncAddTopic,
-
+	return &DefaultChannelService{
+		msgProducer: msgProducer,
 		channelRepo: channelRepo,
-		producer:    producer,
-
-		ctx:        ctx,
-		cancelFunc: cancel,
 
 		logger: logger,
-	}
-
-	for i := range memberSyncAddPartition {
-		partition := i
-
-		consumer, err := consumerFactory.NewConsumer(memberSyncAddTopic, memberSyncAddGroupID)
-		if err != nil {
-			logger.Error(
-				"[hermet-channel] failed to create member sync add consumer",
-				zap.String("topic", memberSyncAddTopic),
-				zap.String("group_id", memberSyncAddGroupID),
-				zap.Int("partition", partition),
-				zap.Error(err),
-			)
-			return nil, err
-		}
-
-		msgChan, err := consumer.ConsumeChan(ctx)
-		if err != nil {
-			logger.Error(
-				"[hermet-channel] failed to get message channel",
-				zap.String("topic", memberSyncAddTopic),
-				zap.String("group_id", memberSyncAddGroupID),
-				zap.Int("partition", partition),
-				zap.Error(err),
-			)
-			return nil, err
-		}
-		go svc.consumeMemberAddMsg(msgChan)
-	}
-	return svc, nil
-}
-
-// consumeMemberAddMsg 消费成员同步添加消息。
-func (s *DefaultChannelService) consumeMemberAddMsg(msgChan <-chan *xmq.Message) {
-	for {
-		select {
-		case <-s.ctx.Done():
-			s.logger.Info("[hermet-channel-service] member sync add consumer context done")
-			return
-		case msg, ok := <-msgChan:
-			if !ok {
-				return
-			}
-
-			event := domain.ChannelMemberAddEvent{}
-			if err := json.Unmarshal(msg.Val, &event); err != nil {
-				s.logger.Error(
-					"[hermet-channel-service] failed to unmarshal channel member add event",
-					zap.String("topic", msg.Topic),
-					zap.Int64("offset", msg.Offset),
-					zap.Int("partition", msg.Partition),
-					zap.String("message", string(msg.Val)),
-					zap.Error(err),
-				)
-				continue
-			}
-			// 添加成员失败跳过。
-			if err := s.addMembers(s.ctx, event.CID, event.MemberIDs); err != nil {
-				s.logger.Error(
-					"[hermet-channel-service] failed to add members",
-					zap.String("topic", msg.Topic),
-					zap.Int64("offset", msg.Offset),
-					zap.Int("partition", msg.Partition),
-					zap.String("message", string(msg.Val)),
-					zap.Error(err),
-				)
-				continue
-			}
-		}
-	}
+	}, nil
 }
 
 func (s *DefaultChannelService) Create(ctx context.Context, event domain.ChannelCreateEvent) (domain.Channel, error) {
@@ -171,9 +80,13 @@ func (s *DefaultChannelService) sendMemberAddMsg(ctx context.Context, channelID 
 		end := min(i+batchSize, memberCount)
 		batch := memberIDs[i:end]
 
+		// 判断是否是最后一批成员。
+		isLastBatch := end >= memberCount
+
 		msg := domain.ChannelMemberAddEvent{
-			CID:       channelID,
-			MemberIDs: batch,
+			CID:         channelID,
+			MemberIDs:   batch,
+			IsLastBatch: isLastBatch,
 		}
 
 		val, err := json.Marshal(msg)
@@ -181,17 +94,39 @@ func (s *DefaultChannelService) sendMemberAddMsg(ctx context.Context, channelID 
 			return fmt.Errorf("failed to marshal channel member add event: %w", err)
 		}
 
-		err = s.producer.Produce(ctx, &xmq.Message{
-			Topic: s.memberSyncAddTopic,
-			// 使用 Channel 的 ID 作为 key 确保成员发送到同一个 kafka 分区。
-			Key: []byte(strconv.FormatUint(channelID, 10)),
-			Val: val,
-		})
-		if err != nil {
+		if err := s.msgProducer.Produce(ctx, []byte(strconv.FormatUint(channelID, 10)), val); err != nil {
 			// 发送失败，更新频道状态为 "failed"。
 			_ = s.channelRepo.UpdateStatus(ctx, channelID, string(domain.ChannelStatusFailed))
 			return fmt.Errorf("failed to produce channel member add event: %w", err)
 		}
+	}
+	return nil
+}
+
+func (s *DefaultChannelService) ProcessAddMembersMsg(ctx context.Context, msg *xmq.Message) error {
+	event := domain.ChannelMemberAddEvent{}
+	if err := json.Unmarshal(msg.Val, &event); err != nil {
+		return fmt.Errorf("failed to unmarshal channel member add event: %w", err)
+	}
+
+	if err := s.addMembers(ctx, event.CID, event.MemberIDs); err != nil {
+		// TODO: 需要增加成员添加失败处理。
+		// 1. 指数退避重试 3 次 ( 1s -> 2s -> 4s )。
+		// 2. 如果 3 次重试都失败，转发消息到死信队列 ( DLQ )。
+	}
+
+	if event.IsLastBatch {
+		if err := s.channelRepo.UpdateStatus(ctx, event.CID, string(domain.ChannelStatusActive)); err != nil {
+			s.logger.Error(
+				"[channel-service] failed to update channel status to active",
+				zap.Uint64("channel_id", event.CID),
+				zap.Error(err),
+			)
+		}
+		s.logger.Debug(
+			"[channel-service] channel activated successfully",
+			zap.Uint64("channel_id", event.CID),
+		)
 	}
 	return nil
 }
@@ -201,10 +136,5 @@ func (s *DefaultChannelService) addMembers(ctx context.Context, channelID uint64
 	if err := s.channelRepo.AddMembers(ctx, channelID, memberIDs); err != nil {
 		return fmt.Errorf("failed to add members: %w", err)
 	}
-	return nil
-}
-
-func (s *DefaultChannelService) Stop() error {
-	s.cancelFunc()
 	return nil
 }

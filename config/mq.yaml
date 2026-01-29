@@ -1,0 +1,33 @@
+mq:
+  channel_member_add:
+    topic: event_channel_member_add
+    group_id: hermet-channel-member-add-group
+    partitions: 6
+    handle_timeout: 16s  # 成员添加有指数退避重试机制 ( 1s -> 2s -> 4s ) 需要一个稍长的超时时间
+
+  cdc:
+    user_processor:
+      group_id: hermet-user-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    contact_processor:
+      group_id: hermet-contact-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    conversation_processor:
+      group_id: hermet-conversation-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    channel_processor:
+      group_id: hermet-channel-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    channel_member_processor:
+      group_id: hermet-channel-member-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4

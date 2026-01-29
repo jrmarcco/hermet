@@ -29,7 +29,7 @@ type App struct {
 func (app *App) Start() error {
 	go func() {
 		if err := app.svr.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			app.logger.Fatal("[hermet-ioc] failed to start http server", zap.Error(err))
+			app.logger.Fatal("[ioc] failed to start http server", zap.Error(err))
 		}
 	}()
 
@@ -37,13 +37,13 @@ func (app *App) Start() error {
 }
 
 func (app *App) Stop(ctx context.Context) error {
-	app.logger.Info("[hermet-ioc] stopping http server ...")
+	app.logger.Info("[ioc] stopping http server ...")
 	if err := app.svr.Shutdown(ctx); err != nil {
-		app.logger.Error("[hermet-ioc] failed to shutdown http server", zap.Error(err))
+		app.logger.Error("[ioc] failed to shutdown http server", zap.Error(err))
 		return err
 	}
 
-	app.logger.Info("[hermet-ioc] http server stopped")
+	app.logger.Info("[ioc] http server stopped")
 	return nil
 }
 

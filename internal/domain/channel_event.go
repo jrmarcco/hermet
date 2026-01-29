@@ -11,8 +11,9 @@ type ChannelCreateEvent struct {
 
 // ChannelMemberAddEvent 频道成员添加事件。
 type ChannelMemberAddEvent struct {
-	CID       uint64   // 频道 ID
-	MemberIDs []uint64 // 添加的成员 ID 列表
+	CID         uint64   // 频道 ID
+	MemberIDs   []uint64 // 添加的成员 ID 列表
+	IsLastBatch bool     // 是否是最后一批成员
 }
 
 // ChannelMemberRmEvent 频道成员移除事件。

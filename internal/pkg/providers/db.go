@@ -88,10 +88,10 @@ func newDBShardingClients(zapLogger *zap.Logger, lc fx.Lifecycle) (*xsync.Map[st
 		lc.Append(fx.Hook{
 			OnStop: func(_ context.Context) error {
 				if err := sqlDB.Close(); err != nil {
-					zapLogger.Error("[hermet-ioc-db] failed to close db connection", zap.Error(err))
+					zapLogger.Error("[ioc-db] failed to close db connection", zap.Error(err))
 					return fmt.Errorf("failed to close db connection: %w", err)
 				}
-				zapLogger.Info("[hermet-ioc-db] db connection closed")
+				zapLogger.Info("[ioc-db] db connection closed")
 				return nil
 			},
 		})

@@ -98,7 +98,7 @@ func (h *AuthHandler) RefreshToken(ctx *gin.Context, req refreshTokenRequest) (x
 	// 刷新 session 过期时间。
 	if err := h.RefreshSession(ctx, au.SID); err != nil {
 		// 刷新失败不中断流程，记录日志即可。
-		h.logger.Error("[hermet-user-handler] failed to refresh session", zap.Error(err))
+		h.logger.Error("[user-handler] failed to refresh session", zap.Error(err))
 	}
 
 	// 重新生成 access token 和 refresh token。
@@ -133,7 +133,7 @@ func (h *AuthHandler) SignOut(ctx *gin.Context) (xgin.R, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		if err := h.ClearSession(ctx, au.SID); err != nil {
-			h.logger.Error("[hermet-user-handler] failed to clear session", zap.Error(err))
+			h.logger.Error("[user-handler] failed to clear session", zap.Error(err))
 		}
 	}()
 	return xgin.R{
