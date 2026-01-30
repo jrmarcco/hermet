@@ -27,7 +27,7 @@ func NewGmOutboxProcessor(
 				TBShardCount: tbShardCount,
 
 				GroupID:      groupID,
-				TopicPattern: "pgsql_hermet_%d.public.group_member_outbox_%d",
+				TopicPattern: "pgsql_hermet_%d.public.group_member_outbox_event_%d",
 
 				HandleTimeout: handleTimeout,
 			},

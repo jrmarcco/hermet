@@ -91,11 +91,13 @@ var DaoFxModule = fx.Module(
 		fx.Annotate(
 			NewDefaultChannelDao,
 			fx.As(new(ChannelDao)),
-			fx.ParamTags(
-				`name:"db_sharding_clients"`,
-				`name:"channel_shard_helper"`,
-				`name:"channel_reverse_index_shard_helper"`,
-			),
+			fx.ParamTags(`name:"db_sharding_clients"`, `name:"channel_shard_helper"`),
+		),
+		// 频道反向索引。
+		fx.Annotate(
+			NewDefaultChannelRidxDao,
+			fx.As(new(ChannelRidxDao)),
+			fx.ParamTags(`name:"db_sharding_clients"`, `name:"channel_reverse_index_shard_helper"`),
 		),
 
 		// 消息 Dao ( MongoDB )。

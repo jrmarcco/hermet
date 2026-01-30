@@ -28,7 +28,7 @@ var RepoFxModule = fx.Module(
 		fx.Annotate(newUserGroupRepo, fx.As(new(UserGroupRepo))),
 
 		// channel repo ( 用户频道 )
-		fx.Annotate(NewDefaultChannelRepo, fx.As(new(ChannelRepo))),
+		fx.Annotate(newChannelRepo, fx.As(new(ChannelRepo))),
 
 		// message repo ( 消息 )
 		fx.Annotate(NewDefaultMessageRepo, fx.As(new(MessageRepo))),
@@ -44,7 +44,7 @@ type contactRepoFxParams struct {
 	ContactRidxDao dao.ContactRidxDao
 
 	DBs            *xsync.Map[string, *gorm.DB] `name:"db_sharding_clients"`
-	ShardHelper    *sharding.ShardHelper        `name:"contact_shard_helper"`
+	CShardHelper   *sharding.ShardHelper        `name:"contact_shard_helper"`
 	CvShardHelper  *sharding.ShardHelper        `name:"contact_view_shard_helper"`
 	CriShardHelper *sharding.ShardHelper        `name:"contact_reverse_index_shard_helper"`
 }
@@ -57,7 +57,7 @@ func newContactRepo(params contactRepoFxParams) ContactRepo {
 		params.ContactRidxDao,
 
 		params.DBs,
-		params.ShardHelper,
+		params.CShardHelper,
 		params.CvShardHelper,
 		params.CriShardHelper,
 	)
@@ -73,7 +73,7 @@ type groupRepoFxParams struct {
 	GroupMemberOutboxDao dao.GroupMemberOutboxDao
 
 	DBs            *xsync.Map[string, *gorm.DB] `name:"db_sharding_clients"`
-	ShardHelper    *sharding.ShardHelper        `name:"group_shard_helper"`
+	GShardHelper   *sharding.ShardHelper        `name:"group_shard_helper"`
 	GMShardHelper  *sharding.ShardHelper        `name:"group_member_shard_helper"`
 	GmvShardHelper *sharding.ShardHelper        `name:"group_member_view_shard_helper"`
 	GmoShardHelper *sharding.ShardHelper        `name:"group_member_outbox_shard_helper"`
@@ -88,7 +88,7 @@ func newGroupRepo(params groupRepoFxParams) GroupRepo {
 		params.GroupMemberOutboxDao,
 
 		params.DBs,
-		params.ShardHelper,
+		params.GShardHelper,
 		params.GMShardHelper,
 		params.GmvShardHelper,
 		params.GmoShardHelper,
@@ -104,7 +104,7 @@ type userGroupRepoFxParams struct {
 	UserGroupRidxDao dao.UserGroupRidxDao
 
 	DBs             *xsync.Map[string, *gorm.DB] `name:"db_sharding_clients"`
-	ShardHelper     *sharding.ShardHelper        `name:"user_group_shard_helper"`
+	UgShardHelper   *sharding.ShardHelper        `name:"user_group_shard_helper"`
 	UgvShardHelper  *sharding.ShardHelper        `name:"user_group_view_shard_helper"`
 	UgriShardHelper *sharding.ShardHelper        `name:"user_group_reverse_index_shard_helper"`
 }
@@ -117,8 +117,29 @@ func newUserGroupRepo(params userGroupRepoFxParams) UserGroupRepo {
 		params.UserGroupRidxDao,
 
 		params.DBs,
-		params.ShardHelper,
+		params.UgShardHelper,
 		params.UgvShardHelper,
 		params.UgriShardHelper,
+	)
+}
+
+type channelRepoFxParams struct {
+	fx.In
+
+	ChannelDao     dao.ChannelDao
+	ChannelRidxDao dao.ChannelRidxDao
+
+	DBs              *xsync.Map[string, *gorm.DB] `name:"db_sharding_clients"`
+	CShardHelper     *sharding.ShardHelper        `name:"channel_shard_helper"`
+	CRidxShardHelper *sharding.ShardHelper        `name:"channel_reverse_index_shard_helper"`
+}
+
+func newChannelRepo(params channelRepoFxParams) ChannelRepo {
+	return NewDefaultChannelRepo(
+		params.ChannelDao,
+		params.ChannelRidxDao,
+		params.DBs,
+		params.CShardHelper,
+		params.CRidxShardHelper,
 	)
 }

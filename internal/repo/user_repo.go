@@ -22,15 +22,15 @@ type UserRepo interface {
 var _ UserRepo = (*DefaultUserRepo)(nil)
 
 type DefaultUserRepo struct {
-	dao dao.UserDao
+	userDao dao.UserDao
 }
 
-func NewDefaultUserRepo(dao dao.UserDao) *DefaultUserRepo {
-	return &DefaultUserRepo{dao: dao}
+func NewDefaultUserRepo(userDao dao.UserDao) *DefaultUserRepo {
+	return &DefaultUserRepo{userDao: userDao}
 }
 
 func (r *DefaultUserRepo) Create(ctx context.Context, user domain.BizUser) (domain.BizUser, error) {
-	entity, err := r.dao.Create(ctx, r.toEntity(user))
+	entity, err := r.userDao.Create(ctx, r.toEntity(user))
 	if err != nil {
 		return domain.BizUser{}, err
 	}
@@ -38,7 +38,7 @@ func (r *DefaultUserRepo) Create(ctx context.Context, user domain.BizUser) (doma
 }
 
 func (r *DefaultUserRepo) FindByID(ctx context.Context, id uint64) (domain.BizUser, error) {
-	entity, err := r.dao.FindByID(ctx, id)
+	entity, err := r.userDao.FindByID(ctx, id)
 	if err != nil {
 		// 将数据库层的错误转换为领域层错误。
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -50,7 +50,7 @@ func (r *DefaultUserRepo) FindByID(ctx context.Context, id uint64) (domain.BizUs
 }
 
 func (r *DefaultUserRepo) FindByEmail(ctx context.Context, email string) (domain.BizUser, error) {
-	entity, err := r.dao.FindByEmail(ctx, email)
+	entity, err := r.userDao.FindByEmail(ctx, email)
 	if err != nil {
 		// 将数据库层的错误转换为领域层错误。
 		if errors.Is(err, gorm.ErrRecordNotFound) {

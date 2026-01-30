@@ -20,6 +20,8 @@ type GroupRepo interface {
 	AddMembers(ctx context.Context, groupID uint64, memberIDs []uint64) error
 
 	UpdateStatus(ctx context.Context, id uint64, status string) error
+
+	FindByID(ctx context.Context, id uint64) (domain.ChatGroup, error)
 }
 
 var _ GroupRepo = (*TxGroupRepo)(nil)
@@ -158,4 +160,30 @@ func (r *TxGroupRepo) AddMembers(ctx context.Context, groupID uint64, memberIDs 
 
 func (r *TxGroupRepo) UpdateStatus(ctx context.Context, id uint64, status string) error {
 	return r.groupDao.UpdateStatus(ctx, id, status)
+}
+
+func (r *TxGroupRepo) FindByID(ctx context.Context, id uint64) (domain.ChatGroup, error) {
+	group, err := r.groupDao.FindByID(ctx, id)
+	if err != nil {
+		return domain.ChatGroup{}, err
+	}
+	return domain.ChatGroup{
+		ID: group.ID,
+
+		GroupName:        group.GroupName,
+		GroupAvatar:      group.GroupAvatar,
+		GroupStatus:      domain.ChatGroupStatus(group.GroupStatus),
+		GroupMemberCount: group.GroupMemberCount,
+
+		InfoVer: group.InfoVer,
+
+		LastMessageAt: group.LastMessageAt,
+
+		CreatorID: group.CreatorID,
+
+		DeletedAt: group.DeletedAt,
+
+		CreatedAt: group.CreatedAt,
+		UpdatedAt: group.UpdatedAt,
+	}, nil
 }

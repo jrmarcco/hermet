@@ -2,11 +2,13 @@ package repo
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"time"
 
 	"github.com/jrmarcco/hermet/internal/domain"
-	"github.com/jrmarcco/hermet/internal/errs"
+	"github.com/jrmarcco/hermet/internal/pkg/sharding"
 	"github.com/jrmarcco/hermet/internal/repo/dao"
+	"github.com/jrmarcco/jit/xsync"
 	"gorm.io/gorm"
 )
 
@@ -20,35 +22,87 @@ type ChannelRepo interface {
 var _ ChannelRepo = (*DefaultChannelRepo)(nil)
 
 type DefaultChannelRepo struct {
-	userDao    dao.UserDao
-	channelDao dao.ChannelDao
+	channelDao     dao.ChannelDao
+	channelRidxDao dao.ChannelRidxDao
+
+	dbs              *xsync.Map[string, *gorm.DB]
+	cShardHelper     *sharding.ShardHelper
+	cRidxShardHelper *sharding.ShardHelper
 }
 
-func NewDefaultChannelRepo(userDao dao.UserDao, channelDao dao.ChannelDao) *DefaultChannelRepo {
+func NewDefaultChannelRepo(
+	channelDao dao.ChannelDao,
+	channelRidxDao dao.ChannelRidxDao,
+	dbs *xsync.Map[string, *gorm.DB],
+	cShardHelper *sharding.ShardHelper,
+	cRidxShardHelper *sharding.ShardHelper,
+) *DefaultChannelRepo {
 	return &DefaultChannelRepo{
-		userDao:    userDao,
-		channelDao: channelDao,
+		channelDao:       channelDao,
+		channelRidxDao:   channelRidxDao,
+		dbs:              dbs,
+		cShardHelper:     cShardHelper,
+		cRidxShardHelper: cRidxShardHelper,
 	}
 }
 
 func (r *DefaultChannelRepo) Create(ctx context.Context, channel domain.Channel) error {
-	user, err := r.userDao.FindByID(ctx, channel.TargetID)
+	// 1. 准备 Sharder ( 以 target_id 为分片键获取 Sharder )。
+	sharder := sharding.NewSingleIDSharder(channel.TargetID)
+
+	// 2. 生成 channel ID 并获取分片信息。
+	id, dst, err := r.cShardHelper.NextIDAndShard(sharder)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errs.ErrRecordNotFound
+		return fmt.Errorf("failed to get shard destination from channel target id [ %d ]: %w", channel.TargetID, err)
+	}
+
+	// 3. 加载 gorm.DB 连接。
+	db, ok := r.dbs.Load(dst.DB)
+	if !ok {
+		return fmt.Errorf("failed to load database [ %s ]", dst.DB)
+	}
+
+	now := time.Now().UnixMilli()
+
+	// 4. 开启事务协调 DAO 写入数据。
+	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 5. 写入 channel 表。
+		channelEntity := dao.Channel{
+			ID: id,
+
+			UserID:        channel.UserID,
+			TargetID:      channel.TargetID,
+			TargetInfoVer: channel.TargetInfoVer,
+
+			ChannelType:   string(channel.ChannelType),
+			ChannelName:   channel.ChannelName,
+			ChannelRemark: channel.ChannelRemark,
+			ChannelAvatar: channel.ChannelAvatar,
+
+			OpenedAt: channel.OpenedAt,
+
+			CreatedAt: now,
+			UpdatedAt: now,
 		}
-		return err
-	}
+		if err := r.channelDao.CreateInTx(ctx, tx, dst.TB, channelEntity); err != nil {
+			return fmt.Errorf("failed to create channel in transaction: %w", err)
+		}
 
-	channel.TargetInfoVer = user.InfoVer
-	channel.ChannelName = user.Nickname
-	channel.ChannelAvatar = user.Avatar
+		// 6. 写入 channel_reverse_index 表。
+		channelRidxEntity := dao.ChannelReverseIndex{
+			ID: id,
 
-	err = r.channelDao.Create(ctx, r.toEntity(channel))
-	if err != nil {
-		return err
-	}
-	return nil
+			UserID:      channel.UserID,
+			TargetID:    channel.TargetID,
+			ChannelType: string(channel.ChannelType),
+
+			CreatedAt: now,
+		}
+		if err := r.channelRidxDao.CreateInTx(ctx, tx, dst.TB, channelRidxEntity); err != nil {
+			return fmt.Errorf("failed to create channel reverse index in transaction: %w", err)
+		}
+		return nil
+	})
 }
 
 func (r *DefaultChannelRepo) ListByUserID(ctx context.Context, userID uint64) ([]domain.Channel, error) {
@@ -62,42 +116,6 @@ func (r *DefaultChannelRepo) ListByUserID(ctx context.Context, userID uint64) ([
 		domains = append(domains, r.toDomain(entities[i]))
 	}
 	return domains, nil
-}
-
-func (r *DefaultChannelRepo) toEntity(channel domain.Channel) dao.Channel {
-	return dao.Channel{
-		ID: channel.ID,
-
-		UserID:        channel.UserID,
-		TargetID:      channel.TargetID,
-		TargetInfoVer: channel.TargetInfoVer,
-
-		ChannelType:   string(channel.ChannelType),
-		ChannelName:   channel.ChannelName,
-		ChannelRemark: channel.ChannelRemark,
-		ChannelAvatar: channel.ChannelAvatar,
-
-		IsMuted:   channel.IsMuted,
-		IsPinned:  channel.IsPinned,
-		IsHidden:  channel.IsHidden,
-		IsStarred: channel.IsStarred,
-
-		LastMessageID:         channel.LastMessageID,
-		LastMessageType:       channel.LastMessageType,
-		LastMessageContent:    channel.LastMessageContent,
-		LastMessageSenderID:   channel.LastMessageSenderID,
-		LastMessageSenderName: channel.LastMessageSenderName,
-		LastMessageTime:       channel.LastMessageTime,
-
-		UnreadCount:  channel.UnreadCount,
-		MentionCount: channel.MentionCount,
-
-		OpenedAt: channel.OpenedAt,
-		ClosedAt: channel.ClosedAt,
-
-		CreatedAt: channel.CreatedAt,
-		UpdatedAt: channel.UpdatedAt,
-	}
 }
 
 func (r *DefaultChannelRepo) toDomain(channel dao.Channel) domain.Channel {

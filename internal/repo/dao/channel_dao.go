@@ -3,7 +3,6 @@ package dao
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/jrmarcco/hermet/internal/pkg/sharding"
 	"github.com/jrmarcco/jit/xsync"
@@ -46,20 +45,8 @@ type Channel struct {
 	UpdatedAt int64 `gorm:"column:updated_at"`
 }
 
-// ChannelReverseIndex 频道反向索引表。
-type ChannelReverseIndex struct {
-	ID uint64 `gorm:"column:id"`
-
-	UserID   uint64 `gorm:"column:user_id"`
-	TargetID uint64 `gorm:"column:target_id"`
-
-	ChannelType string `gorm:"column:channel_type"`
-
-	CreatedAt int64 `gorm:"column:created_at"`
-}
-
 type ChannelDao interface {
-	Create(ctx context.Context, channel Channel) error
+	CreateInTx(ctx context.Context, tx *gorm.DB, tbName string, channel Channel) error
 
 	ListByUserID(ctx context.Context, userID uint64) ([]Channel, error)
 }
@@ -67,94 +54,27 @@ type ChannelDao interface {
 var _ ChannelDao = (*DefaultChannelDao)(nil)
 
 type DefaultChannelDao struct {
-	dbs            *xsync.Map[string, *gorm.DB]
-	shardHelper    *sharding.ShardHelper
-	criShardHelper *sharding.ShardHelper
+	dbs         *xsync.Map[string, *gorm.DB]
+	shardHelper *sharding.ShardHelper
 }
 
 func NewDefaultChannelDao(
 	dbs *xsync.Map[string, *gorm.DB],
-	shardHelper, criShardHelper *sharding.ShardHelper,
+	shardHelper *sharding.ShardHelper,
 ) *DefaultChannelDao {
 	return &DefaultChannelDao{
-		dbs:            dbs,
-		shardHelper:    shardHelper,
-		criShardHelper: criShardHelper,
+		dbs:         dbs,
+		shardHelper: shardHelper,
 	}
 }
 
-func (d *DefaultChannelDao) Create(ctx context.Context, channel Channel) error {
-	sharder := sharding.NewSingleIDSharder(channel.UserID)
-
-	id, dst, err := d.shardHelper.NextIDAndShard(sharder)
-	if err != nil {
-		return fmt.Errorf("failed to get shard destination from user id [ %d ]", channel.UserID)
-	}
-
-	db, ok := d.dbs.Load(dst.DB)
-	if !ok {
-		return fmt.Errorf("failed to load database [ %s ]", dst.DB)
-	}
-
-	now := time.Now().UnixMilli()
-
-	// 开启事务。
-	// 这里需要写入多个数据表:
-	// 	- channel_view
-	// 	- channel_reverse_index
-	// 这 2 张表都是以 user_id 为分片键，因此能确保在同一个数据库分片内进行事务操作。
-	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 1. 写入 channel 表。
-		channel.ID = id
-		channel.CreatedAt = now
-		channel.UpdatedAt = now
-		err = tx.WithContext(ctx).Table(dst.TB).Model(&Channel{}).
-			Clauses(clause.OnConflict{
-				// 唯一索引 ( user_id, target_id, channel_type ) 冲突时，不进行任何操作。
-				Columns: []clause.Column{
-					{Name: "user_id"},
-					{Name: "target_id"},
-					{Name: "channel_type"},
-				},
-				DoNothing: true,
-			}).
-			Create(&channel).Error
-		if err != nil {
-			return fmt.Errorf("failed to save user channel view: %w", err)
-		}
-
-		// 2. 写入 channel_reverse_index 表。
-		reverseIndexDst, err := d.criShardHelper.DstFromSharder(sharder)
-		if err != nil {
-			return fmt.Errorf("failed to get shard destination from user id [ %d ]", channel.UserID)
-		}
-		err = tx.WithContext(ctx).Table(reverseIndexDst.TB).Model(&ChannelReverseIndex{}).
-			Clauses(clause.OnConflict{
-				// 唯一索引 ( user_id, target_id, channel_type ) 冲突时，不进行任何操作。
-				Columns: []clause.Column{
-					{Name: "user_id"},
-					{Name: "target_id"},
-					{Name: "channel_type"},
-				},
-				DoNothing: true,
-			}).
-			Create(&ChannelReverseIndex{
-				ID: id,
-
-				UserID:   channel.UserID,
-				TargetID: channel.TargetID,
-
-				ChannelType: channel.ChannelType,
-
-				CreatedAt: now,
-			}).Error
-		if err != nil {
-			return fmt.Errorf("failed to save conversation reverse index: %w", err)
-		}
-
-		return nil
-	})
-	return err
+func (d *DefaultChannelDao) CreateInTx(ctx context.Context, tx *gorm.DB, tbName string, channel Channel) error {
+	return tx.WithContext(ctx).Table(tbName).Model(&Channel{}).
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "user_id"}, {Name: "target_id"}, {Name: "channel_type"}},
+			DoNothing: true,
+		}).
+		Create(&channel).Error
 }
 
 func (d *DefaultChannelDao) ListByUserID(ctx context.Context, userID uint64) ([]Channel, error) {

@@ -15,6 +15,7 @@ var CdcFxModule = fx.Module(
 	"cdc",
 	fx.Invoke(newContactReviewProcessor),
 	fx.Invoke(newContactProcessor),
+	fx.Invoke(newUserGroupProcessor),
 	fx.Invoke(newGroupMemberProcessor),
 	fx.Invoke(newGmOutboxProcessor),
 )
@@ -94,6 +95,39 @@ func newContactProcessor(
 		},
 		OnStop: func(ctx context.Context) error {
 			return processor.Stop(ctx)
+		},
+	})
+	return processor, nil
+}
+
+func newUserGroupProcessor(
+	cdcService service.CDCService,
+	factory xconsume.ConsumerFactory,
+	zapLogger *zap.Logger,
+	lifecycle fx.Lifecycle,
+) (*UserGroupProcessor, error) {
+	cfg, err := loadCdcProcessorConfig("mq.cdc.user_group")
+	if err != nil {
+		return nil, err
+	}
+
+	processor := NewUserGroupProcessor(
+		cfg.DBShardCount,
+		cfg.TBShardCount,
+		cfg.GroupID,
+		cfg.HandleTimeout,
+
+		factory,
+		cdcService.ProcessUserGroup,
+	)
+
+	lifecycle.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			if err := processor.Start(ctx); err != nil {
+				zapLogger.Error("failed to start user group processor", zap.Error(err))
+				return err
+			}
+			return nil
 		},
 	})
 	return processor, nil
