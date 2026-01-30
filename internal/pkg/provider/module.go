@@ -1,4 +1,4 @@
-package providers
+package provider
 
 import (
 	"github.com/jrmarcco/hermet/internal/pkg/xgin"
@@ -86,18 +86,18 @@ var ShardingFxModule = fx.Module(
 			newContactApplicationShardHelper,
 			fx.ResultTags(`name:"contact_application_shard_helper"`),
 		),
-		// 频道申请。
+		// 聊天群申请。
 		fx.Annotate(
 			newGroupApplicationShardHelper,
 			fx.ResultTags(`name:"group_application_shard_helper"`),
 		),
 
-		// 用户联系人。
+		// 联系人。
 		fx.Annotate(
 			newContactShardHelper,
 			fx.ResultTags(`name:"contact_shard_helper"`),
 		),
-		// 用户联系人视图。
+		// 联系人视图。
 		fx.Annotate(
 			newContactViewShardHelper,
 			fx.ResultTags(`name:"contact_view_shard_helper"`),
@@ -107,26 +107,44 @@ var ShardingFxModule = fx.Module(
 			newContactReverseIndexShardHelper,
 			fx.ResultTags(`name:"contact_reverse_index_shard_helper"`),
 		),
-		// 频道。
+
+		// 聊天群。
 		fx.Annotate(
 			newGroupShardHelper,
 			fx.ResultTags(`name:"group_shard_helper"`),
 		),
-		// 频道成员。
+		// 聊天群成员。
 		fx.Annotate(
 			newGroupMemberShardHelper,
 			fx.ResultTags(`name:"group_member_shard_helper"`),
 		),
-		// 频道成员视图。
+		// 聊天群成员视图。
 		fx.Annotate(
 			newGroupMemberViewShardHelper,
 			fx.ResultTags(`name:"group_member_view_shard_helper"`),
 		),
-		// 频道成员反向索引。
+		// 聊天群成员 outbox 事件。
 		fx.Annotate(
-			newGroupMemberReverseIndexShardHelper,
-			fx.ResultTags(`name:"group_member_reverse_index_shard_helper"`),
+			newGroupMemberOutboxShardHelper,
+			fx.ResultTags(`name:"group_member_outbox_shard_helper"`),
 		),
+
+		// 用户群组。
+		fx.Annotate(
+			newUserGroupShardHelper,
+			fx.ResultTags(`name:"user_group_shard_helper"`),
+		),
+		// 用户群组视图。
+		fx.Annotate(
+			newUserGroupViewShardHelper,
+			fx.ResultTags(`name:"user_group_view_shard_helper"`),
+		),
+		// 用户群组反向索引。
+		fx.Annotate(
+			newUserGroupReverseIndexShardHelper,
+			fx.ResultTags(`name:"user_group_reverse_index_shard_helper"`),
+		),
+
 		// 聊天频道。
 		fx.Annotate(
 			newChannelShardHelper,

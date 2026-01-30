@@ -54,8 +54,8 @@ func (s *DefaultGroupService) Create(ctx context.Context, event domain.GroupCrea
 		GroupStatus: domain.ChatGroupStatusCreating,
 		CreatorID:   event.Creator,
 	}
-	_, err := s.groupRepo.Create(ctx, group)
-	if err != nil {
+
+	if err := s.groupRepo.Create(ctx, group); err != nil {
 		return domain.ChatGroup{}, fmt.Errorf("failed to create group: %w", err)
 	}
 

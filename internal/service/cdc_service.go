@@ -38,6 +38,11 @@ type CDCService interface {
 	// 聊天群成员添加后，建立成员视图 ( 冗余成员信息 )。
 	// msg 是 debezium 推送到 kafka 的消息。
 	ProcessGroupMember(ctx context.Context, msg *xmq.Message) error
+
+	// ProcessGroupMemberOutbox 处理聊天群成员 outbox 事件。
+	// 聊天群成员 outbox 事件用于分流 group_member 表的 cdc 事件 ( 用于保证 user_group 的创建 )。
+	// msg 是 debezium 推送到 kafka 的消息。
+	ProcessGroupMemberOutbox(ctx context.Context, msg *xmq.Message) error
 }
 
 var _ CDCService = (*DefaultCDCService)(nil)
@@ -45,9 +50,11 @@ var _ CDCService = (*DefaultCDCService)(nil)
 type DefaultCDCService struct {
 	rdb redis.Cmdable
 
-	userRepo    repo.UserRepo
-	contactRepo repo.ContactRepo
+	userRepo      repo.UserRepo
+	userGroupRepo repo.UserGroupRepo
+
 	groupRepo   repo.GroupRepo
+	contactRepo repo.ContactRepo
 	channelRepo repo.ChannelRepo
 
 	logger *zap.Logger
@@ -56,17 +63,20 @@ type DefaultCDCService struct {
 func NewDefaultCDCService(
 	rdb redis.Cmdable,
 	userRepo repo.UserRepo,
-	contactRepo repo.ContactRepo,
+	userGroupRepo repo.UserGroupRepo,
 	groupRepo repo.GroupRepo,
+	contactRepo repo.ContactRepo,
 	channelRepo repo.ChannelRepo,
 	logger *zap.Logger,
 ) *DefaultCDCService {
 	return &DefaultCDCService{
 		rdb: rdb,
 
-		userRepo:    userRepo,
-		contactRepo: contactRepo,
+		userRepo:      userRepo,
+		userGroupRepo: userGroupRepo,
+
 		groupRepo:   groupRepo,
+		contactRepo: contactRepo,
 		channelRepo: channelRepo,
 
 		logger: logger,
@@ -140,16 +150,12 @@ func (s *DefaultCDCService) createContact(ctx context.Context, contact domain.Co
 
 	if contact.ID != 0 && contact.DeletedAt != 0 {
 		// 以前添加过联系人但被删除了，现在重新添加。
-		_, err = s.contactRepo.Recreate(ctx, contact)
-		if err != nil {
+		if err := s.contactRepo.Recreate(ctx, contact); err != nil {
 			return err
 		}
+		return nil
 	}
-
-	if _, err = s.contactRepo.Create(ctx, contact); err != nil {
-		return err
-	}
-	return nil
+	return s.contactRepo.Create(ctx, contact)
 }
 
 // createContactSync 创建联系人关系。
@@ -179,29 +185,6 @@ func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message
 		ChannelType: domain.ChannelTypeSingle,
 		OpenedAt:    event.AddedAt,
 	})
-}
-
-func (s *DefaultCDCService) createChannel(ctx context.Context, channel domain.Channel) error {
-	// 幂等性判断 ( 防止重复处理相同的联系人关系建立事件 )。
-	cacheKey := fmt.Sprintf("channel:create:%d-%d", channel.UserID, channel.TargetID)
-	if exists, _ := s.rdb.Exists(ctx, cacheKey).Result(); exists > 0 {
-		s.logger.Debug(
-			"[cdc-channel] channel already processed",
-			zap.Uint64("user_id", channel.UserID),
-			zap.Uint64("target_id", channel.TargetID),
-		)
-		return nil
-	}
-
-	// 创建会话 ( 这里消费的是联系人关系建立事件，只需要创建会话即可 )。
-	if err := s.channelRepo.Create(ctx, channel); err != nil {
-		s.logger.Error("[cdc-contact] failed to create channel for contact", zap.Error(err))
-		return err
-	}
-
-	// 关联关系建立成功，设置缓存标记 ( 用于幂等性判断 )。
-	s.rdb.Set(ctx, cacheKey, "1", cdcIdempotentCacheTTL)
-	return nil
 }
 
 func (s *DefaultCDCService) ProcessGroupMember(ctx context.Context, msg *xmq.Message) error {
@@ -236,8 +219,8 @@ func (s *DefaultCDCService) ProcessGroupMember(ctx context.Context, msg *xmq.Mes
 	gmv := domain.GroupMemberView{
 		ID: event.ID,
 
-		GID: event.GroupID,
-		UID: event.UserID,
+		GroupID: event.GroupID,
+		UserID:  event.UserID,
 
 		MemberRole: domain.GroupMemberRole(event.MemberRole),
 
@@ -255,21 +238,87 @@ func (s *DefaultCDCService) ProcessGroupMember(ctx context.Context, msg *xmq.Mes
 
 func (s *DefaultCDCService) createGmv(ctx context.Context, gmv domain.GroupMemberView) error {
 	// 幂等性判断 ( 防止重复处理相同的聊天群成员添加事件 )。
-	cacheKey := fmt.Sprintf("group:member:create:%d-%d", gmv.GID, gmv.UID)
+	cacheKey := fmt.Sprintf("group:member:create:%d-%d", gmv.GroupID, gmv.UserID)
 	if exists, _ := s.rdb.Exists(ctx, cacheKey).Result(); exists > 0 {
 		s.logger.Debug(
 			"[cdc-group-member] group member already processed",
-			zap.Uint64("group_id", gmv.GID),
-			zap.Uint64("user_id", gmv.UID),
+			zap.Uint64("group_id", gmv.GroupID),
+			zap.Uint64("user_id", gmv.UserID),
 		)
 		return nil
 	}
 
-	if _, err := s.groupRepo.CreateMemberView(ctx, gmv); err != nil {
+	if err := s.groupRepo.CreateMemberView(ctx, gmv); err != nil {
 		return fmt.Errorf("failed to create group member view: %w", err)
 	}
 
 	// 聊天群成员视图创建成功，设置缓存标记 ( 用于幂等性判断 )。
+	s.rdb.Set(ctx, cacheKey, "1", cdcIdempotentCacheTTL)
+	return nil
+}
+
+func (s *DefaultCDCService) ProcessGroupMemberOutbox(ctx context.Context, msg *xmq.Message) error {
+	var event event.GroupMemberOutboxEvent
+	if err := json.Unmarshal(msg.Val, &event); err != nil {
+		return fmt.Errorf("failed to unmarshal group member outbox cdc event: %w", err)
+	}
+
+	// 只处理创建事件。
+	// 这里的创建事件是数据库表层面的。
+	// 业务层面的操作来行由 op_type 来决定。
+	if !event.IsCreate() {
+		return nil
+	}
+
+	cacheKey := fmt.Sprintf("group:member:outbox:%d-%d", event.GroupID, event.UserID)
+	if exists, _ := s.rdb.Exists(ctx, cacheKey).Result(); exists > 0 {
+		s.logger.Debug(
+			"[cdc-group-member-outbox] group member outbox already processed",
+			zap.Uint64("group_id", event.GroupID),
+			zap.Uint64("user_id", event.UserID),
+		)
+		return nil
+	}
+
+	op := domain.GroupMemberOpType(event.OpType)
+	var err error
+	switch op {
+	case domain.GroupMemberOpTypeCreate:
+		err = s.userGroupRepo.Create(ctx, domain.UserGroup{
+			UserID:   event.UserID,
+			GroupID:  event.GroupID,
+			JoinedAt: event.JoinedAt,
+		})
+	default:
+		return fmt.Errorf("unknown group member op type: %s", op)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to process group member outbox event [ %s ]: %w", op, err)
+	}
+
+	s.rdb.Set(ctx, cacheKey, "1", cdcIdempotentCacheTTL)
+	return nil
+}
+
+func (s *DefaultCDCService) createChannel(ctx context.Context, channel domain.Channel) error {
+	// 幂等性判断 ( 防止重复处理相同的联系人关系建立事件 )。
+	cacheKey := fmt.Sprintf("channel:create:%s-%d-%d", channel.ChannelType, channel.UserID, channel.TargetID)
+	if exists, _ := s.rdb.Exists(ctx, cacheKey).Result(); exists > 0 {
+		s.logger.Debug(
+			"[cdc-channel] channel already processed",
+			zap.Uint64("user_id", channel.UserID),
+			zap.Uint64("target_id", channel.TargetID),
+		)
+		return nil
+	}
+
+	// 创建会话 ( 这里消费的是联系人关系建立事件，只需要创建会话即可 )。
+	if err := s.channelRepo.Create(ctx, channel); err != nil {
+		s.logger.Error("[cdc-contact] failed to create channel for contact", zap.Error(err))
+		return err
+	}
+
+	// 关联关系建立成功，设置缓存标记 ( 用于幂等性判断 )。
 	s.rdb.Set(ctx, cacheKey, "1", cdcIdempotentCacheTTL)
 	return nil
 }

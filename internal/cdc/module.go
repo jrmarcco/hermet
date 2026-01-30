@@ -16,6 +16,7 @@ var CdcFxModule = fx.Module(
 	fx.Invoke(newContactReviewProcessor),
 	fx.Invoke(newContactProcessor),
 	fx.Invoke(newGroupMemberProcessor),
+	fx.Invoke(newGmOutboxProcessor),
 )
 
 type cdcProcessorConfig struct {
@@ -46,6 +47,7 @@ func newContactReviewProcessor(
 		factory,
 		cdcService.ProcessContactReview,
 	)
+
 	lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if err := processor.Start(ctx); err != nil {
@@ -81,6 +83,7 @@ func newContactProcessor(
 		factory,
 		cdcService.ProcessContact,
 	)
+
 	lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if err := processor.Start(ctx); err != nil {
@@ -116,10 +119,44 @@ func newGroupMemberProcessor(
 		factory,
 		cdcService.ProcessGroupMember,
 	)
+
 	lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if err := processor.Start(ctx); err != nil {
 				zapLogger.Error("failed to start group member processor", zap.Error(err))
+				return err
+			}
+			return nil
+		},
+	})
+	return processor, nil
+}
+
+func newGmOutboxProcessor(
+	cdcService service.CDCService,
+	factory xconsume.ConsumerFactory,
+	zapLogger *zap.Logger,
+	lifecycle fx.Lifecycle,
+) (*GmOutboxProcessor, error) {
+	cfg, err := loadCdcProcessorConfig("mq.cdc.group_member_outbox")
+	if err != nil {
+		return nil, err
+	}
+
+	processor := NewGmOutboxProcessor(
+		cfg.DBShardCount,
+		cfg.TBShardCount,
+		cfg.GroupID,
+		cfg.HandleTimeout,
+
+		factory,
+		cdcService.ProcessGroupMemberOutbox,
+	)
+
+	lifecycle.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			if err := processor.Start(ctx); err != nil {
+				zapLogger.Error("failed to start group member outbox processor", zap.Error(err))
 				return err
 			}
 			return nil

@@ -6,6 +6,7 @@
 DROP TABLE IF EXISTS contact_reverse_index;
 CREATE TABLE contact_reverse_index (
     id BIGINT PRIMARY KEY,
+
     user_id BIGINT NOT NULL,                           -- 用户 ID ( 联系人 ID )
     owner_id BIGINT NOT NULL,                          -- 用户 ID ( 谁的联系人 )
 
@@ -30,6 +31,30 @@ CREATE INDEX idx_cori_contact ON contact_reverse_index(user_id);
 -- SELECT owner_id FROM contact_reverse_index WHERE user_id = A
 
 
+-- 用户聊天群反向索引表 ( 用于快速查询 - "哪个聊天群中有某个用户" )
+DROP TABLE IF EXISTS user_group_reverse_index;
+CREATE TABLE user_group_reverse_index (
+    id BIGINT PRIMARY KEY,
+
+    user_id BIGINT NOT NULL,                           -- 用户 ID ( 聊天群成员 ID )
+    group_id BIGINT NOT NULL,                          -- 聊天群 ID
+
+    created_at BIGINT NOT NULL,
+
+    -- 约束
+    CONSTRAINT uk_user_group_reverse_index UNIQUE(user_id, group_id)
+);
+
+COMMENT ON TABLE user_group_reverse_index IS '【 反向索引 】用户聊天群反向索引表 ( 用于快速查询 - "哪个聊天群中有某个用户" )';
+COMMENT ON COLUMN user_group_reverse_index.id IS '主键 ID';
+COMMENT ON COLUMN user_group_reverse_index.user_id IS '聊天群成员用户 ID';
+COMMENT ON COLUMN user_group_reverse_index.group_id IS '聊天群 ID';
+COMMENT ON COLUMN user_group_reverse_index.created_at IS '创建时间戳 ( Unix 毫秒值 )';
+
+-- 索引
+CREATE INDEX idx_cri_user_group ON user_group_reverse_index(user_id);
+
+
 -- 频道反向索引表 ( 用于快速查询 - "谁的频道中有某个用户" )
 DROP TABLE IF EXISTS channel_reverse_index;
 CREATE TABLE channel_reverse_index (
@@ -41,8 +66,6 @@ CREATE TABLE channel_reverse_index (
     channel_type VARCHAR(16) NOT NULL,        -- 频道类型
 
     created_at BIGINT NOT NULL,
-
-    PRIMARY KEY(user_id, target_id, channel_type),
 
     -- 约束
     -- 频道类型 - 枚举 ( single=单聊 / group=群聊 )

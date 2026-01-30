@@ -62,10 +62,31 @@ sharding:
     db_shard_count: 2
     tb_shard_count: 4
 
-  # 聊天群成员反向索引表
-  group_member_reverse_index:
+  # 聊天群成员 outbox 事件表
+  group_member_outbox_event:
     db_prefix: hermet
-    tb_prefix: group_member_reverse_index
+    tb_prefix: group_member_outbox_event
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 用户群组表
+  user_group:
+    db_prefix: hermet
+    tb_prefix: user_group
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 用户群组视图表
+  user_group_view:
+    db_prefix: hermet
+    tb_prefix: user_group_view
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 用户群组反向索引表
+  user_group_reverse_index:
+    db_prefix: hermet
+    tb_prefix: user_group_reverse_index
     db_shard_count: 2
     tb_shard_count: 4
 

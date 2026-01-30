@@ -44,8 +44,8 @@ const (
 type GroupMember struct {
 	ID uint64 // 成员 ID
 
-	GID uint64 // 聊天群 ID ( group_id )
-	UID uint64 // 用户 ID ( user_id )
+	GroupID uint64 // 聊天群 ID
+	UserID  uint64 // 用户 ID
 
 	MemberRole GroupMemberRole // 成员角色
 
@@ -59,8 +59,8 @@ type GroupMember struct {
 type GroupMemberView struct {
 	ID uint64 // 成员 ID
 
-	GID uint64 // 聊天群 ID ( group_id )
-	UID uint64 // 用户 ID ( user_id )
+	GroupID uint64 // 聊天群 ID
+	UserID  uint64 // 用户 ID
 
 	MemberRole GroupMemberRole // 成员角色
 

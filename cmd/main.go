@@ -7,7 +7,7 @@ import (
 	"github.com/jrmarcco/hermet/internal/app"
 	"github.com/jrmarcco/hermet/internal/cdc"
 	"github.com/jrmarcco/hermet/internal/mq"
-	"github.com/jrmarcco/hermet/internal/pkg/providers"
+	"github.com/jrmarcco/hermet/internal/pkg/provider"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/hermet/internal/repo/dao"
 	"github.com/jrmarcco/hermet/internal/service"
@@ -28,33 +28,33 @@ func main() {
 		}),
 
 		// 初始化 zap.logger。
-		providers.ZapLoggerFxModule,
+		provider.ZapLoggerFxModule,
 
 		// 初始化 redis client。
-		providers.RedisFxModule,
+		provider.RedisFxModule,
 
 		// 初始化 db。
-		providers.DBFxModule,
+		provider.DBFxModule,
 
 		// 初始化 mongo db client。
-		providers.MongoFxModule,
+		provider.MongoFxModule,
 
 		// 初始化 kafka client。
-		providers.KafkaFxModule,
-		providers.KafkaProducerFxModule,
-		providers.KafkaConsumerFxModule,
+		provider.KafkaFxModule,
+		provider.KafkaProducerFxModule,
+		provider.KafkaConsumerFxModule,
 
 		// 初始化 jwt manager。
-		providers.JwtManagerFxModule,
+		provider.JwtManagerFxModule,
 
 		// 初始化 jwt handler。
-		providers.JwtHandlerFxModule,
+		provider.JwtHandlerFxModule,
 
 		// 初始化 middleware。
-		providers.MiddlewareFxModule,
+		provider.MiddlewareFxModule,
 
 		// 初始化 sharding。
-		providers.ShardingFxModule,
+		provider.ShardingFxModule,
 
 		// 初始化 dao。
 		dao.DaoFxModule,
