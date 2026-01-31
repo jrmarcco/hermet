@@ -352,7 +352,7 @@ func (s *DefaultCDCService) createGmv(ctx context.Context, gmv domain.GroupMembe
 }
 
 func (s *DefaultCDCService) ProcessGroupMemberOutbox(ctx context.Context, msg *xmq.Message) error {
-	var event event.GroupMemberOutboxEvent
+	var event event.OutboxCDCEvent
 	if err := json.Unmarshal(msg.Val, &event); err != nil {
 		return fmt.Errorf("failed to unmarshal group member outbox cdc event: %w", err)
 	}
@@ -364,35 +364,40 @@ func (s *DefaultCDCService) ProcessGroupMemberOutbox(ctx context.Context, msg *x
 		return nil
 	}
 
-	cacheKey := fmt.Sprintf("group:member:outbox:%d-%d", event.GroupID, event.UserID)
+	var gmOutboxEvent domain.GroupMemberOutboxEvent
+	if err := json.Unmarshal(event.Payload, &gmOutboxEvent); err != nil {
+		return fmt.Errorf("failed to unmarshal group member outbox event payload: %w", err)
+	}
+
+	cacheKey := fmt.Sprintf("group:member:outbox:%d-%d", gmOutboxEvent.GroupID, gmOutboxEvent.UserID)
 	if exists, _ := s.rdb.Exists(ctx, cacheKey).Result(); exists > 0 {
 		s.logger.Debug(
 			"[cdc-group-member-outbox] group member outbox already processed",
-			zap.Uint64("group_id", event.GroupID),
-			zap.Uint64("user_id", event.UserID),
+			zap.Uint64("group_id", gmOutboxEvent.GroupID),
+			zap.Uint64("user_id", gmOutboxEvent.UserID),
 		)
 		return nil
 	}
 
-	op := domain.GroupMemberOpType(event.OpType)
+	op := domain.OutboxEventType(event.EventType)
 	var err error
 	switch op {
-	case domain.GroupMemberOpTypeCreate:
+	case domain.OutboxEventTypeGmCreate:
 		// 首次加入聊天群。
 		err = s.userGroupRepo.Create(ctx, domain.UserGroup{
-			UserID:   event.UserID,
-			GroupID:  event.GroupID,
-			JoinedAt: event.JoinedAt,
+			UserID:   gmOutboxEvent.UserID,
+			GroupID:  gmOutboxEvent.GroupID,
+			JoinedAt: gmOutboxEvent.JoinedAt,
 		})
-	case domain.GroupMemberOpTypeUpdate:
+	case domain.OutboxEventTypeGmUpdate:
 		// 重新加入聊天群。
-	case domain.GroupMemberOpTypeDelete:
+	case domain.OutboxEventTypeGmDelete:
 		// 删除聊天群成员。
 	default:
-		return fmt.Errorf("unknown group member op type: %s", op)
+		return fmt.Errorf("unknown outbox event type: %s", op)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to process group member outbox event [ %s ]: %w", op, err)
+		return fmt.Errorf("failed to process outbox event [ %s ]: %w", op, err)
 	}
 
 	s.rdb.Set(ctx, cacheKey, "1", cdcIdempotentCacheTTL)

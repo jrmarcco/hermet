@@ -1,13 +1,5 @@
 package domain
 
-type GroupMemberOpType string
-
-const (
-	GroupMemberOpTypeCreate GroupMemberOpType = "c"
-	GroupMemberOpTypeDelete GroupMemberOpType = "d"
-	GroupMemberOpTypeUpdate GroupMemberOpType = "u"
-)
-
 // GroupCreateEvent 聊天群创建事件。
 type GroupCreateEvent struct {
 	Name    string // 聊天群名称

@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -27,11 +28,13 @@ type GroupRepo interface {
 var _ GroupRepo = (*TxGroupRepo)(nil)
 
 type TxGroupRepo struct {
-	userDao              dao.UserDao
-	groupDao             dao.GroupDao
-	groupMemberDao       dao.GroupMemberDao
-	groupMemberViewDao   dao.GroupMemberViewDao
-	groupMemberOutboxDao dao.GroupMemberOutboxDao
+	userDao dao.UserDao
+
+	groupDao           dao.GroupDao
+	groupMemberDao     dao.GroupMemberDao
+	groupMemberViewDao dao.GroupMemberViewDao
+
+	outboxEventDao dao.OutboxEventDao
 
 	dbs            *xsync.Map[string, *gorm.DB]
 	gShardHelper   *sharding.ShardHelper
@@ -45,16 +48,18 @@ func NewTxGroupRepo(
 	groupDao dao.GroupDao,
 	groupMemberDao dao.GroupMemberDao,
 	groupMemberViewDao dao.GroupMemberViewDao,
-	groupMemberOutboxDao dao.GroupMemberOutboxDao,
+	outboxEventDao dao.OutboxEventDao,
 	dbs *xsync.Map[string, *gorm.DB],
 	shardHelper, gmShardHelper, gmvShardHelper, gmoShardHelper *sharding.ShardHelper,
 ) *TxGroupRepo {
 	return &TxGroupRepo{
-		userDao:              userDao,
-		groupDao:             groupDao,
-		groupMemberDao:       groupMemberDao,
-		groupMemberViewDao:   groupMemberViewDao,
-		groupMemberOutboxDao: groupMemberOutboxDao,
+		userDao: userDao,
+
+		groupDao:           groupDao,
+		groupMemberDao:     groupMemberDao,
+		groupMemberViewDao: groupMemberViewDao,
+
+		outboxEventDao: outboxEventDao,
 
 		dbs:            dbs,
 		gShardHelper:   shardHelper,
@@ -135,20 +140,30 @@ func (r *TxGroupRepo) CreateMemberView(ctx context.Context, gmv domain.GroupMemb
 			return fmt.Errorf("failed to create group member view in transaction: %w", err)
 		}
 
-		// 6. 写入 group_member_outbox 表 ( 分流 CDC 事件用以创建 user_group 记录 )。
-		gmoEntity := dao.GroupMemberOutboxEvent{
+		// 6. 写入 outbox_event 表 ( 分流 CDC 事件用以创建 user_group 记录 )。
+		payload, err := json.Marshal(domain.GroupMemberOutboxEvent{
+			GroupID:  gmv.GroupID,
+			UserID:   gmv.UserID,
+			JoinedAt: gmv.JoinedAt,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to marshal outbox event payload: %w", err)
+		}
+
+		outboxEventEntity := dao.OutboxEvent{
 			ID: gmv.ID,
 
-			GroupID: gmv.GroupID,
-			UserID:  gmv.UserID,
-			// 操作设置为创建群成员。
-			OpType: string(domain.GroupMemberOpTypeCreate),
+			AggregateID:   gmv.GroupID,
+			AggregateType: string(domain.OutboxAggregateTypeGm),
 
-			JoinedAt:  gmv.JoinedAt,
+			EventType: string(domain.OutboxEventTypeGmCreate),
+			Payload:   payload,
+
 			CreatedAt: now,
 		}
-		if err := r.groupMemberOutboxDao.CreateInTx(ctx, tx, gmoDst.TB, gmoEntity); err != nil {
-			return fmt.Errorf("failed to create group member outbox in transaction: %w", err)
+
+		if err := r.outboxEventDao.CreateInTx(ctx, tx, gmoDst.TB, outboxEventEntity); err != nil {
+			return fmt.Errorf("failed to create outbox event in transaction: %w", err)
 		}
 		return nil
 	})

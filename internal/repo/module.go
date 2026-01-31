@@ -66,17 +66,19 @@ func newContactRepo(params contactRepoFxParams) ContactRepo {
 type groupRepoFxParams struct {
 	fx.In
 
-	UserDao              dao.UserDao
-	GroupDao             dao.GroupDao
-	GroupMemberDao       dao.GroupMemberDao
-	GroupMemberViewDao   dao.GroupMemberViewDao
-	GroupMemberOutboxDao dao.GroupMemberOutboxDao
+	UserDao dao.UserDao
+
+	GroupDao           dao.GroupDao
+	GroupMemberDao     dao.GroupMemberDao
+	GroupMemberViewDao dao.GroupMemberViewDao
+
+	OutboxEventDao dao.OutboxEventDao
 
 	DBs            *xsync.Map[string, *gorm.DB] `name:"db_sharding_clients"`
 	GShardHelper   *sharding.ShardHelper        `name:"group_shard_helper"`
 	GMShardHelper  *sharding.ShardHelper        `name:"group_member_shard_helper"`
 	GmvShardHelper *sharding.ShardHelper        `name:"group_member_view_shard_helper"`
-	GmoShardHelper *sharding.ShardHelper        `name:"group_member_outbox_shard_helper"`
+	OEShardHelper  *sharding.ShardHelper        `name:"outbox_event_shard_helper"`
 }
 
 func newGroupRepo(params groupRepoFxParams) GroupRepo {
@@ -85,13 +87,14 @@ func newGroupRepo(params groupRepoFxParams) GroupRepo {
 		params.GroupDao,
 		params.GroupMemberDao,
 		params.GroupMemberViewDao,
-		params.GroupMemberOutboxDao,
+		params.OutboxEventDao,
 
 		params.DBs,
 		params.GShardHelper,
 		params.GMShardHelper,
 		params.GmvShardHelper,
-		params.GmoShardHelper,
+
+		params.OEShardHelper,
 	)
 }
 

@@ -123,11 +123,6 @@ var ShardingFxModule = fx.Module(
 			newGroupMemberViewShardHelper,
 			fx.ResultTags(`name:"group_member_view_shard_helper"`),
 		),
-		// 聊天群成员 outbox 事件。
-		fx.Annotate(
-			newGroupMemberOutboxShardHelper,
-			fx.ResultTags(`name:"group_member_outbox_shard_helper"`),
-		),
 
 		// 用户群组。
 		fx.Annotate(
@@ -154,6 +149,11 @@ var ShardingFxModule = fx.Module(
 		fx.Annotate(
 			newChannelReverseIndexShardHelper,
 			fx.ResultTags(`name:"channel_reverse_index_shard_helper"`),
+		),
+		// outbox 事件。
+		fx.Annotate(
+			newOutboxEventShardHelper,
+			fx.ResultTags(`name:"outbox_event_shard_helper"`),
 		),
 	),
 )

@@ -105,14 +105,6 @@ func newGroupMemberViewShardHelper(gen idgen.Generator, extractor sharding.Shard
 	return newShardHelper(gen, extractor, cfg)
 }
 
-func newGroupMemberOutboxShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
-	cfg := shardingConfig{}
-	if err := viper.UnmarshalKey("sharding.group_member_outbox_event", &cfg); err != nil {
-		return nil, err
-	}
-	return newShardHelper(gen, extractor, cfg)
-}
-
 func newUserGroupShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
 	cfg := shardingConfig{}
 	if err := viper.UnmarshalKey("sharding.user_group", &cfg); err != nil {
@@ -148,6 +140,14 @@ func newChannelShardHelper(gen idgen.Generator, extractor sharding.ShardValExtra
 func newChannelReverseIndexShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
 	cfg := shardingConfig{}
 	if err := viper.UnmarshalKey("sharding.channel_reverse_index", &cfg); err != nil {
+		return nil, err
+	}
+	return newShardHelper(gen, extractor, cfg)
+}
+
+func newOutboxEventShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
+	cfg := shardingConfig{}
+	if err := viper.UnmarshalKey("sharding.outbox_event", &cfg); err != nil {
 		return nil, err
 	}
 	return newShardHelper(gen, extractor, cfg)
