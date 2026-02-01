@@ -25,11 +25,11 @@ type Contact struct {
 
 	RemarkName string        // 备注名
 	Source     ContactSource // 添加来源 ( search=搜索添加 / qrcode=扫码添加 / group=群聊添加 )
-	Tags       []string      // 标签
-	GroupName  string        // 分组名称
 
-	IsMuted  bool // 是否免打扰
-	IsPinned bool // 是否置顶
+	IsStarred bool // 是否星标
+	IsBlocked bool // 是否黑名单
+	IsMuted   bool // 是否免打扰
+	IsPinned  bool // 是否置顶
 
 	AddedAt   int64 // 添加时间戳 ( Unix 毫秒值 )
 	DeletedAt int64 // 删除时间戳 ( Unix 毫秒值 )
@@ -47,17 +47,17 @@ type ContactView struct {
 
 	ContactNickname string // 联系人昵称
 	ContactAvatar   string // 联系人头像
-	ContactInfoVer  int    // 联系人信息版本
 	ContactGender   string // 联系人性别
+	ContactMobile   string // 联系人手机号
+	ContactInfoVer  int    // 联系人信息版本
 
-	RemarkName string   // 备注名
-	Tags       []string // 标签
+	RemarkName string        // 备注名
+	Source     ContactSource // 添加来源 ( search=搜索添加 / qrcode=扫码添加 / group=群聊添加 )
 
-	IsMuted  bool // 是否免打扰
-	IsPinned bool // 是否置顶
-
-	Mobile string        // 手机号
-	Source ContactSource // 添加来源 ( search=搜索添加 / qrcode=扫码添加 / group=群聊添加 )
+	IsStarred bool // 是否星标
+	IsBlocked bool // 是否黑名单
+	IsMuted   bool // 是否免打扰
+	IsPinned  bool // 是否置顶
 
 	AddedAt int64 // 添加时间戳 ( Unix 毫秒值 )
 }

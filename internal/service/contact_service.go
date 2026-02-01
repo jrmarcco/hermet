@@ -101,6 +101,10 @@ func (s *DefaultContactService) ReviewApplication(ctx context.Context, userID ui
 		return fmt.Errorf("%w: you are not the target user", errs.ErrInvalidParam)
 	}
 
+	if ca.ApplicationStatus != domain.ApplicationStatusPending {
+		return fmt.Errorf("%w: application is already reviewed", errs.ErrInvalidParam)
+	}
+
 	err = s.contactApplicationRepo.UpdateStatus(ctx, event.ApplicationID, event.Status)
 	if err != nil {
 		s.logger.Error("[hermet] failed to review contact application", zap.Error(err))

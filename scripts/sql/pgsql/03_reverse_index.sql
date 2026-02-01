@@ -68,6 +68,8 @@ CREATE TABLE channel_reverse_index (
     created_at BIGINT NOT NULL,
 
     -- 约束
+    -- 唯一约束 - 同一用户在同一会话目标中只能有一条记录 ( 区分单聊和群聊 )
+    CONSTRAINT uk_channel_reverse_index UNIQUE(user_id, target_id, channel_type),
     -- 频道类型 - 枚举 ( single=单聊 / group=群聊 )
     CONSTRAINT chk_channel_type CHECK (channel_type IN ('single', 'group'))
 );

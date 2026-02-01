@@ -23,10 +23,8 @@ type Channel struct {
 	ChannelRemark string `gorm:"column:channel_remark"`
 	ChannelAvatar string `gorm:"column:channel_avatar"`
 
-	IsMuted   bool `gorm:"column:is_muted"`
-	IsPinned  bool `gorm:"column:is_pinned"`
-	IsHidden  bool `gorm:"column:is_hidden"`
-	IsStarred bool `gorm:"column:is_starred"`
+	IsMuted  bool `gorm:"column:is_muted"`
+	IsPinned bool `gorm:"column:is_pinned"`
 
 	LastMessageID         uint64 `gorm:"column:last_message_id"`
 	LastMessageType       string `gorm:"column:last_message_type"`

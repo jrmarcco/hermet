@@ -87,10 +87,14 @@ func (d *DefaultContactApplicationDao) UpdateStatus(ctx context.Context, id uint
 		return fmt.Errorf("failed to load database [ %s ]", dst.DB)
 	}
 
+	now := time.Now().UnixMilli()
 	return db.WithContext(ctx).Table(dst.TB).Model(&ContactApplication{}).
 		Where("id = ?", id).
-		Update("application_status", string(status)).
-		Update("reviewed_at", time.Now().UnixMilli()).Error
+		UpdateColumns(map[string]any{
+			"application_status": string(status),
+			"reviewed_at":        now,
+			"updated_at":         now,
+		}).Error
 }
 
 func (d *DefaultContactApplicationDao) FindByID(ctx context.Context, id uint64) (ContactApplication, error) {
@@ -107,7 +111,6 @@ func (d *DefaultContactApplicationDao) FindByID(ctx context.Context, id uint64) 
 	var ca ContactApplication
 	err = db.WithContext(ctx).Table(dst.TB).Model(&ContactApplication{}).
 		Where("id = ?", id).
-		Where("deleted_at = ?", 0).
 		First(&ca).Error
 	return ca, err
 }

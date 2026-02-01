@@ -112,20 +112,22 @@ func (s *DefaultCDCService) ProcessContactReview(ctx context.Context, msg *xmq.M
 	// 创建 A -> B 的联系人关系。
 	eg.Go(func() error {
 		return s.createContact(ctx, domain.Contact{
-			UserID:    event.ApplicantID,
-			ContactID: event.TargetID,
-			Source:    event.Source,
-			AddedAt:   event.CreatedAt,
+			UserID:     event.ApplicantID,
+			ContactID:  event.TargetID,
+			RemarkName: event.ApplicantName,
+			Source:     event.Source,
+			AddedAt:    event.CreatedAt,
 		})
 	})
 
 	// 创建 B -> A 的联系人关系。
 	eg.Go(func() error {
 		return s.createContact(ctx, domain.Contact{
-			UserID:    event.TargetID,
-			ContactID: event.ApplicantID,
-			Source:    event.Source,
-			AddedAt:   event.ReviewedAt,
+			UserID:     event.TargetID,
+			ContactID:  event.ApplicantID,
+			RemarkName: event.ApplicantName,
+			Source:     event.Source,
+			AddedAt:    event.ReviewedAt,
 		})
 	})
 
@@ -148,14 +150,14 @@ func (s *DefaultCDCService) ProcessContactReview(ctx context.Context, msg *xmq.M
 // 如果联系人关系不存在，则创建。
 func (s *DefaultCDCService) createContact(ctx context.Context, contact domain.Contact) error {
 	// 查询联系人关系。
-	contact, err := s.contactRepo.FindByUserIDAndContactID(ctx, contact.UserID, contact.ContactID)
-	if err != nil {
+	exists, err := s.contactRepo.FindByUserIDAndContactID(ctx, contact.UserID, contact.ContactID)
+	if err != nil && !errors.Is(err, errs.ErrRecordNotFound) {
 		return err
 	}
 
-	if contact.ID != 0 && contact.DeletedAt != 0 {
+	if exists.ID != 0 && exists.DeletedAt != 0 {
 		// 以前添加过联系人但被删除了，现在重新添加。
-		if err := s.contactRepo.Recreate(ctx, contact); err != nil {
+		if err := s.contactRepo.Recreate(ctx, exists); err != nil {
 			return err
 		}
 		return nil
@@ -185,9 +187,10 @@ func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message
 
 	// cdc 事件为创建联系人关系事件，创建会话。
 	return s.createChannel(ctx, domain.Channel{
-		UserID:   event.UserID,
-		TargetID: event.ContactID,
-		OpenedAt: event.AddedAt,
+		UserID:      event.UserID,
+		TargetID:    event.ContactID,
+		ChannelType: domain.ChannelTypeSingle,
+		OpenedAt:    event.AddedAt,
 	})
 }
 
@@ -211,9 +214,10 @@ func (s *DefaultCDCService) ProcessUserGroup(ctx context.Context, msg *xmq.Messa
 	}
 
 	return s.createChannel(ctx, domain.Channel{
-		UserID:   event.UserID,
-		TargetID: event.GroupID,
-		OpenedAt: event.JoinedAt,
+		UserID:      event.UserID,
+		TargetID:    event.GroupID,
+		ChannelType: domain.ChannelTypeGroup,
+		OpenedAt:    event.JoinedAt,
 	})
 }
 
@@ -261,9 +265,11 @@ func (s *DefaultCDCService) fillInChannelRedundant(ctx context.Context, channel 
 			return fmt.Errorf("failed to find user: %w", err)
 		}
 		channel.TargetInfoVer = user.InfoVer
+
 		channel.ChannelName = user.Nickname
 		channel.ChannelRemark = user.Nickname
 		channel.ChannelAvatar = user.Avatar
+
 	case domain.ChannelTypeGroup:
 		group, err := s.groupRepo.FindByID(ctx, channel.TargetID)
 		if err != nil {
@@ -274,6 +280,7 @@ func (s *DefaultCDCService) fillInChannelRedundant(ctx context.Context, channel 
 			return fmt.Errorf("failed to find chat group: %w", err)
 		}
 		channel.TargetInfoVer = group.InfoVer
+
 		channel.ChannelName = group.GroupName
 		channel.ChannelRemark = group.GroupName
 		channel.ChannelAvatar = group.GroupAvatar

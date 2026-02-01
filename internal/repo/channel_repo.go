@@ -62,11 +62,14 @@ func (r *DefaultChannelRepo) Create(ctx context.Context, channel domain.Channel)
 		return fmt.Errorf("failed to load database [ %s ]", dst.DB)
 	}
 
+	// 4. 获取反向索引表的分片信息。
+	criDst, _ := r.cRidxShardHelper.DstFromSharder(sharder)
+
 	now := time.Now().UnixMilli()
 
-	// 4. 开启事务协调 DAO 写入数据。
+	// 5. 开启事务协调 DAO 写入数据。
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 5. 写入 channel 表。
+		// 6. 写入 channel 表。
 		channelEntity := dao.Channel{
 			ID: id,
 
@@ -88,17 +91,17 @@ func (r *DefaultChannelRepo) Create(ctx context.Context, channel domain.Channel)
 			return fmt.Errorf("failed to create channel in transaction: %w", err)
 		}
 
-		// 6. 写入 channel_reverse_index 表。
+		// 7. 写入 channel_reverse_index 表。
 		channelRidxEntity := dao.ChannelReverseIndex{
-			ID: id,
+			ID: channelEntity.ID,
 
-			UserID:      channel.UserID,
-			TargetID:    channel.TargetID,
-			ChannelType: string(channel.ChannelType),
+			UserID:      channelEntity.UserID,
+			TargetID:    channelEntity.TargetID,
+			ChannelType: channelEntity.ChannelType,
 
 			CreatedAt: now,
 		}
-		if err := r.channelRidxDao.CreateInTx(ctx, tx, dst.TB, channelRidxEntity); err != nil {
+		if err := r.channelRidxDao.CreateInTx(ctx, tx, criDst.TB, channelRidxEntity); err != nil {
 			return fmt.Errorf("failed to create channel reverse index in transaction: %w", err)
 		}
 		return nil
@@ -131,10 +134,8 @@ func (r *DefaultChannelRepo) toDomain(channel dao.Channel) domain.Channel {
 		ChannelRemark: channel.ChannelRemark,
 		ChannelAvatar: channel.ChannelAvatar,
 
-		IsMuted:   channel.IsMuted,
-		IsPinned:  channel.IsPinned,
-		IsHidden:  channel.IsHidden,
-		IsStarred: channel.IsStarred,
+		IsMuted:  channel.IsMuted,
+		IsPinned: channel.IsPinned,
 
 		LastMessageID:         channel.LastMessageID,
 		LastMessageType:       channel.LastMessageType,

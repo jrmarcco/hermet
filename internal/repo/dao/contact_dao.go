@@ -21,10 +21,10 @@ type Contact struct {
 	RemarkName string `gorm:"column:remark_name"`
 	Source     string `gorm:"column:source"`
 
-	Tags []string `gorm:"column:tags"`
-
-	IsMuted  bool `gorm:"column:is_muted"`
-	IsPinned bool `gorm:"column:is_pinned"`
+	IsStarred bool `gorm:"column:is_starred"`
+	IsBlocked bool `gorm:"column:is_blocked"`
+	IsMuted   bool `gorm:"column:is_muted"`
+	IsPinned  bool `gorm:"column:is_pinned"`
 
 	AddedAt   int64 `gorm:"column:added_at"`
 	DeletedAt int64 `gorm:"column:deleted_at"`

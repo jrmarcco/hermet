@@ -27,7 +27,6 @@ Content-Type: application/json
 }
 
 
-
 ### Add Contact Application
 POST {{uri}}/api/v1/contact/apply
 x-access-token: Bearer {{signIn.response.body.$.data.accessToken}}
@@ -40,12 +39,10 @@ Content-Type: application/json
 }
 
 
-
-### Get Contacts
-GET {{uri}}/api/v1/contact/contacts
+### Get Contact Applications
+GET {{uri}}/api/v1/contact/applications
 x-access-token: Bearer {{signIn.response.body.$.data.accessToken}}
 Content-Type: application/json
-
 
 
 ### Review Contact Application
@@ -54,17 +51,21 @@ x-access-token: Bearer {{signIn.response.body.$.data.accessToken}}
 Content-Type: application/json
 
 {
-    "applicationId": 139648821490614272,
+    "applicationId": 143667005994565632,
     "status": "approved"
 }
 
 
-
-### Get Contact Applications
-GET {{uri}}/api/v1/contact/applications
+### Get Contacts
+GET {{uri}}/api/v1/contact/contacts
 x-access-token: Bearer {{signIn.response.body.$.data.accessToken}}
 Content-Type: application/json
 
+
+### Get Channels
+GET {{uri}}/api/v1/channel/channels
+x-access-token: Bearer {{signIn.response.body.$.data.accessToken}}
+Content-Type: application/json
 
 
 ### =======================================================

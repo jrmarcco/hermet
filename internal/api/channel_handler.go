@@ -35,14 +35,14 @@ func (h *ChannelHandler) Register(engine *gin.Engine) {
 type getChannelResp struct {
 	ID uint64 `json:"id"`
 
-	// 关系 ID ( 用于唯一标识一个会话 )。
+	// 会话目的地 ID ( 用于唯一标识一个会话 )。
 	// 取值规则:
 	//
 	//  - ChannelType = single
-	// 	  RelationID = min(UserID, TargetID):max(UserID, TargetID)。
+	// 	  DestinationID = min(UserID, TargetID):max(UserID, TargetID)。
 	//  - ChannelType = group
-	// 	  RelationID = TargetID。
-	RelationID string `json:"relationId"`
+	// 	  DestinationID = TargetID。
+	DestinationID string `json:"destination"`
 
 	UserID        uint64 `json:"userId"`
 	TargetID      uint64 `json:"targetId"`
@@ -78,8 +78,8 @@ func (h *ChannelHandler) GetChannels(ctx *gin.Context, au xgin.ContextUser) (xgi
 	data := make([]getChannelResp, 0, len(channels))
 	for i := range channels {
 		data = append(data, getChannelResp{
-			ID:         channels[i].ID,
-			RelationID: relationID(channels[i].UserID, channels[i].TargetID, channels[i].ChannelType),
+			ID:            channels[i].ID,
+			DestinationID: relationID(channels[i].UserID, channels[i].TargetID, channels[i].ChannelType),
 
 			UserID:        channels[i].UserID,
 			TargetID:      channels[i].TargetID,
@@ -90,10 +90,8 @@ func (h *ChannelHandler) GetChannels(ctx *gin.Context, au xgin.ContextUser) (xgi
 			ChannelRemark: channels[i].ChannelRemark,
 			ChannelAvatar: channels[i].ChannelAvatar,
 
-			IsMuted:   channels[i].IsMuted,
-			IsPinned:  channels[i].IsPinned,
-			IsHidden:  channels[i].IsHidden,
-			IsStarred: channels[i].IsStarred,
+			IsMuted:  channels[i].IsMuted,
+			IsPinned: channels[i].IsPinned,
 
 			LastMessageID:         channels[i].LastMessageID,
 			LastMessageType:       channels[i].LastMessageType,

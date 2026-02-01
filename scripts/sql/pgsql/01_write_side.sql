@@ -163,11 +163,11 @@ CREATE TABLE contact (
     remark_name VARCHAR(64) NOT NULL DEFAULT '',                    -- 联系人备注名
     source VARCHAR(16) NOT NULL DEFAULT 'search',                   -- 添加来源 ( search=搜索添加 / qrcode=扫码添加 / group=群聊添加 )
 
-    tags VARCHAR(128)[] DEFAULT '{}',                               -- 联系人标签
-
     -- 状态标记
-    is_muted BOOLEAN NOT NULL DEFAULT FALSE,            -- 免打扰
-    is_pinned BOOLEAN NOT NULL DEFAULT FALSE,           -- 置顶
+    is_starred BOOLEAN NOT NULL DEFAULT FALSE,                      -- 星标
+    is_blocked BOOLEAN NOT NULL DEFAULT FALSE,                      -- 黑名单
+    is_muted BOOLEAN NOT NULL DEFAULT FALSE,                        -- 免打扰
+    is_pinned BOOLEAN NOT NULL DEFAULT FALSE,                       -- 置顶
 
     added_at BIGINT NOT NULL,
     deleted_at BIGINT NOT NULL DEFAULT 0,
@@ -188,7 +188,8 @@ COMMENT ON COLUMN contact.user_id IS '联系人 ID';
 COMMENT ON COLUMN contact.contact_id IS '联系人 ID';
 COMMENT ON COLUMN contact.remark_name IS '联系人备注名';
 COMMENT ON COLUMN contact.source IS '添加来源 ( search=搜索 / qrcode=扫码 / group=群聊 )';
-COMMENT ON COLUMN contact.tags IS '联系人标签数组';
+COMMENT ON COLUMN contact.is_starred IS '是否星标';
+COMMENT ON COLUMN contact.is_blocked IS '是否黑名单';
 COMMENT ON COLUMN contact.is_muted IS '是否免打扰';
 COMMENT ON COLUMN contact.is_pinned IS '是否置顶';
 COMMENT ON COLUMN contact.added_at IS '添加时间戳 ( Unix 毫秒值 )';
@@ -211,8 +212,8 @@ CREATE TABLE user_group (
     -- 个性化设置
     remark_name VARCHAR(64) NOT NULL DEFAULT '',        -- 群组备注名
 
-    is_muted BOOLEAN NOT NULL DEFAULT FALSE,            -- 免打扰
-    is_pinned BOOLEAN NOT NULL DEFAULT FALSE,           -- 置顶
+    is_muted BOOLEAN NOT NULL DEFAULT FALSE,              -- 免打扰
+    is_pinned BOOLEAN NOT NULL DEFAULT FALSE,             -- 置顶
 
     -- 时间信息
     joined_at BIGINT NOT NULL,

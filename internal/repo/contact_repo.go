@@ -115,9 +115,8 @@ func (r *TxContactRepo) Create(ctx context.Context, contact domain.Contact) erro
 			RemarkName: contact.RemarkName,
 			Source:     string(contact.Source),
 
-			Tags: contact.Tags,
+			AddedAt: contact.AddedAt,
 
-			AddedAt:   contact.AddedAt,
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
@@ -127,18 +126,24 @@ func (r *TxContactRepo) Create(ctx context.Context, contact domain.Contact) erro
 
 		// 7. 写入 contact_view 表。
 		viewEntity := dao.ContactView{
-			ID: id,
+			ID: contactEntity.ID,
 
 			UserID:    contact.UserID,
 			ContactID: contact.ContactID,
 			// 冗余用户信息。
 			ContactNickname: user.Nickname,
 			ContactAvatar:   user.Avatar,
-			ContactInfoVer:  user.InfoVer,
 			ContactGender:   user.Gender,
+			ContactMobile:   user.Mobile,
+			ContactInfoVer:  user.InfoVer,
 
-			Mobile: user.Mobile,
-			Source: string(contact.Source),
+			IsStarred: false,
+			IsBlocked: false,
+			IsMuted:   false,
+			IsPinned:  false,
+
+			RemarkName: contactEntity.RemarkName,
+			Source:     string(contact.Source),
 
 			AddedAt:   contact.AddedAt,
 			CreatedAt: now,
@@ -150,7 +155,7 @@ func (r *TxContactRepo) Create(ctx context.Context, contact domain.Contact) erro
 
 		// 6. 写入 contact_reverse_index 表。
 		ridxEntity := dao.ContactReverseIndex{
-			ID: id,
+			ID: contactEntity.ID,
 
 			UserID:  contact.UserID,
 			OwnerID: contact.ContactID,
@@ -206,7 +211,7 @@ func (r *TxContactRepo) Recreate(ctx context.Context, contact domain.Contact) er
 
 		// 6. 更新 contact_view 表。
 		viewEntity := dao.ContactView{
-			ID: contact.ID,
+			ID: contactEntity.ID,
 
 			UserID:    contact.UserID,
 			ContactID: contact.ContactID,
@@ -215,9 +220,16 @@ func (r *TxContactRepo) Recreate(ctx context.Context, contact domain.Contact) er
 			ContactAvatar:   user.Avatar,
 			ContactInfoVer:  user.InfoVer,
 			ContactGender:   user.Gender,
+			ContactMobile:   user.Mobile,
 
-			Mobile: user.Mobile,
-			Source: string(contact.Source),
+			// 重置状态。
+			IsStarred: false,
+			IsBlocked: false,
+			IsMuted:   false,
+			IsPinned:  false,
+
+			RemarkName: contactEntity.RemarkName,
+			Source:     string(contact.Source),
 
 			AddedAt:   contact.AddedAt,
 			UpdatedAt: now,
@@ -229,7 +241,7 @@ func (r *TxContactRepo) Recreate(ctx context.Context, contact domain.Contact) er
 		// 7. 写入 contact_reverse_index 表。
 		//    contact_reverse_index 没有逻辑删除字段，需要重新创建一条记录。
 		ridxEntity := dao.ContactReverseIndex{
-			ID: contact.ID,
+			ID: contactEntity.ID,
 
 			UserID:  contact.UserID,
 			OwnerID: contact.ContactID,
@@ -277,10 +289,10 @@ func (r *TxContactRepo) toDomain(uc dao.Contact) domain.Contact {
 		RemarkName: uc.RemarkName,
 		Source:     domain.ContactSource(uc.Source),
 
-		Tags: uc.Tags,
-
-		IsMuted:  uc.IsMuted,
-		IsPinned: uc.IsPinned,
+		IsStarred: uc.IsStarred,
+		IsBlocked: uc.IsBlocked,
+		IsMuted:   uc.IsMuted,
+		IsPinned:  uc.IsPinned,
 
 		AddedAt:   uc.AddedAt,
 		DeletedAt: uc.DeletedAt,
@@ -299,15 +311,17 @@ func (r *TxContactRepo) toViewDomain(ucv dao.ContactView) domain.ContactView {
 
 		ContactNickname: ucv.ContactNickname,
 		ContactAvatar:   ucv.ContactAvatar,
+		ContactGender:   ucv.ContactGender,
+		ContactMobile:   ucv.ContactMobile,
 		ContactInfoVer:  ucv.ContactInfoVer,
 
 		RemarkName: ucv.RemarkName,
-		Tags:       ucv.Tags,
 
-		IsMuted:  ucv.IsMuted,
-		IsPinned: ucv.IsPinned,
+		IsStarred: ucv.IsStarred,
+		IsBlocked: ucv.IsBlocked,
+		IsMuted:   ucv.IsMuted,
+		IsPinned:  ucv.IsPinned,
 
-		Mobile: ucv.Mobile,
 		Source: domain.ContactSource(ucv.Source),
 
 		AddedAt: ucv.AddedAt,

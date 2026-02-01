@@ -21,16 +21,16 @@ type ContactView struct {
 	ContactNickname string `gorm:"column:contact_nickname"`
 	ContactAvatar   string `gorm:"column:contact_avatar"`
 	ContactGender   string `gorm:"column:contact_gender"`
+	ContactMobile   string `gorm:"column:contact_mobile"`
 	ContactInfoVer  int    `gorm:"column:contact_info_ver"`
 
-	RemarkName string   `gorm:"column:remark_name"`
-	Tags       []string `gorm:"column:tags"`
+	RemarkName string `gorm:"column:remark_name"`
+	Source     string `gorm:"column:source"`
 
-	IsMuted  bool `gorm:"column:is_muted"`
-	IsPinned bool `gorm:"column:is_pinned"`
-
-	Mobile string `gorm:"column:mobile"`
-	Source string `gorm:"column:source"`
+	IsStarred bool `gorm:"column:is_starred"`
+	IsBlocked bool `gorm:"column:is_blocked"`
+	IsMuted   bool `gorm:"column:is_muted"`
+	IsPinned  bool `gorm:"column:is_pinned"`
 
 	AddedAt   int64 `gorm:"column:added_at"`
 	DeletedAt int64 `gorm:"column:deleted_at"`
@@ -79,10 +79,16 @@ func (d *DefaultContactViewDao) RecreateInTx(ctx context.Context, tx *gorm.DB, t
 			// 更新联系人信息。
 			"contact_nickname": cv.ContactNickname,
 			"contact_avatar":   cv.ContactAvatar,
-			"contact_info_ver": cv.ContactInfoVer,
 			"contact_gender":   cv.ContactGender,
-			"mobile":           cv.Mobile,
+			"contact_mobile":   cv.ContactMobile,
+			"contact_info_ver": cv.ContactInfoVer,
 			"source":           cv.Source,
+
+			"is_starred": cv.IsStarred,
+			"is_blocked": cv.IsBlocked,
+			"is_muted":   cv.IsMuted,
+			"is_pinned":  cv.IsPinned,
+
 			// 重置逻辑删除字段。
 			"deleted_at": 0,
 			// 更新添加时间以及更新时间。

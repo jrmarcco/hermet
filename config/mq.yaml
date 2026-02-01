@@ -31,13 +31,13 @@ mq:
       handle_timeout: 10s
       db_shard_count: 2
       tb_shard_count: 4
-    group_member_outbox:
-      group_id: hermet-group-member-outbox-processor
+    user_group:
+      group_id: hermet-user-group-processor
       handle_timeout: 10s
       db_shard_count: 2
       tb_shard_count: 4
-    user_group:
-      group_id: hermet-user-group-processor
+    outbox_event:
+      group_id: hermet-group-member-outbox-processor
       handle_timeout: 10s
       db_shard_count: 2
       tb_shard_count: 4

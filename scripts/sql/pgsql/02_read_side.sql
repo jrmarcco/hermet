@@ -14,18 +14,17 @@ CREATE TABLE contact_view (
     contact_nickname VARCHAR(64) NOT NULL DEFAULT '',           -- 联系人昵称 ( 冗余 )
     contact_avatar VARCHAR(256) NOT NULL DEFAULT '',            -- 联系人头像 ( 冗余 )
     contact_gender VARCHAR(16) NOT NULL DEFAULT 'unknown',      -- 联系人性别 ( unknown=未知 / male=男 / female=女 )
+    contact_mobile VARCHAR(16) NOT NULL DEFAULT '',                     -- 手机号
     contact_info_ver INT NOT NULL DEFAULT 1,                    -- 【 CQRS 关键字段 】联系人信息版本号 ( 用于同步检测 )
 
     remark_name VARCHAR(64) NOT NULL DEFAULT '',                -- 备注名
-    tags VARCHAR(128)[] NOT NULL DEFAULT '{}',                           -- 标签
+    source VARCHAR(16) NOT NULL DEFAULT 'search',               -- 添加来源 ( search=搜索 / qrcode=扫码 / group=群聊 )
 
     -- 状态
     is_starred BOOLEAN NOT NULL DEFAULT FALSE,                  -- 星标
     is_blocked BOOLEAN NOT NULL DEFAULT FALSE,                  -- 黑名单
-
-    -- 扩展信息 ( 冗余自 biz_user 表 )
-    mobile VARCHAR(16) NOT NULL DEFAULT '',                     -- 手机号
-    source VARCHAR(16) NOT NULL DEFAULT 'search',               -- 添加来源 ( search=搜索 / qrcode=扫码 / group=群聊 )
+    is_muted BOOLEAN NOT NULL DEFAULT FALSE,                    -- 免打扰
+    is_pinned BOOLEAN NOT NULL DEFAULT FALSE,                   -- 置顶
 
     added_at BIGINT NOT NULL,
     deleted_at BIGINT NOT NULL DEFAULT 0,
@@ -35,7 +34,7 @@ CREATE TABLE contact_view (
 
     -- 约束
     -- 唯一约束 - 同一用户在同一联系人中只能有一条记录
-    CONSTRAINT uk_contact_view UNIQUE(user_id, contact_id),
+    CONSTRAINT uk_contact_view UNIQUE(user_id, contact_id)
 );
 
 COMMENT ON TABLE contact_view IS '【 读取侧 】联系人视图表 ( 用于通讯录展示 )';
@@ -45,13 +44,14 @@ COMMENT ON COLUMN contact_view.contact_id IS '联系人 ID ( 好友 ID )';
 COMMENT ON COLUMN contact_view.contact_nickname IS '联系人昵称 ( 冗余自 biz_user 表 )';
 COMMENT ON COLUMN contact_view.contact_avatar IS '联系人头像 ( 冗余自 biz_user 表 )';
 COMMENT ON COLUMN contact_view.contact_gender IS '联系人性别 ( unknown=未知 / male=男 / female=女 )';
+COMMENT ON COLUMN contact_view.contact_mobile IS '联系人手机号 ( 冗余自 biz_user 表 )';
 COMMENT ON COLUMN contact_view.contact_info_ver IS '【 CQRS 关键字段 】联系人信息版本号 ( 用于同步检测 )';
 COMMENT ON COLUMN contact_view.remark_name IS '备注名';
-COMMENT ON COLUMN contact_view.tags IS '标签数组';
+COMMENT ON COLUMN contact_view.source IS '添加来源 ( search=搜索 / qrcode=扫码 / group=群聊 )';
 COMMENT ON COLUMN contact_view.is_starred IS '是否星标';
-COMMENT ON COLUMN contact_view.is_blocked IS '是否拉黑';
-COMMENT ON COLUMN contact_view.mobile IS '手机号 ( 冗余 )';
-COMMENT ON COLUMN contact_view.source IS '添加来源';
+COMMENT ON COLUMN contact_view.is_blocked IS '是否黑名单';
+COMMENT ON COLUMN contact_view.is_muted IS '是否免打扰';
+COMMENT ON COLUMN contact_view.is_pinned IS '是否置顶';
 COMMENT ON COLUMN contact_view.added_at IS '添加时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN contact_view.deleted_at IS '删除时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN contact_view.created_at IS '创建时间戳 ( Unix 毫秒值 )';
@@ -99,7 +99,7 @@ CREATE TABLE group_member_view (
     updated_at BIGINT NOT NULL,
 
     -- 约束
-    CONSTRAINT uk_group_member_view UNIQUE(group_id, user_id),
+    CONSTRAINT uk_group_member_view UNIQUE(group_id, user_id)
 );
 
 COMMENT ON TABLE group_member_view IS '【 读取侧 】聊天群成员视图表 ( 用于聊天群成员列表展示 )';

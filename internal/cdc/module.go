@@ -171,13 +171,13 @@ func newGmOutboxProcessor(
 	factory xconsume.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
-) (*GmOutboxProcessor, error) {
-	cfg, err := loadCdcProcessorConfig("mq.cdc.group_member_outbox")
+) (*OutboxEventProcessor, error) {
+	cfg, err := loadCdcProcessorConfig("mq.cdc.outbox_event")
 	if err != nil {
 		return nil, err
 	}
 
-	processor := NewGmOutboxProcessor(
+	processor := NewOutboxEventProcessor(
 		cfg.DBShardCount,
 		cfg.TBShardCount,
 		cfg.GroupID,

@@ -16,14 +16,14 @@ sharding:
   # 联系人表
   contact:
     db_prefix: hermet
-    tb_prefix: user_contact
+    tb_prefix: contact
     db_shard_count: 2
     tb_shard_count: 4
 
   # 联系人视图表
   contact_view:
     db_prefix: hermet
-    tb_prefix: user_contact_view
+    tb_prefix: contact_view
     db_shard_count: 2
     tb_shard_count: 4
 

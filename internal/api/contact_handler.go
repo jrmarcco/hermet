@@ -146,14 +146,14 @@ type getContactsResp struct {
 
 	ContactNickname string `json:"contactNickname"`
 	ContactAvatar   string `json:"contactAvatar"`
-	ContactInfoVer  int    `json:"contactInfoVer"`
 	ContactGender   string `json:"contactGender"`
+	ContactMobile   string `json:"contactMobile"`
+	ContactInfoVer  int    `json:"contactInfoVer"`
 
-	RemarkName string   `json:"remarkName"`
-	Tags       []string `json:"tags"`
+	RemarkName string `json:"remarkName"`
+	Source     string `json:"source"`
 
-	Mobile string `json:"mobile"`
-	Source string `json:"source"`
+	Tags []string `json:"tags"`
 
 	AddedAt int64 `json:"addedAt"`
 }
@@ -174,14 +174,12 @@ func (h *ContactHandler) GetContacts(ctx *gin.Context, au xgin.ContextUser) (xgi
 
 			ContactNickname: contacts[i].ContactNickname,
 			ContactAvatar:   contacts[i].ContactAvatar,
-			ContactInfoVer:  contacts[i].ContactInfoVer,
 			ContactGender:   contacts[i].ContactGender,
+			ContactMobile:   contacts[i].ContactMobile,
+			ContactInfoVer:  contacts[i].ContactInfoVer,
 
 			RemarkName: contacts[i].RemarkName,
-			Tags:       contacts[i].Tags,
-
-			Mobile: contacts[i].Mobile,
-			Source: string(contacts[i].Source),
+			Source:     string(contacts[i].Source),
 
 			AddedAt: contacts[i].AddedAt,
 		})

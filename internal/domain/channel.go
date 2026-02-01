@@ -20,10 +20,8 @@ type Channel struct {
 	ChannelRemark string      // 频道备注
 	ChannelAvatar string      // 频道头像
 
-	IsMuted   bool // 是否免打扰
-	IsPinned  bool // 是否置顶
-	IsHidden  bool // 是否隐藏
-	IsStarred bool // 是否星标
+	IsMuted  bool // 是否免打扰
+	IsPinned bool // 是否置顶
 
 	LastMessageID         uint64
 	LastMessageType       string
