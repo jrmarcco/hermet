@@ -1,6 +1,26 @@
 x-postgresql-common: &postgresql-common
   image: postgres:latest
   restart: unless-stopped
+  environment: &postgresql-common-env
+    PGDATA: /var/lib/postgresql/data
+    # WAL 和复制配置 - Debezium CDC 必需
+    # - max_wal_senders=10
+    #   允许同时启动的 WAL sender 进程数量上限 ( 决定可用的物理/逻辑复制连接数 )
+    # - max_replication_slots=10
+    #   可创建的复制槽数量上限 ( 复制槽用于保证下游消费不丢 WAL )
+    # - wal_keep_size=1024MB
+    #   保留至少 1GB 的 WAL 文件 ( 复制槽用于保证下游消费不丢 WAL )
+    # - max_slot_wal_keep_size=2048MB
+    #   复制槽最多保留 2GB WAL
+    # - wal_sender_timeout=60s
+    #   WAL sender 无活动 60 秒就断开连接 ( 防止挂起连接长期占用资源 )
+    POSTGRES_INITDB_ARGS: >-
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c wal_keep_size=1024MB
+      -c max_slot_wal_keep_size=2048MB
+      -c wal_sender_timeout=60s
   networks:
     - jrmarcco_net
 
@@ -16,13 +36,12 @@ services:
     ports:
       - "15432:5432"
     environment:
+      <<: *postgresql-common-env
       POSTGRES_DB: ${POSTGRES_DB:-hermet_0}
       POSTGRES_USER: ${POSTGRES_USER:-hermet_0}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-<passwd>}
-      # 启用逻辑复制 （ Debezium 同步数据必需 )
-      POSTGRES_INITDB_ARGS: "-c wal_level=logical"
     volumes:
-      - ./data-0:/var/lib/postgresql/MAJOR/docker
+      - ./data-0:/var/lib/postgresql/data
     networks:
       - jrmarcco_net
 
@@ -33,13 +52,12 @@ services:
     ports:
       - "25432:5432"
     environment:
+      <<: *postgresql-common-env
       POSTGRES_DB: ${POSTGRES_DB:-hermet_1}
       POSTGRES_USER: ${POSTGRES_USER:-hermet_1}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-<passwd>}
-      # 启用逻辑复制 （ Debezium 同步数据必需 )
-      POSTGRES_INITDB_ARGS: "-c wal_level=logical"
     volumes:
-      - ./data-1:/var/lib/postgresql/MAJOR/docker
+      - ./data-1:/var/lib/postgresql/data
     networks:
       - jrmarcco_net
 
