@@ -23,13 +23,6 @@ COMMENT ON COLUMN contact_reverse_index.user_id IS '联系人用户 ID ( 被添�
 COMMENT ON COLUMN contact_reverse_index.owner_id IS '联系人所有者 ID ( 谁的联系人 )';
 COMMENT ON COLUMN contact_reverse_index.created_at IS '创建时间戳 ( Unix 毫秒值 )';
 
--- 索引
-CREATE INDEX idx_cori_contact ON contact_reverse_index(user_id);
-
--- 使用场景示例
--- 用户 A 修改了昵称/头像，需要更新哪些人的联系人视图？
--- SELECT owner_id FROM contact_reverse_index WHERE user_id = A
-
 
 -- 用户聊天群反向索引表 ( 用于快速查询 - "哪个聊天群中有某个用户" )
 DROP TABLE IF EXISTS user_group_reverse_index;
@@ -50,9 +43,6 @@ COMMENT ON COLUMN user_group_reverse_index.id IS '主键 ID';
 COMMENT ON COLUMN user_group_reverse_index.user_id IS '聊天群成员用户 ID';
 COMMENT ON COLUMN user_group_reverse_index.group_id IS '聊天群 ID';
 COMMENT ON COLUMN user_group_reverse_index.created_at IS '创建时间戳 ( Unix 毫秒值 )';
-
--- 索引
-CREATE INDEX idx_cri_user_group ON user_group_reverse_index(user_id);
 
 
 -- 频道反向索引表 ( 用于快速查询 - "谁的频道中有某个用户" )
@@ -80,10 +70,3 @@ COMMENT ON COLUMN channel_reverse_index.user_id IS '频道用户 ID';
 COMMENT ON COLUMN channel_reverse_index.target_id IS '频道目标 ID';
 COMMENT ON COLUMN channel_reverse_index.channel_type IS '频道类型';
 COMMENT ON COLUMN channel_reverse_index.created_at IS '创建时间戳 ( Unix 毫秒值 )';
-
--- 索引
-CREATE INDEX idx_cri_channel ON channel_reverse_index(user_id);
-
--- 使用场景示例：
--- 用户 A 修改了昵称/头像，需要更新哪些人的会话视图？
--- SELECT user_id, target_id FROM channel_reverse_index WHERE user_id = A

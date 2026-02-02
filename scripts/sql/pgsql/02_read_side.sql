@@ -240,8 +240,6 @@ COMMENT ON COLUMN channel.channel_remark IS '频道备注名';
 COMMENT ON COLUMN channel.channel_avatar IS '频道显示头像 ( 单聊：对方头像，群聊：群头像 )';
 COMMENT ON COLUMN channel.is_muted IS '是否免打扰';
 COMMENT ON COLUMN channel.is_pinned IS '是否置顶';
-COMMENT ON COLUMN channel.is_hidden IS '是否隐藏';
-COMMENT ON COLUMN channel.is_starred IS '是否星标';
 COMMENT ON COLUMN channel.last_message_id IS '最后消息 ID';
 COMMENT ON COLUMN channel.last_message_type IS '最后消息类型';
 COMMENT ON COLUMN channel.last_message_content IS '最后消息内容摘要';
@@ -261,7 +259,7 @@ CREATE INDEX idx_cv_list ON channel(
     user_id,
     is_pinned DESC,
     last_message_time DESC
-) WHERE closed_at = 0 AND is_hidden = FALSE;
+) WHERE closed_at = 0;
 
 -- 2. 置顶会话查询
 CREATE INDEX idx_cv_pinned ON channel(

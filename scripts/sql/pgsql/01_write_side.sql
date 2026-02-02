@@ -105,6 +105,7 @@ COMMENT ON COLUMN chat_group.creator_id IS '创建者 ID';
 COMMENT ON COLUMN chat_group.deleted_at IS '软删除时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN chat_group.created_at IS '创建时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN chat_group.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
+
 -- 索引
 CREATE INDEX idx_chat_group_creator ON chat_group(creator_id);
 CREATE INDEX idx_chat_group_status ON chat_group(group_status);
@@ -143,11 +144,6 @@ COMMENT ON COLUMN channel_member.joined_at IS '加入时间戳 ( Unix 毫秒值 
 COMMENT ON COLUMN group_member.left_at IS '退出时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN group_member.created_at IS '创建时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN group_member.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
-
--- 索引
-CREATE INDEX idx_group_member_group ON group_member(group_id);
-CREATE INDEX idx_group_member_user ON group_member(user_id);
-CREATE INDEX idx_group_member_active ON group_member(group_id, left_at) WHERE left_at = 0;
 
 
 -- 联系人表
@@ -195,9 +191,6 @@ COMMENT ON COLUMN contact.deleted_at IS '删除时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN contact.created_at IS '创建时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN contact.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
 
--- 索引
-CREATE INDEX idx_contact_user ON contact(user_id);
-
 
 -- 用户聊天群表
 DROP TABLE IF EXISTS user_group;
@@ -236,6 +229,3 @@ COMMENT ON COLUMN user_group.joined_at IS '加入时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN user_group.left_at IS '退出时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN user_group.created_at IS '创建时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN user_group.updated_at IS '更新时间戳 ( Unix 毫秒值 )';
-
--- 索引
-CREATE INDEX idx_user_group_user ON user_group(user_id);

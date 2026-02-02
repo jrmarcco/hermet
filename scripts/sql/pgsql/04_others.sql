@@ -122,6 +122,3 @@ COMMENT ON COLUMN outbox_event.payload IS '事件数据';
 COMMENT ON COLUMN outbox_event.metadata IS '元数据 ( 例如 trace_id 等 )';
 COMMENT ON COLUMN outbox_event.retry_count IS '重试次数';
 COMMENT ON COLUMN outbox_event.created_at IS '创建时间戳 ( Unix 毫秒值 )';
-
--- 索引
-CREATE INDEX idx_outbox_event_aggregate ON outbox_event(aggregate_id, aggregate_type);
