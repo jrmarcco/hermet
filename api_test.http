@@ -70,14 +70,7 @@ Content-Type: application/json
 {
     "name": "test-group-12",
     "avatar": "",
-    "memberIds": [
-        134605228232032256,
-        143662228415512576,
-        143658079553953792,
-        143663311559270400,
-        143665467381035008,
-        143666934888747008
-    ]
+    "memberIds": []
 }
 
 
@@ -85,23 +78,3 @@ Content-Type: application/json
 GET {{uri}}/api/v1/channel/channels
 x-access-token: Bearer {{signIn.response.body.$.data.accessToken}}
 Content-Type: application/json
-
-
-### =======================================================
-### Admin
-
-### Add User
-POST {{uri}}/api/v1/admin/user
-x-access-token: Bearer {{signIn.response.body.$.data.accessToken}}
-Content-Type: application/json
-
-{
-    "email": "test-user-1@example.com",
-    "mobile": "13800138001",
-    "nickname": "ciallo",
-    "avatar": "",
-    "gender": "female",
-    "region": "",
-    "birthday": 0,
-    "tagline": ""
-}
