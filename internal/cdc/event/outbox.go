@@ -11,8 +11,8 @@ type OutboxCDCEvent struct {
 	AggregateType string `json:"aggregate_type"`
 
 	EventType string `json:"event_type"`
-	Payload   []byte `json:"payload"`
-	Metadata  []byte `json:"metadata"`
+	Payload   string `json:"payload"`
+	Metadata  string `json:"metadata"`
 
 	RetryCount int `json:"retry_count"`
 

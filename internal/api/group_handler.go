@@ -44,15 +44,13 @@ func (h *GroupHandler) CreateGroup(ctx *gin.Context, req createGroupReq, au xgin
 		return xgin.R{}, fmt.Errorf("%w: name is required", errs.ErrInvalidParam)
 	}
 
-	event := domain.GroupCreateEvent{
-		Name:    req.Name,
-		Avatar:  req.Avatar,
-		Creator: au.UID,
+	channel, err := h.svc.Create(ctx, domain.GroupCreateEvent{
+		Name:      req.Name,
+		Avatar:    req.Avatar,
+		CreatorID: au.UID,
 
 		MemberIDs: req.MemberIDs,
-	}
-
-	channel, err := h.svc.Create(ctx, event)
+	})
 	if err != nil {
 		return xgin.R{}, err
 	}

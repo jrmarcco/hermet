@@ -28,7 +28,9 @@ var _ GroupService = (*DefaultGroupService)(nil)
 
 type DefaultGroupService struct {
 	msgProducer GroupMemberMsgProducer
-	groupRepo   repo.GroupRepo
+
+	groupRepo       repo.GroupRepo
+	groupMemberRepo repo.GroupMemberRepo
 
 	logger *zap.Logger
 }
@@ -36,11 +38,14 @@ type DefaultGroupService struct {
 func NewDefaultGroupService(
 	producer GroupMemberMsgProducer,
 	groupRepo repo.GroupRepo,
+	groupMemberRepo repo.GroupMemberRepo,
 	logger *zap.Logger,
 ) (*DefaultGroupService, error) {
 	return &DefaultGroupService{
 		msgProducer: producer,
-		groupRepo:   groupRepo,
+
+		groupRepo:       groupRepo,
+		groupMemberRepo: groupMemberRepo,
 
 		logger: logger,
 	}, nil
@@ -48,31 +53,30 @@ func NewDefaultGroupService(
 
 func (s *DefaultGroupService) Create(ctx context.Context, event domain.GroupCreateEvent) (domain.ChatGroup, error) {
 	// 1. 创建聊天群 ( 状态为 "creating" )。
-	group := domain.ChatGroup{
+	group, err := s.groupRepo.Create(ctx, domain.ChatGroup{
 		GroupName:   event.Name,
 		GroupAvatar: event.Avatar,
 		GroupStatus: domain.ChatGroupStatusCreating,
-		CreatorID:   event.Creator,
-	}
-
-	if err := s.groupRepo.Create(ctx, group); err != nil {
+		CreatorID:   event.CreatorID,
+	})
+	if err != nil {
 		return domain.ChatGroup{}, fmt.Errorf("failed to create group: %w", err)
 	}
 
 	// 2. 批量添加成员 ( 异步 )。
 	// 使用 Kafka 消息队列实现异步。
-	if err := s.sendMemberAddMsg(ctx, group.ID, event.MemberIDs); err != nil {
+	if err := s.sendMemberAddMsg(ctx, group.ID, event.CreatorID, event.MemberIDs); err != nil {
 		return domain.ChatGroup{}, fmt.Errorf("failed to send member add message: %w", err)
 	}
 	return group, nil
 }
 
 func (s *DefaultGroupService) AddMembers(ctx context.Context, event domain.GroupMemberAddEvent) error {
-	return s.sendMemberAddMsg(ctx, event.GID, event.MemberIDs)
+	return s.sendMemberAddMsg(ctx, event.GID, event.CreatorID, event.MemberIDs)
 }
 
 // sendMemberAddMsg 发送成员添加消息。
-func (s *DefaultGroupService) sendMemberAddMsg(ctx context.Context, groupID uint64, memberIDs []uint64) error {
+func (s *DefaultGroupService) sendMemberAddMsg(ctx context.Context, groupID, creatorID uint64, memberIDs []uint64) error {
 	// 分批发送 ( 每批 500 个成员 )。
 	const batchSize = 500
 	memberCount := len(memberIDs)
@@ -85,6 +89,7 @@ func (s *DefaultGroupService) sendMemberAddMsg(ctx context.Context, groupID uint
 
 		msg := domain.GroupMemberAddEvent{
 			GID:         groupID,
+			CreatorID:   creatorID,
 			MemberIDs:   batch,
 			IsLastBatch: isLastBatch,
 		}
@@ -104,12 +109,12 @@ func (s *DefaultGroupService) sendMemberAddMsg(ctx context.Context, groupID uint
 }
 
 func (s *DefaultGroupService) ProcessAddMembersMsg(ctx context.Context, msg *xmq.Message) error {
-	event := domain.GroupMemberAddEvent{}
+	var event domain.GroupMemberAddEvent
 	if err := json.Unmarshal(msg.Val, &event); err != nil {
 		return fmt.Errorf("failed to unmarshal channel member add event: %w", err)
 	}
 
-	if err := s.addMembers(ctx, event.GID, event.MemberIDs); err != nil {
+	if err := s.addMembers(ctx, event.GID, event.CreatorID, event.MemberIDs); err != nil {
 		// TODO: 需要增加成员添加失败处理。
 		// 1. 指数退避重试 3 次 ( 1s -> 2s -> 4s )。
 		// 2. 如果 3 次重试都失败，转发消息到死信队列 ( DLQ )。
@@ -132,8 +137,8 @@ func (s *DefaultGroupService) ProcessAddMembersMsg(ctx context.Context, msg *xmq
 }
 
 // addMembers 实际写入成员到数据库。
-func (s *DefaultGroupService) addMembers(ctx context.Context, groupID uint64, memberIDs []uint64) error {
-	if err := s.groupRepo.AddMembers(ctx, groupID, memberIDs); err != nil {
+func (s *DefaultGroupService) addMembers(ctx context.Context, groupID, creatorID uint64, memberIDs []uint64) error {
+	if err := s.groupMemberRepo.BatchCreate(ctx, groupID, creatorID, memberIDs); err != nil {
 		return fmt.Errorf("failed to add members: %w", err)
 	}
 	return nil

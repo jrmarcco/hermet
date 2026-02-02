@@ -137,7 +137,6 @@ CREATE TABLE user_group_view (
     group_name VARCHAR(64) NOT NULL DEFAULT '',       -- 聊天群名称
     group_avatar VARCHAR(256) NOT NULL DEFAULT '',    -- 聊天群头像
     group_status VARCHAR(16) NOT NULL,                -- 聊天群状态
-    group_member_count INT NOT NULL DEFAULT 0,        -- 聊天群成员数量
     group_info_ver INT NOT NULL DEFAULT 1,            -- 【 CQRS 关键字段 】聊天群信息版本号 ( 用于同步检测 )
 
     remark_name VARCHAR(64) NOT NULL DEFAULT '',       -- 聊天群备注名
@@ -163,7 +162,6 @@ COMMENT ON COLUMN user_group_view.group_id IS '聊天群 ID';
 COMMENT ON COLUMN user_group_view.group_name IS '聊天群名称 ( 冗余 )';
 COMMENT ON COLUMN user_group_view.group_avatar IS '聊天群头像 ( 冗余 )';
 COMMENT ON COLUMN user_group_view.group_status IS '聊天群状态 ( 冗余 )';
-COMMENT ON COLUMN user_group_view.group_member_count IS '聊天群成员数量 ( 冗余 )';
 COMMENT ON COLUMN user_group_view.group_info_ver IS '【 CQRS 关键字段 】聊天群信息版本号 ( 用于同步检测 )';
 COMMENT ON COLUMN user_group_view.remark_name IS '聊天群备注名';
 COMMENT ON COLUMN user_group_view.is_muted IS '是否免打扰';

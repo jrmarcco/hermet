@@ -17,7 +17,7 @@ var CdcFxModule = fx.Module(
 	fx.Invoke(newContactProcessor),
 	fx.Invoke(newUserGroupProcessor),
 	fx.Invoke(newGroupMemberProcessor),
-	fx.Invoke(newGmOutboxProcessor),
+	fx.Invoke(newOutboxEventProcessor),
 )
 
 type cdcProcessorConfig struct {
@@ -166,7 +166,7 @@ func newGroupMemberProcessor(
 	return processor, nil
 }
 
-func newGmOutboxProcessor(
+func newOutboxEventProcessor(
 	cdcService service.CDCService,
 	factory xconsume.ConsumerFactory,
 	zapLogger *zap.Logger,
@@ -184,7 +184,7 @@ func newGmOutboxProcessor(
 		cfg.HandleTimeout,
 
 		factory,
-		cdcService.ProcessGroupMemberOutbox,
+		cdcService.ProcessOutboxEvent,
 	)
 
 	lifecycle.Append(fx.Hook{

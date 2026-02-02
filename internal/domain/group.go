@@ -13,10 +13,9 @@ const (
 type ChatGroup struct {
 	ID uint64 // 频道 ID
 
-	GroupName        string          // 频道名称
-	GroupAvatar      string          // 频道头像
-	GroupStatus      ChatGroupStatus // 频道状态
-	GroupMemberCount int             // 频道成员数量
+	GroupName   string          // 频道名称
+	GroupAvatar string          // 频道头像
+	GroupStatus ChatGroupStatus // 频道状态
 
 	InfoVer int // 信息版本
 

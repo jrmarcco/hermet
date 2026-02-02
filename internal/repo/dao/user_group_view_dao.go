@@ -15,11 +15,10 @@ type UserGroupView struct {
 	UserID  uint64 `gorm:"column:user_id"`
 	GroupID uint64 `gorm:"column:group_id"`
 
-	GroupName        string `gorm:"column:group_name"`
-	GroupAvatar      string `gorm:"column:group_avatar"`
-	GroupStatus      string `gorm:"column:group_status"`
-	GroupMemberCount int    `gorm:"column:group_member_count"`
-	GroupInfoVer     int    `gorm:"column:group_info_ver"`
+	GroupName    string `gorm:"column:group_name"`
+	GroupAvatar  string `gorm:"column:group_avatar"`
+	GroupStatus  string `gorm:"column:group_status"`
+	GroupInfoVer int    `gorm:"column:group_info_ver"`
 
 	RemarkName string `gorm:"column:remark_name"`
 

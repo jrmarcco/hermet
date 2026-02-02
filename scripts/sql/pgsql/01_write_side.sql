@@ -76,7 +76,6 @@ CREATE TABLE chat_group (
     group_name VARCHAR(64) NOT NULL DEFAULT '',
     group_avatar VARCHAR(256) NOT NULL DEFAULT '',
     group_status VARCHAR(16) NOT NULL,
-    group_member_count INT NOT NULL DEFAULT 0,
 
     info_ver INT NOT NULL DEFAULT 1,                   -- 【 CQRS 关键字段 】信息版本号
 
@@ -100,7 +99,6 @@ COMMENT ON COLUMN chat_group.id IS '聊天组 ID';
 COMMENT ON COLUMN chat_group.group_name IS '聊天组名称';
 COMMENT ON COLUMN chat_group.group_avatar IS '聊天组头像';
 COMMENT ON COLUMN chat_group.group_status IS '聊天组状态 ( creating=创建中 / active=活跃 / failed=失败 / archived=已归档 )';
-COMMENT ON COLUMN chat_group.group_member_count IS '聊天组成员数量';
 COMMENT ON COLUMN chat_group.info_ver IS '【 CQRS 关键字段 】信息版本号 ( 用于同步检测 )';
 COMMENT ON COLUMN chat_group.last_message_at IS '最后消息时间戳 ( Unix 毫秒值 )';
 COMMENT ON COLUMN chat_group.creator_id IS '创建者 ID';

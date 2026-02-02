@@ -22,7 +22,9 @@ var RepoFxModule = fx.Module(
 		// group application repo ( 聊天群申请 )
 		fx.Annotate(NewDefaultGroupApplicationRepo, fx.As(new(GroupApplicationRepo))),
 		// group repo ( 聊天群 )
-		fx.Annotate(newGroupRepo, fx.As(new(GroupRepo))),
+		fx.Annotate(NewDefaultGroupRepo, fx.As(new(GroupRepo))),
+		// group member repo ( 聊天群成员 )
+		fx.Annotate(newGroupMemberRepo, fx.As(new(GroupMemberRepo))),
 
 		// user group repo ( 用户群组 )
 		fx.Annotate(newUserGroupRepo, fx.As(new(UserGroupRepo))),
@@ -63,38 +65,31 @@ func newContactRepo(params contactRepoFxParams) ContactRepo {
 	)
 }
 
-type groupRepoFxParams struct {
+type groupMemberRepoFxParams struct {
 	fx.In
 
-	UserDao dao.UserDao
+	UserDao        dao.UserDao
+	OutboxEventDao dao.OutboxEventDao
 
-	GroupDao           dao.GroupDao
 	GroupMemberDao     dao.GroupMemberDao
 	GroupMemberViewDao dao.GroupMemberViewDao
 
-	OutboxEventDao dao.OutboxEventDao
-
 	DBs            *xsync.Map[string, *gorm.DB] `name:"db_sharding_clients"`
-	GShardHelper   *sharding.ShardHelper        `name:"group_shard_helper"`
-	GMShardHelper  *sharding.ShardHelper        `name:"group_member_shard_helper"`
-	GmvShardHelper *sharding.ShardHelper        `name:"group_member_view_shard_helper"`
 	OEShardHelper  *sharding.ShardHelper        `name:"outbox_event_shard_helper"`
+	GmvShardHelper *sharding.ShardHelper        `name:"group_member_view_shard_helper"`
 }
 
-func newGroupRepo(params groupRepoFxParams) GroupRepo {
-	return NewTxGroupRepo(
+func newGroupMemberRepo(params groupMemberRepoFxParams) GroupMemberRepo {
+	return NewTxGroupMemberRepo(
 		params.UserDao,
-		params.GroupDao,
-		params.GroupMemberDao,
-		params.GroupMemberViewDao,
 		params.OutboxEventDao,
 
-		params.DBs,
-		params.GShardHelper,
-		params.GMShardHelper,
-		params.GmvShardHelper,
+		params.GroupMemberDao,
+		params.GroupMemberViewDao,
 
+		params.DBs,
 		params.OEShardHelper,
+		params.GmvShardHelper,
 	)
 }
 

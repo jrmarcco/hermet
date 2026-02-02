@@ -109,11 +109,10 @@ func (r *TxUserGroupRepo) Create(ctx context.Context, ug domain.UserGroup) error
 			UserID:  ug.UserID,
 			GroupID: ug.GroupID,
 
-			GroupName:        group.GroupName,
-			GroupAvatar:      group.GroupAvatar,
-			GroupStatus:      group.GroupStatus,
-			GroupMemberCount: group.GroupMemberCount,
-			GroupInfoVer:     group.InfoVer,
+			GroupName:    group.GroupName,
+			GroupAvatar:  group.GroupAvatar,
+			GroupStatus:  group.GroupStatus,
+			GroupInfoVer: group.InfoVer,
 
 			RemarkName: ug.RemarkName,
 

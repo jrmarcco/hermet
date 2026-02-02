@@ -44,10 +44,11 @@ type CDCService interface {
 	// msg 是 debezium 推送到 kafka 的消息。
 	ProcessGroupMember(ctx context.Context, msg *xmq.Message) error
 
-	// ProcessGroupMemberOutbox 处理聊天群成员 outbox 事件。
-	// 聊天群成员 outbox 事件用于分流 group_member 表的 cdc 事件 ( 用于保证 user_group 的创建 )。
+	// ProcessOutboxEvent 处理 outbox 事件。
+	// 现有的 outbox 事件包含:
+	// - group_member 表的分流 ( 用于保证 user_group 的创建 )。
 	// msg 是 debezium 推送到 kafka 的消息。
-	ProcessGroupMemberOutbox(ctx context.Context, msg *xmq.Message) error
+	ProcessOutboxEvent(ctx context.Context, msg *xmq.Message) error
 }
 
 var _ CDCService = (*DefaultCDCService)(nil)
@@ -58,7 +59,9 @@ type DefaultCDCService struct {
 	userRepo      repo.UserRepo
 	userGroupRepo repo.UserGroupRepo
 
-	groupRepo   repo.GroupRepo
+	groupRepo       repo.GroupRepo
+	groupMemberRepo repo.GroupMemberRepo
+
 	contactRepo repo.ContactRepo
 	channelRepo repo.ChannelRepo
 
@@ -70,6 +73,7 @@ func NewDefaultCDCService(
 	userRepo repo.UserRepo,
 	userGroupRepo repo.UserGroupRepo,
 	groupRepo repo.GroupRepo,
+	groupMemberRepo repo.GroupMemberRepo,
 	contactRepo repo.ContactRepo,
 	channelRepo repo.ChannelRepo,
 	logger *zap.Logger,
@@ -80,7 +84,9 @@ func NewDefaultCDCService(
 		userRepo:      userRepo,
 		userGroupRepo: userGroupRepo,
 
-		groupRepo:   groupRepo,
+		groupRepo:       groupRepo,
+		groupMemberRepo: groupMemberRepo,
+
 		contactRepo: contactRepo,
 		channelRepo: channelRepo,
 
@@ -349,7 +355,7 @@ func (s *DefaultCDCService) createGmv(ctx context.Context, gmv domain.GroupMembe
 		return nil
 	}
 
-	if err := s.groupRepo.CreateMemberView(ctx, gmv); err != nil {
+	if err := s.groupMemberRepo.CreateView(ctx, gmv); err != nil {
 		return fmt.Errorf("failed to create group member view: %w", err)
 	}
 
@@ -358,21 +364,21 @@ func (s *DefaultCDCService) createGmv(ctx context.Context, gmv domain.GroupMembe
 	return nil
 }
 
-func (s *DefaultCDCService) ProcessGroupMemberOutbox(ctx context.Context, msg *xmq.Message) error {
+func (s *DefaultCDCService) ProcessOutboxEvent(ctx context.Context, msg *xmq.Message) error {
 	var event event.OutboxCDCEvent
 	if err := json.Unmarshal(msg.Val, &event); err != nil {
-		return fmt.Errorf("failed to unmarshal group member outbox cdc event: %w", err)
+		return fmt.Errorf("failed to unmarshal outbox cdc event: %w", err)
 	}
 
 	// 只处理创建事件。
 	// 这里的创建事件是数据库表层面的。
-	// 业务层面的操作来行由 op_type 来决定。
+	// 业务层面的操作来行由 EventType 来决定。
 	if !event.IsCreate() {
 		return nil
 	}
 
 	var gmOutboxEvent domain.GroupMemberOutboxEvent
-	if err := json.Unmarshal(event.Payload, &gmOutboxEvent); err != nil {
+	if err := json.Unmarshal([]byte(event.Payload), &gmOutboxEvent); err != nil {
 		return fmt.Errorf("failed to unmarshal group member outbox event payload: %w", err)
 	}
 

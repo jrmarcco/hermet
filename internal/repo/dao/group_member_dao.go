@@ -30,7 +30,7 @@ type GroupMember struct {
 
 type GroupMemberDao interface {
 	// BatchCreate 批量创建聊天群成员。
-	BatchCreate(ctx context.Context, groupID uint64, memberIDs []uint64) error
+	BatchCreate(ctx context.Context, groupID, creatorID uint64, memberIDs []uint64) error
 }
 
 var _ GroupMemberDao = (*DefaultGroupMemberDao)(nil)
@@ -47,7 +47,7 @@ func NewDefaultGroupMemberDao(dbs *xsync.Map[string, *gorm.DB], shardHelper *sha
 	}
 }
 
-func (d *DefaultGroupMemberDao) BatchCreate(ctx context.Context, groupID uint64, memberIDs []uint64) error {
+func (d *DefaultGroupMemberDao) BatchCreate(ctx context.Context, groupID, creatorID uint64, memberIDs []uint64) error {
 	// 以 group_id 为分片键获取 Sharder。
 	sharder := sharding.NewSingleIDSharder(groupID)
 
@@ -70,13 +70,18 @@ func (d *DefaultGroupMemberDao) BatchCreate(ctx context.Context, groupID uint64,
 			return fmt.Errorf("failed to generate id for member [ %d ]: %w", memberID, err)
 		}
 
+		memberRole := domain.GroupMemberRoleMember
+		if memberID == creatorID {
+			memberRole = domain.GroupMemberRoleOwner
+		}
+
 		members = append(members, GroupMember{
 			ID: id,
 
 			GroupID: groupID,
 			UserID:  memberID,
 
-			MemberRole: string(domain.GroupMemberRoleMember),
+			MemberRole: string(memberRole),
 
 			JoinedAt: now,
 			LeftAt:   0,

@@ -16,10 +16,9 @@ const groupMemberBatchSize = 500
 type ChatGroup struct {
 	ID uint64 `gorm:"column:id"`
 
-	GroupName        string `gorm:"column:group_name"`
-	GroupAvatar      string `gorm:"column:group_avatar"`
-	GroupStatus      string `gorm:"column:group_status"`
-	GroupMemberCount int    `gorm:"column:group_member_count"`
+	GroupName   string `gorm:"column:group_name"`
+	GroupAvatar string `gorm:"column:group_avatar"`
+	GroupStatus string `gorm:"column:group_status"`
 
 	InfoVer int `gorm:"column:info_ver"`
 
@@ -35,7 +34,7 @@ type ChatGroup struct {
 
 type GroupDao interface {
 	// Create 创建聊天群。
-	Create(ctx context.Context, group ChatGroup) error
+	Create(ctx context.Context, group ChatGroup) (ChatGroup, error)
 
 	// UpdateStatus 更新聊天群状态。
 	UpdateStatus(ctx context.Context, id uint64, status string) error
@@ -60,10 +59,10 @@ func NewDefaultGroupDao(
 	}
 }
 
-func (d *DefaultGroupDao) Create(ctx context.Context, group ChatGroup) error {
+func (d *DefaultGroupDao) Create(ctx context.Context, group ChatGroup) (ChatGroup, error) {
 	id, dst, err := d.shardHelper.NextIDAndShard(sharding.NewStringSharder(group.GroupName))
 	if err != nil {
-		return fmt.Errorf("failed to get shard destination from group name [ %s ]", group.GroupName)
+		return ChatGroup{}, fmt.Errorf("failed to get shard destination from group name [ %s ]", group.GroupName)
 	}
 
 	now := time.Now().UnixMilli()
@@ -74,9 +73,14 @@ func (d *DefaultGroupDao) Create(ctx context.Context, group ChatGroup) error {
 
 	db, ok := d.dbs.Load(dst.DB)
 	if !ok {
-		return fmt.Errorf("failed to load database [ %s ]", dst.DB)
+		return ChatGroup{}, fmt.Errorf("failed to load database [ %s ]", dst.DB)
 	}
-	return db.WithContext(ctx).Table(dst.TB).Model(&ChatGroup{}).Create(&group).Error
+
+	err = db.WithContext(ctx).Table(dst.TB).Model(&ChatGroup{}).Create(&group).Error
+	if err != nil {
+		return ChatGroup{}, fmt.Errorf("failed to create group: %w", err)
+	}
+	return group, nil
 }
 
 func (d *DefaultGroupDao) UpdateStatus(ctx context.Context, id uint64, status string) error {

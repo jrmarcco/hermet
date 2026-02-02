@@ -62,6 +62,25 @@ x-access-token: Bearer {{signIn.response.body.$.data.accessToken}}
 Content-Type: application/json
 
 
+### Create Group
+POST {{uri}}/api/v1/group/create
+x-access-token: Bearer {{signIn.response.body.$.data.accessToken}}
+Content-Type: application/json
+
+{
+    "name": "test-group-12",
+    "avatar": "",
+    "memberIds": [
+        134605228232032256,
+        143662228415512576,
+        143658079553953792,
+        143663311559270400,
+        143665467381035008,
+        143666934888747008
+    ]
+}
+
+
 ### Get Channels
 GET {{uri}}/api/v1/channel/channels
 x-access-token: Bearer {{signIn.response.body.$.data.accessToken}}
