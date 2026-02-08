@@ -1,15 +1,20 @@
 package domain
 
-type ContentType int32
+type ContentType string
+
+const (
+	ContentTypeText  ContentType = "text"
+	ContentTypeImage ContentType = "image"
+)
 
 // Message 对应网关消息中的 body 的具体格式。
 type Message struct {
 	ID uint64 // 消息 ID
 
-	SID        uint64 // 发送者 ID
-	RelationID string // 关系 ID ( 用于唯一标识一个会话 )
+	SID uint64 // Sender ID ( 发送者 ID )
+	MID uint64 // Message ID ( 这里指的是网关消息的 ID )
 
-	MID uint64 // 这里指的是网关消息的唯一 id
+	DestinationID string // Destination ID ( 目的地频道 ID )
 
 	Content     []byte      // 消息内容
 	ContentType ContentType // 消息类型

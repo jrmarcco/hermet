@@ -10,15 +10,15 @@ import (
 type Message struct {
 	ID uint64 `bson:"id"`
 
-	CID uint64 `bson:"cid"`
-	SID uint64 `bson:"sid"`
+	SID uint64 `bson:"sid"` // Sender ID ( 发送者 ID )
+	MID uint64 `bson:"mid"` // Message ID ( 这里指的是网关消息的 ID )
 
-	MID string `bson:"mid"`
+	DestinationID string `bson:"destinationId"` // Destination ID ( 目的地频道 ID )
 
-	Content     []byte `bson:"content"`
-	ContentType int32  `bson:"contentType"`
+	Content     []byte `bson:"content"`     // Message Content
+	ContentType string `bson:"contentType"` // Message Content Type
 
-	SendAt int64 `bson:"sendAt"`
+	SendAt int64 `bson:"sendAt"` // Message Send Time
 }
 
 type MessageDao interface {

@@ -8,7 +8,7 @@ require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/google/uuid v1.6.0
 	github.com/jrmarcco/jit v0.0.4
-	github.com/jrmarcco/synp-api v0.0.4
+	github.com/jrmarcco/synp-api v0.0.5
 	github.com/redis/go-redis/v9 v9.17.1
 	github.com/segmentio/kafka-go v0.4.49
 	github.com/spf13/viper v1.21.0
@@ -79,6 +79,6 @@ require (
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
 	golang.org/x/tools v0.40.0 // indirect
-	google.golang.org/protobuf v1.36.10 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
