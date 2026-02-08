@@ -24,6 +24,11 @@ type GroupService interface {
 	ProcessAddMembersMsg(ctx context.Context, msg *xmq.Message) error
 }
 
+const (
+	// 成员数阈值：小于此值使用同步创建，大于等于此值使用异步创建
+	AsyncThreshold = 100
+)
+
 var _ GroupService = (*DefaultGroupService)(nil)
 
 type DefaultGroupService struct {
@@ -84,14 +89,11 @@ func (s *DefaultGroupService) sendMemberAddMsg(ctx context.Context, groupID, cre
 		end := min(i+batchSize, memberCount)
 		batch := memberIDs[i:end]
 
-		// 判断是否是最后一批成员。
-		isLastBatch := end >= memberCount
-
 		msg := domain.GroupMemberAddEvent{
 			GID:         groupID,
 			CreatorID:   creatorID,
 			MemberIDs:   batch,
-			IsLastBatch: isLastBatch,
+			IsLastBatch: end >= memberCount, // 判断是否是最后一批成员。
 		}
 
 		val, err := json.Marshal(msg)

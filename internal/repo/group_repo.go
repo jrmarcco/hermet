@@ -38,8 +38,6 @@ func NewDefaultGroupRepo(
 
 func (r *DefaultGroupRepo) Create(ctx context.Context, group domain.ChatGroup) (domain.ChatGroup, error) {
 	entity, err := r.groupDao.Create(ctx, dao.ChatGroup{
-		ID: group.ID,
-
 		GroupName:   group.GroupName,
 		GroupAvatar: group.GroupAvatar,
 		GroupStatus: string(group.GroupStatus),

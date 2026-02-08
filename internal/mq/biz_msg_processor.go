@@ -10,12 +10,12 @@ import (
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproduce"
 )
 
-var _ Processor = (*GroupMemberProcessor)(nil)
+var _ Processor = (*BizMsgProcessor)(nil)
 
-// GroupMemberProcessor 是聊天群成员业务消息处理器。
-type GroupMemberProcessor struct {
-	consumeProcessor *xprocess.ConsumeProcessor
-	produceProcessor *xprocess.ProduceProcessor
+// BizMsgProcessor 是业务消息处理器。
+type BizMsgProcessor struct {
+	consumer *xprocess.ConsumeProcessor
+	producer *xprocess.ProduceProcessor
 
 	factory xconsume.ConsumerFactory
 
@@ -25,14 +25,14 @@ type GroupMemberProcessor struct {
 	handleTimeout time.Duration
 }
 
-// NewGroupMemberProcessor 创建一个新的聊天群成员处理器。
-func NewGroupMemberProcessor(
+// NewBizMsgProcessor 创建一个新的业务消息处理器。
+func NewBizMsgProcessor(
 	producer xproduce.Producer,
 	factory xconsume.ConsumerFactory,
 	topic, groupID string,
 	partitions int32,
 	handleTimeout time.Duration,
-) (*GroupMemberProcessor, error) {
+) (*BizMsgProcessor, error) {
 	if topic == "" || groupID == "" || partitions <= 0 {
 		return nil, fmt.Errorf("topic, groupID and partitions are required")
 	}
@@ -43,8 +43,8 @@ func NewGroupMemberProcessor(
 		return nil, err
 	}
 
-	return &GroupMemberProcessor{
-		produceProcessor: produceProcessor,
+	return &BizMsgProcessor{
+		producer: produceProcessor,
 
 		factory: factory,
 
@@ -56,7 +56,7 @@ func NewGroupMemberProcessor(
 }
 
 // StartConsumer 启动消费者，需要传入消息处理函数。
-func (p *GroupMemberProcessor) StartConsumer(ctx context.Context, handler xprocess.MsgHandler) error {
+func (p *BizMsgProcessor) StartConsumer(ctx context.Context, handler xprocess.MsgHandler) error {
 	if handler == nil {
 		return fmt.Errorf("handler is required")
 	}
@@ -71,7 +71,7 @@ func (p *GroupMemberProcessor) StartConsumer(ctx context.Context, handler xproce
 	}
 
 	// 创建消费处理器。
-	p.consumeProcessor = xprocess.NewConsumeProcessor(
+	p.consumer = xprocess.NewConsumeProcessor(
 		xprocess.ConsumeProcessorConfig{
 			Topics:        topics,
 			Handler:       handler,
@@ -80,26 +80,26 @@ func (p *GroupMemberProcessor) StartConsumer(ctx context.Context, handler xproce
 		p.factory,
 	)
 
-	return p.consumeProcessor.Start(ctx)
+	return p.consumer.Start(ctx)
 }
 
-// Start 启动处理器 ( 仅用于兼容 xprocess.Processor 接口)。
-func (p *GroupMemberProcessor) Start(ctx context.Context) error {
-	if p.consumeProcessor != nil {
-		return p.consumeProcessor.Start(ctx)
+// Start 启动处理器 ( 仅用于兼容 xprocess.Processor 接口 )。
+func (p *BizMsgProcessor) Start(ctx context.Context) error {
+	if p.consumer != nil {
+		return p.consumer.Start(ctx)
 	}
 	return nil
 }
 
 // Stop 停止处理器。
-func (p *GroupMemberProcessor) Stop(ctx context.Context) error {
-	if p.consumeProcessor != nil {
-		return p.consumeProcessor.Stop(ctx)
+func (p *BizMsgProcessor) Stop(ctx context.Context) error {
+	if p.consumer != nil {
+		return p.consumer.Stop(ctx)
 	}
 	return nil
 }
 
 // Produce 发送消息到主题。
-func (p *GroupMemberProcessor) Produce(ctx context.Context, key, val []byte) error {
-	return p.produceProcessor.Produce(ctx, key, val)
+func (p *BizMsgProcessor) Produce(ctx context.Context, key, val []byte) error {
+	return p.producer.Produce(ctx, key, val)
 }

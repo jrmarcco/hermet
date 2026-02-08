@@ -15,7 +15,6 @@ import (
 var MqFxModule = fx.Module(
 	"mq",
 	fx.Provide(
-		newGroupMemberProcessor,
 		fx.Annotate(
 			newGroupMemberProcessor,
 			fx.As(new(service.GroupMemberMsgProducer)),
@@ -24,7 +23,7 @@ var MqFxModule = fx.Module(
 	fx.Invoke(startGroupMemberConsumer),
 )
 
-func newGroupMemberProcessor(producer xproduce.Producer, factory xconsume.ConsumerFactory) (*GroupMemberProcessor, error) {
+func newGroupMemberProcessor(producer xproduce.Producer, factory xconsume.ConsumerFactory) (*BizMsgProcessor, error) {
 	type config struct {
 		Topic         string        `mapstructure:"topic"`
 		GroupID       string        `mapstructure:"group_id"`
@@ -37,7 +36,7 @@ func newGroupMemberProcessor(producer xproduce.Producer, factory xconsume.Consum
 		return nil, err
 	}
 
-	processor, err := NewGroupMemberProcessor(
+	processor, err := NewBizMsgProcessor(
 		producer,
 		factory,
 
@@ -54,7 +53,7 @@ func newGroupMemberProcessor(producer xproduce.Producer, factory xconsume.Consum
 
 // startGroupMemberConsumer 启动聊天群成员消费者 ( fx Invoke 函数 )。
 func startGroupMemberConsumer(
-	processor *GroupMemberProcessor,
+	processor *BizMsgProcessor,
 	groupService service.GroupService,
 	lifecycle fx.Lifecycle,
 	logger *zap.Logger,
