@@ -19,15 +19,10 @@ type GroupService interface {
 	ProcessAddMembersMsg(ctx context.Context, msg *xmq.Message) error
 }
 
-const (
-	// 成员数阈值：小于此值使用同步创建，大于等于此值使用异步创建
-	AsyncThreshold = 100
-)
-
 var _ GroupService = (*DefaultGroupService)(nil)
 
 type DefaultGroupService struct {
-	producer mq.Producer
+	gmProducer mq.Producer
 
 	groupRepo       repo.GroupRepo
 	groupMemberRepo repo.GroupMemberRepo
@@ -36,13 +31,13 @@ type DefaultGroupService struct {
 }
 
 func NewDefaultGroupService(
-	producer mq.Producer,
+	gmProducer mq.Producer,
 	groupRepo repo.GroupRepo,
 	groupMemberRepo repo.GroupMemberRepo,
 	logger *zap.Logger,
 ) (*DefaultGroupService, error) {
 	return &DefaultGroupService{
-		producer: producer,
+		gmProducer: gmProducer,
 
 		groupRepo:       groupRepo,
 		groupMemberRepo: groupMemberRepo,
@@ -96,7 +91,7 @@ func (s *DefaultGroupService) sendMemberAddMsg(ctx context.Context, groupID, cre
 			return fmt.Errorf("failed to marshal channel member add event: %w", err)
 		}
 
-		if err := s.producer.Produce(ctx, nil, val); err != nil {
+		if err := s.gmProducer.Produce(ctx, nil, val); err != nil {
 			// 发送失败，更新频道状态为 "failed"。
 			_ = s.groupRepo.UpdateStatus(ctx, groupID, string(domain.ChatGroupStatusFailed))
 			return fmt.Errorf("failed to produce channel member add event: %w", err)

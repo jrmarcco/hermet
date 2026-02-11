@@ -23,6 +23,16 @@ var MqFxModule = fx.Module(
 			fx.As(new(mq.Producer)),
 			fx.ResultTags(`name:"group_member_producer"`),
 		),
+		fx.Annotate(
+			newDMsgProducer,
+			fx.As(new(mq.Producer)),
+			fx.ResultTags(`name:"downstream_msg_producer"`),
+		),
+		fx.Annotate(
+			newUMsgConsumer,
+			fx.As(new(mq.Consumer)),
+			fx.ResultTags(`name:"upstream_msg_consumer"`),
+		),
 	),
 )
 
@@ -80,4 +90,66 @@ func newGroupMemberMqProcessor(params gmpFxParams) (*mq.LoopbackProcessor, error
 		},
 	})
 	return gmp, nil
+}
+
+func newDMsgProducer(producer xproduce.Producer) (*mq.DefaultProducer, error) {
+	cfg := mqConfig{}
+	if err := viper.UnmarshalKey("mq.message_downstream", &cfg); err != nil {
+		return nil, err
+	}
+
+	dp, err := mq.NewDefaultProducer(cfg.Topic, producer)
+	if err != nil {
+		return nil, err
+	}
+
+	return dp, nil
+}
+
+type umConsumerFxParams struct {
+	fx.In
+
+	Factory        xconsume.ConsumerFactory
+	MessageService service.MessageService
+	Logger         *zap.Logger
+	Lifecycle      fx.Lifecycle
+}
+
+func newUMsgConsumer(params umConsumerFxParams) (*mq.DefaultConsumer, error) {
+	cfg := mqConfig{}
+	if err := viper.UnmarshalKey("mq.message_upstream", &cfg); err != nil {
+		return nil, err
+	}
+
+	dc, err := mq.NewDefaultConsumer(
+		params.Factory,
+
+		cfg.Topic,
+		cfg.GroupID,
+		cfg.Partitions,
+
+		params.MessageService.ProcessUpstreamMsg,
+		cfg.HandleTimeout,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	params.Lifecycle.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			if err := dc.Start(ctx); err != nil {
+				params.Logger.Error("failed to start upstream message consumer", zap.Error(err))
+				return err
+			}
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			if err := dc.Stop(ctx); err != nil {
+				params.Logger.Error("failed to stop upstream message consumer", zap.Error(err))
+				return err
+			}
+			return nil
+		},
+	})
+	return dc, nil
 }

@@ -9,7 +9,7 @@ const (
 
 // Message 对应网关消息中的 body 的具体格式。
 type Message struct {
-	ID uint64 // 消息 ID
+	ID string // 消息 ID
 
 	SID uint64 // Sender ID ( 发送者 ID )
 	MID uint64 // Message ID ( 这里指的是网关消息的 ID )

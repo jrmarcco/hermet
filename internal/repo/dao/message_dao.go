@@ -8,7 +8,7 @@ import (
 )
 
 type Message struct {
-	ID uint64 `bson:"id"`
+	ID string `bson:"id"`
 
 	SID uint64 `bson:"sid"` // Sender ID ( 发送者 ID )
 	MID uint64 `bson:"mid"` // Message ID ( 这里指的是网关消息的 ID )
