@@ -1,9 +1,10 @@
-package cdc
+package bootstrap
 
 import (
 	"context"
 	"time"
 
+	"github.com/jrmarcco/hermet/internal/cdc"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
 	"github.com/jrmarcco/hermet/internal/service"
 	"github.com/spf13/viper"
@@ -11,13 +12,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// cdc_module.go 负责配置 CDC ( Change Data Capture ) 相关的依赖注入。
+
 var CdcFxModule = fx.Module(
 	"cdc",
-	fx.Invoke(newContactReviewProcessor),
-	fx.Invoke(newContactProcessor),
-	fx.Invoke(newUserGroupProcessor),
-	fx.Invoke(newGroupMemberProcessor),
-	fx.Invoke(newOutboxEventProcessor),
+	fx.Invoke(newContactReviewCdcProcessor),
+	fx.Invoke(newContactCdcProcessor),
+	fx.Invoke(newUserGroupCdcProcessor),
+	fx.Invoke(newGroupMemberCdcProcessor),
+	fx.Invoke(newOutboxEventCdcProcessor),
 )
 
 type cdcProcessorConfig struct {
@@ -28,18 +31,18 @@ type cdcProcessorConfig struct {
 	TBShardCount int `mapstructure:"tb_shard_count"`
 }
 
-func newContactReviewProcessor(
+func newContactReviewCdcProcessor(
 	cdcService service.CDCService,
 	factory xconsume.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
-) (*ContactReviewProcessor, error) {
+) (*cdc.ContactReviewProcessor, error) {
 	cfg, err := loadCdcProcessorConfig("mq.cdc.contact_review")
 	if err != nil {
 		return nil, err
 	}
 
-	processor := NewContactReviewProcessor(
+	processor := cdc.NewContactReviewProcessor(
 		cfg.DBShardCount,
 		cfg.TBShardCount,
 		cfg.GroupID,
@@ -64,18 +67,18 @@ func newContactReviewProcessor(
 	return processor, nil
 }
 
-func newContactProcessor(
+func newContactCdcProcessor(
 	cdcService service.CDCService,
 	factory xconsume.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
-) (*ContactProcessor, error) {
+) (*cdc.ContactProcessor, error) {
 	cfg, err := loadCdcProcessorConfig("mq.cdc.contact")
 	if err != nil {
 		return nil, err
 	}
 
-	processor := NewContactProcessor(
+	processor := cdc.NewContactProcessor(
 		cfg.DBShardCount,
 		cfg.TBShardCount,
 		cfg.GroupID,
@@ -100,18 +103,18 @@ func newContactProcessor(
 	return processor, nil
 }
 
-func newUserGroupProcessor(
+func newUserGroupCdcProcessor(
 	cdcService service.CDCService,
 	factory xconsume.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
-) (*UserGroupProcessor, error) {
+) (*cdc.UserGroupProcessor, error) {
 	cfg, err := loadCdcProcessorConfig("mq.cdc.user_group")
 	if err != nil {
 		return nil, err
 	}
 
-	processor := NewUserGroupProcessor(
+	processor := cdc.NewUserGroupProcessor(
 		cfg.DBShardCount,
 		cfg.TBShardCount,
 		cfg.GroupID,
@@ -133,18 +136,18 @@ func newUserGroupProcessor(
 	return processor, nil
 }
 
-func newGroupMemberProcessor(
+func newGroupMemberCdcProcessor(
 	cdcService service.CDCService,
 	factory xconsume.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
-) (*GroupMemberProcessor, error) {
+) (*cdc.GroupMemberProcessor, error) {
 	cfg, err := loadCdcProcessorConfig("mq.cdc.group_member")
 	if err != nil {
 		return nil, err
 	}
 
-	processor := NewGroupMemberProcessor(
+	processor := cdc.NewGroupMemberProcessor(
 		cfg.DBShardCount,
 		cfg.TBShardCount,
 		cfg.GroupID,
@@ -166,18 +169,18 @@ func newGroupMemberProcessor(
 	return processor, nil
 }
 
-func newOutboxEventProcessor(
+func newOutboxEventCdcProcessor(
 	cdcService service.CDCService,
 	factory xconsume.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
-) (*OutboxEventProcessor, error) {
+) (*cdc.OutboxEventProcessor, error) {
 	cfg, err := loadCdcProcessorConfig("mq.cdc.outbox_event")
 	if err != nil {
 		return nil, err
 	}
 
-	processor := NewOutboxEventProcessor(
+	processor := cdc.NewOutboxEventProcessor(
 		cfg.DBShardCount,
 		cfg.TBShardCount,
 		cfg.GroupID,

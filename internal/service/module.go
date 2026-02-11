@@ -1,10 +1,12 @@
 package service
 
 import (
+	"github.com/jrmarcco/hermet/internal/mq"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/jit/xjwt"
 	authv1 "github.com/jrmarcco/synp-api/api/go/auth/v1"
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
 var ServiceFxModule = fx.Module(
@@ -21,11 +23,11 @@ var ServiceFxModule = fx.Module(
 		// Contact service
 		fx.Annotate(NewDefaultContactService, fx.As(new(ContactService))),
 
-		// Channel service
-		fx.Annotate(NewDefaultChannelService, fx.As(new(ChannelService))),
+		// Group service
+		fx.Annotate(newGroupService, fx.As(new(GroupService))),
 
 		// Channel service
-		fx.Annotate(NewDefaultGroupService, fx.As(new(GroupService))),
+		fx.Annotate(NewDefaultChannelService, fx.As(new(ChannelService))),
 	),
 )
 
@@ -44,5 +46,25 @@ func newAuthService(p authServiceFxParams) AuthService {
 		p.Repo,
 		p.AtManager,
 		p.RtManager,
+	)
+}
+
+type groupServiceFxParams struct {
+	fx.In
+
+	Producer mq.Producer `name:"group_member_producer"`
+
+	GroupRepo       repo.GroupRepo
+	GroupMemberRepo repo.GroupMemberRepo
+
+	Logger *zap.Logger
+}
+
+func newGroupService(params groupServiceFxParams) (*DefaultGroupService, error) {
+	return NewDefaultGroupService(
+		params.Producer,
+		params.GroupRepo,
+		params.GroupMemberRepo,
+		params.Logger,
 	)
 }

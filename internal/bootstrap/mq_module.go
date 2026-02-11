@@ -1,9 +1,10 @@
-package mq
+package bootstrap
 
 import (
 	"context"
 	"time"
 
+	"github.com/jrmarcco/hermet/internal/mq"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproduce"
 	"github.com/jrmarcco/hermet/internal/service"
@@ -12,12 +13,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// mq_module.go 负责配置消息队列相关的依赖注入。
+
 var MqFxModule = fx.Module(
 	"mq",
 	fx.Provide(
 		fx.Annotate(
-			newGroupMemberProcessor,
-			fx.As(new(service.GroupMemberMsgProducer)),
+			newGroupMemberMqProcessor,
+			fx.As(new(mq.Producer)),
+			fx.ResultTags(`name:"group_member_producer"`),
 		),
 	),
 )
@@ -42,13 +46,13 @@ type gmpFxParams struct {
 }
 
 // newGroupMemberProcessor 创建一个新的聊天群成员处理器。
-func newGroupMemberProcessor(params gmpFxParams) (*LoopbackProcessor, error) {
+func newGroupMemberMqProcessor(params gmpFxParams) (*mq.LoopbackProcessor, error) {
 	cfg := mqConfig{}
 	if err := viper.UnmarshalKey("mq.group_member_add", &cfg); err != nil {
 		return nil, err
 	}
 
-	gmp, err := NewLoopbackProcessor(
+	gmp, err := mq.NewLoopbackProcessor(
 		params.Producer,
 		params.Factory,
 

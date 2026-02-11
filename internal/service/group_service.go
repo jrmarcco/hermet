@@ -4,18 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 
 	"github.com/jrmarcco/hermet/internal/domain"
+	"github.com/jrmarcco/hermet/internal/mq"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"go.uber.org/zap"
 )
-
-// GroupMemberMsgProducer 是频道消息生产者接口。
-type GroupMemberMsgProducer interface {
-	Produce(ctx context.Context, key []byte, val []byte) error
-}
 
 type GroupService interface {
 	Create(ctx context.Context, event domain.GroupCreateEvent) (domain.ChatGroup, error)
@@ -32,7 +27,7 @@ const (
 var _ GroupService = (*DefaultGroupService)(nil)
 
 type DefaultGroupService struct {
-	msgProducer GroupMemberMsgProducer
+	producer mq.Producer
 
 	groupRepo       repo.GroupRepo
 	groupMemberRepo repo.GroupMemberRepo
@@ -41,13 +36,13 @@ type DefaultGroupService struct {
 }
 
 func NewDefaultGroupService(
-	producer GroupMemberMsgProducer,
+	producer mq.Producer,
 	groupRepo repo.GroupRepo,
 	groupMemberRepo repo.GroupMemberRepo,
 	logger *zap.Logger,
 ) (*DefaultGroupService, error) {
 	return &DefaultGroupService{
-		msgProducer: producer,
+		producer: producer,
 
 		groupRepo:       groupRepo,
 		groupMemberRepo: groupMemberRepo,
@@ -101,7 +96,7 @@ func (s *DefaultGroupService) sendMemberAddMsg(ctx context.Context, groupID, cre
 			return fmt.Errorf("failed to marshal channel member add event: %w", err)
 		}
 
-		if err := s.msgProducer.Produce(ctx, []byte(strconv.FormatUint(groupID, 10)), val); err != nil {
+		if err := s.producer.Produce(ctx, nil, val); err != nil {
 			// 发送失败，更新频道状态为 "failed"。
 			_ = s.groupRepo.UpdateStatus(ctx, groupID, string(domain.ChatGroupStatusFailed))
 			return fmt.Errorf("failed to produce channel member add event: %w", err)

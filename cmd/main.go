@@ -5,8 +5,7 @@ import (
 
 	"github.com/jrmarcco/hermet/internal/api"
 	"github.com/jrmarcco/hermet/internal/app"
-	"github.com/jrmarcco/hermet/internal/cdc"
-	"github.com/jrmarcco/hermet/internal/mq"
+	"github.com/jrmarcco/hermet/internal/bootstrap"
 	"github.com/jrmarcco/hermet/internal/pkg/provider"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/hermet/internal/repo/dao"
@@ -69,10 +68,10 @@ func main() {
 		api.APIFxModule,
 
 		// 初始化 cdc。
-		cdc.CdcFxModule,
+		bootstrap.CdcFxModule,
 
 		// 初始化 mq。
-		mq.MqFxModule,
+		bootstrap.MqFxModule,
 
 		// 初始化 app。
 		app.AppFxModule,

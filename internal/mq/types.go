@@ -8,7 +8,7 @@ import (
 
 // Producer 是业务消息生产者接口。
 type Producer interface {
-	Produce(ctx context.Context, key []byte, val []byte) error
+	Produce(ctx context.Context, key, val []byte) error
 }
 
 // Consumer 是业务消息消费者接口。
