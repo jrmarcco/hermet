@@ -1,0 +1,51 @@
+# CDC 心跳监控配置示例
+
+heartbeat:
+  # 是否启用心跳监控
+  enabled: true
+
+  # 心跳超时时间（超过该时间未收到心跳则认为不健康）
+  # 格式: "5m", "10m30s", "1h"
+  timeout: "5m"
+
+  # 最大延迟阈值（毫秒）
+  # 超过该阈值会记录警告日志
+  max_delay_threshold: 10000
+
+  # 健康检查间隔（定期检查并打印所有数据源状态）
+  health_check_interval: "1m"
+
+  # 消费者配置
+  consumer:
+    # 消费者组 ID
+    group_id: "cdc-heartbeat-consumer"
+
+    # 数据库分片数量（需要与业务配置一致）
+    db_shard_count: 2
+
+    # 心跳 topic 名称模式
+    # %d 会被替换为分片编号（0, 1, 2, ...）
+    topic_pattern: "__debezium-heartbeat.hermet_%d"
+
+  # 告警配置
+  alert:
+    # 告警方式: "log", "dingtalk", "wechat", "email"
+    type: "log"
+
+    # 钉钉机器人配置（当 type 为 dingtalk 时使用）
+    dingtalk:
+      webhook: "https://oapi.dingtalk.com/robot/send?access_token=xxx"
+      secret: "SECxxx"
+
+    # 企业微信机器人配置（当 type 为 wechat 时使用）
+    wechat:
+      webhook: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx"
+
+    # 邮件告警配置（当 type 为 email 时使用）
+    email:
+      smtp_host: "smtp.example.com"
+      smtp_port: 587
+      from: "alert@example.com"
+      to: ["admin@example.com"]
+      username: "alert@example.com"
+      password: "password"
