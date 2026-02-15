@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,38 +13,33 @@ import (
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocess"
+	"go.uber.org/zap"
 )
 
-// HeartbeatStatus 记录单个数据源的心跳状态。
+// HeartbeatStatus 心跳状态。
+// 用于记录单个数据源的心跳状态。
 type HeartbeatStatus struct {
-	// DataSource 是数据源标识（例如：hermet_0）。
-	DataSource string
+	DataSource string // 数据源标识 ( 对应 Debezium Connector 的 name 配置 )
 
-	// LastHeartbeatTime 是最后一次收到心跳的时间。
-	LastHeartbeatTime time.Time
+	LastHeartbeatTime        time.Time // 最后一次收到心跳的时间 ( 即消费心跳消息的时间 )
+	LastHeartbeatTimestampMs int64     // 心跳消息中的毫秒值 ( 用于计算 CDC 延迟 )
 
-	// LastHeartbeat 是心跳消息中的时间戳（毫秒）。
-	// 用于计算 CDC 延迟（当前时间 - 心跳时间戳）。
-	LastHeartbeatTimestampMs int64
-
-	// MessageCount 是收到的心跳消息总数。
 	MessageCount int64
 
-	// LastError 是最后一次处理心跳消息时的错误。
 	LastError error
 }
 
 // IsHealthy 判断数据源是否健康。
-// timeout 是心跳超时时间，如果超过该时间没有收到心跳，则认为不健康。
 func (s *HeartbeatStatus) IsHealthy(timeout time.Duration) bool {
 	if s.LastHeartbeatTime.IsZero() {
-		return false // 从未收到过心跳
+		// 从未收到过心跳。
+		return false
 	}
 	return time.Since(s.LastHeartbeatTime) < timeout
 }
 
-// GetDelay 获取 CDC 延迟（毫秒）。
-// 返回心跳时间戳与实际收到时间的差值。
+// GetDelay 获取 CDC 延迟 ( 毫秒 )。
+// 即心跳事件戳和实际收到心跳的差值。
 func (s *HeartbeatStatus) GetDelay() int64 {
 	if s.LastHeartbeatTimestampMs == 0 {
 		return 0
@@ -51,40 +47,32 @@ func (s *HeartbeatStatus) GetDelay() int64 {
 	return s.LastHeartbeatTime.UnixMilli() - s.LastHeartbeatTimestampMs
 }
 
-// HeartbeatMonitor 是心跳监控器。
+// HeartbeatMonitor 心跳监控器。
 type HeartbeatMonitor struct {
-	mu       sync.RWMutex
-	statuses map[string]*HeartbeatStatus // key: data source
+	mu sync.RWMutex
 
-	// HeartbeatTimeout 是心跳超时时间。
-	// 如果超过该时间没有收到心跳，认为 Debezium connector 不健康。
+	statuses map[string]*HeartbeatStatus // data source -> heartbeat status
+
 	HeartbeatTimeout time.Duration
-
-	// MaxDelayThreshold 是最大延迟阈值（毫秒）。
-	// 超过该阈值会记录警告日志。
-	MaxDelayThreshold int64
+	DelayThreshold   int64
 }
 
-// NewHeartbeatMonitor 创建心跳监控器。
 func NewHeartbeatMonitor(timeout time.Duration, maxDelay int64) *HeartbeatMonitor {
 	return &HeartbeatMonitor{
-		statuses:          make(map[string]*HeartbeatStatus),
-		HeartbeatTimeout:  timeout,
-		MaxDelayThreshold: maxDelay,
+		statuses:         make(map[string]*HeartbeatStatus),
+		HeartbeatTimeout: timeout,
+		DelayThreshold:   maxDelay,
 	}
 }
 
-// RecordHeartbeat 记录心跳。
-func (m *HeartbeatMonitor) RecordHeartbeat(dataSource string, tsMs int64, err error) {
+func (m *HeartbeatMonitor) Record(ds string, tsMs int64, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	status, exists := m.statuses[dataSource]
-	if !exists {
-		status = &HeartbeatStatus{
-			DataSource: dataSource,
-		}
-		m.statuses[dataSource] = status
+	status, ok := m.statuses[ds]
+	if !ok {
+		status = &HeartbeatStatus{DataSource: ds}
+		m.statuses[ds] = status
 	}
 
 	status.LastHeartbeatTime = time.Now()
@@ -92,48 +80,45 @@ func (m *HeartbeatMonitor) RecordHeartbeat(dataSource string, tsMs int64, err er
 	status.MessageCount++
 	status.LastError = err
 
-	// 计算延迟并记录警告
 	if err == nil {
 		delay := status.GetDelay()
-		if delay > m.MaxDelayThreshold {
+		if delay > m.DelayThreshold {
 			slog.Warn(
 				"[cdc-heartbeat] high CDC delay detected",
-				"data_source", dataSource,
+				"data_source", ds,
 				"delay_ms", delay,
-				"threshold_ms", m.MaxDelayThreshold,
+				"threshold_ms", m.DelayThreshold,
 			)
 		}
 	}
 }
 
-// GetStatus 获取指定数据源的心跳状态。
-func (m *HeartbeatMonitor) GetStatus(dataSource string) *HeartbeatStatus {
+func (m *HeartbeatMonitor) GetStatus(ds string) *HeartbeatStatus {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.statuses[dataSource]
+	return m.statuses[ds]
 }
 
-// GetAllStatuses 获取所有数据源的心跳状态。
 func (m *HeartbeatMonitor) GetAllStatuses() map[string]*HeartbeatStatus {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// 返回副本，避免并发问题
-	result := make(map[string]*HeartbeatStatus, len(m.statuses))
-	for k, v := range m.statuses {
-		statusCopy := *v
-		result[k] = &statusCopy
+	// 返回副本 ( 避免并发问题 )。
+	res := make(map[string]*HeartbeatStatus, len(m.statuses))
+	for ds, status := range m.statuses {
+		statusCopy := *status
+		res[ds] = &statusCopy
 	}
-	return result
+	return res
 }
 
-// IsAllHealthy 判断所有数据源是否健康。
 func (m *HeartbeatMonitor) IsAllHealthy() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	if len(m.statuses) == 0 {
-		return false // 没有任何心跳数据
+		// 没有任何心跳数据。
+		return false
 	}
 
 	for _, status := range m.statuses {
@@ -144,86 +129,44 @@ func (m *HeartbeatMonitor) IsAllHealthy() bool {
 	return true
 }
 
-// StartupStrategy 定义心跳处理器的启动策略。
-type StartupStrategy string
-
-const (
-	// StartupStrategyLatest 从最新消息开始消费（跳过历史堆积）。
-	// 适用场景：初次启动且有大量历史堆积，只关心实时状态。
-	StartupStrategyLatest StartupStrategy = "latest"
-
-	// StartupStrategyEarliest 从最早消息开始消费（消费所有历史消息）。
-	// 适用场景：需要完整的心跳历史数据，或测试环境。
-	StartupStrategyEarliest StartupStrategy = "earliest"
-
-	// StartupStrategyRecent 从最近的消息开始消费（例如最近 1 小时）。
-	// 适用场景：想保留一些历史数据用于分析，但不想消费全部堆积。
-	StartupStrategyRecent StartupStrategy = "recent"
-
-	// StartupStrategySaved 从上次保存的 offset 开始消费。
-	// 适用场景：重启服务，继续上次的消费位置。
-	StartupStrategySaved StartupStrategy = "saved"
-)
-
-// HeartbeatProcessorConfig 是心跳处理器的配置。
 type HeartbeatProcessorConfig struct {
-	// DBShardCount 是数据库分片数量。
-	DBShardCount int
-
-	// GroupID 是消费者组 ID。
 	GroupID string
 
-	// TopicPattern 是心跳 topic 名称模式。
-	// 例如："__debezium-heartbeat.hermet_%d"
-	TopicPattern string
-
-	// StartupStrategy 是启动策略。
-	StartupStrategy StartupStrategy
-
-	// RecentDuration 当使用 StartupStrategyRecent 时，指定消费最近多长时间的消息。
-	// 例如：1 * time.Hour 表示消费最近 1 小时的消息。
-	RecentDuration time.Duration
-
-	// SkipHistoricalOnStartup 是否在启动时跳过历史堆积消息。
-	// 如果为 true，启动时会快速消费并丢弃历史消息，只记录最后一条。
-	// 适用场景：有大量历史堆积，只需要最新状态。
-	SkipHistoricalOnStartup bool
+	DataSources  []string // 数据源列表 ( 对应 Debezium Connector 的 name 配置 )
+	TopicPattern string   // 心跳消息的 kafka topic 名称模式 ( 例如 "__debezium-heartbeat.%s" )
 }
 
 // HeartbeatProcessor 处理 Debezium 心跳消息的处理器。
 type HeartbeatProcessor struct {
 	*BaseProcessor
+
 	monitor *HeartbeatMonitor
-	config  HeartbeatProcessorConfig
+	logger  *zap.Logger
 }
 
-// NewHeartbeatProcessor 创建心跳消息处理器。
 func NewHeartbeatProcessor(
 	config HeartbeatProcessorConfig,
 	factory xconsume.ConsumerFactory,
 	monitor *HeartbeatMonitor,
-) *HeartbeatProcessor {
-	// 设置默认值
-	if config.TopicPattern == "" {
-		config.TopicPattern = "__debezium-heartbeat.hermet_%d"
+	logger *zap.Logger,
+) (*HeartbeatProcessor, error) {
+	if len(config.DataSources) == 0 {
+		return nil, fmt.Errorf("data sources are required")
 	}
-	if config.StartupStrategy == "" {
-		config.StartupStrategy = StartupStrategyLatest
+
+	if config.TopicPattern == "" {
+		return nil, fmt.Errorf("topic pattern is required")
 	}
 
 	processor := &HeartbeatProcessor{
 		monitor: monitor,
-		config:  config,
+		logger:  logger,
 	}
 
-	// 创建心跳消息处理器
-	handler := processor.handleHeartbeat
-
-	// 构建心跳 topic 列表
-	topics := make([]xprocess.TopicConfig, 0, config.DBShardCount)
-	for i := 0; i < config.DBShardCount; i++ {
+	topics := make([]xprocess.TopicConfig, 0, len(config.DataSources))
+	for _, ds := range config.DataSources {
 		topics = append(topics, xprocess.TopicConfig{
-			Topic:   fmt.Sprintf(config.TopicPattern, i),
+			Topic:   fmt.Sprintf(config.TopicPattern, ds),
 			GroupID: config.GroupID,
 		})
 	}
@@ -231,8 +174,8 @@ func NewHeartbeatProcessor(
 	consumerProcessor := xprocess.NewConsumeProcessor(
 		xprocess.ConsumeProcessorConfig{
 			Topics:        topics,
-			Handler:       handler,
-			HandleTimeout: time.Second, // 心跳消息处理超时
+			Handler:       processor.processHeartbeat,
+			HandleTimeout: time.Second,
 		},
 		factory,
 	)
@@ -241,61 +184,41 @@ func NewHeartbeatProcessor(
 		ConsumeProcessor: consumerProcessor,
 	}
 
-	return processor
+	return processor, nil
 }
 
-// handleHeartbeat 处理单条心跳消息。
-func (p *HeartbeatProcessor) handleHeartbeat(_ context.Context, msg *xmq.Message) error {
-	// 从 topic 名称提取数据源标识
-	// 例如：__debezium-heartbeat.hermet_0 -> hermet_0
-	dataSource := p.extractDataSource(msg.Topic)
+func (p *HeartbeatProcessor) processHeartbeat(_ context.Context, msg *xmq.Message) error {
+	ds := p.extractDataSource(msg.Topic)
 
 	var heartbeat event.HeartbeatEvent
 	if err := json.Unmarshal(msg.Val, &heartbeat); err != nil {
-		slog.Error(
+		p.logger.Error(
 			"[cdc-heartbeat] failed to unmarshal heartbeat message",
-			"topic", msg.Topic,
-			"data_source", dataSource,
-			"error", err.Error(),
+			zap.String("topic", msg.Topic),
+			zap.String("data_source", ds),
+			zap.Error(err),
 		)
-		p.monitor.RecordHeartbeat(dataSource, 0, err)
+		p.monitor.Record(ds, 0, err)
 		return err
 	}
 
-	// 记录心跳
-	p.monitor.RecordHeartbeat(dataSource, heartbeat.TimestampMs, nil)
+	// 记录心跳。
+	p.monitor.Record(ds, heartbeat.TimestampMs, nil)
 
-	slog.Debug(
+	p.logger.Debug(
 		"[cdc-heartbeat] received heartbeat",
-		"topic", msg.Topic,
-		"data_source", dataSource,
-		"ts_ms", heartbeat.TimestampMs,
-		"offset", msg.Offset,
+		zap.String("topic", msg.Topic),
+		zap.String("data_source", ds),
+		zap.Int64("ts_ms", heartbeat.TimestampMs),
 	)
-
 	return nil
 }
 
 // extractDataSource 从 topic 名称中提取数据源标识。
-// 例如：__debezium-heartbeat.hermet_0 -> hermet_0
 func (p *HeartbeatProcessor) extractDataSource(topic string) string {
-	// 简单实现：查找最后一个点后的内容
-	// 更复杂的场景可以使用正则表达式
-	for i := len(topic) - 1; i >= 0; i-- {
-		if topic[i] == '.' {
-			return topic[i+1:]
-		}
-	}
-	return topic
+	return strings.Split(topic, ".")[1]
 }
 
-// GetMonitor 获取心跳监控器。
-func (p *HeartbeatProcessor) GetMonitor() *HeartbeatMonitor {
-	return p.monitor
-}
-
-// StartHealthCheck 启动健康检查 goroutine。
-// 定期检查所有数据源的健康状态，并记录警告日志。
 func (p *HeartbeatProcessor) StartHealthCheck(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -303,82 +226,33 @@ func (p *HeartbeatProcessor) StartHealthCheck(ctx context.Context, interval time
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("[cdc-heartbeat] health check stopped")
+			p.logger.Info("[cdc-heartbeat] health check stopped")
 			return
 		case <-ticker.C:
-			p.checkHealth()
+			p.healthCheck()
 		}
 	}
 }
 
-// checkHealth 检查所有数据源的健康状态。
-func (p *HeartbeatProcessor) checkHealth() {
+func (p *HeartbeatProcessor) healthCheck() {
 	statuses := p.monitor.GetAllStatuses()
 
-	for dataSource, status := range statuses {
+	for ds, status := range statuses {
 		if !status.IsHealthy(p.monitor.HeartbeatTimeout) {
-			slog.Error(
+			p.logger.Error(
 				"[cdc-heartbeat] data source unhealthy - no heartbeat received",
-				"data_source", dataSource,
-				"last_heartbeat", status.LastHeartbeatTime.Format(time.RFC3339),
-				"timeout", p.monitor.HeartbeatTimeout.String(),
-				"message_count", status.MessageCount,
+				zap.String("data_source", ds),
+				zap.Time("last_heartbeat", status.LastHeartbeatTime),
 			)
-		} else {
-			delay := status.GetDelay()
-			slog.Info(
-				"[cdc-heartbeat] data source healthy",
-				"data_source", dataSource,
-				"delay_ms", delay,
-				"message_count", status.MessageCount,
-			)
+			continue
 		}
-	}
-}
 
-// Start 启动心跳处理器。
-// 覆盖 BaseProcessor 的 Start 方法，添加启动策略处理。
-func (p *HeartbeatProcessor) Start(ctx context.Context) error {
-	slog.Info(
-		"[cdc-heartbeat] starting heartbeat processor",
-		"startup_strategy", string(p.config.StartupStrategy),
-		"skip_historical", p.config.SkipHistoricalOnStartup,
-	)
-
-	// 根据启动策略处理
-	switch p.config.StartupStrategy {
-	case StartupStrategyLatest:
-		slog.Info("[cdc-heartbeat] using latest strategy - will skip historical messages")
-		// Kafka consumer 默认会从 latest 开始（如果配置正确）
-		// 无需额外处理
-
-	case StartupStrategyRecent:
-		slog.Info(
-			"[cdc-heartbeat] using recent strategy",
-			"duration", p.config.RecentDuration.String(),
+		delay := status.GetDelay()
+		p.logger.Debug(
+			"[cdc-heartbeat] data source healthy",
+			zap.String("data_source", ds),
+			zap.Int64("delay_ms", delay),
+			zap.Int64("message_count", status.MessageCount),
 		)
-		// TODO: 实现从指定时间点开始消费
-		// 需要 Kafka consumer 支持按时间戳定位 offset
-		slog.Warn("[cdc-heartbeat] recent strategy not fully implemented yet, falling back to latest")
-
-	case StartupStrategyEarliest:
-		slog.Info("[cdc-heartbeat] using earliest strategy - will consume all historical messages")
-		// 如果有大量堆积，这可能需要很长时间
-
-	case StartupStrategySaved:
-		slog.Info("[cdc-heartbeat] using saved strategy - resuming from last committed offset")
 	}
-
-	// 启动基础处理器
-	if err := p.BaseProcessor.Start(ctx); err != nil {
-		return err
-	}
-
-	// 如果配置了跳过历史消息，启动后台任务快速消费并丢弃
-	if p.config.SkipHistoricalOnStartup && p.config.StartupStrategy != StartupStrategyLatest {
-		slog.Info("[cdc-heartbeat] skip_historical enabled - historical messages will be consumed quickly")
-		// 实际的跳过逻辑在 handleHeartbeat 中处理
-	}
-
-	return nil
 }

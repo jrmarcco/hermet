@@ -20,7 +20,7 @@
     "snapshot.mode": "when_needed",
     "time.precision.mode": "adaptive_time_microseconds",
     "decimal.handling.mode": "precise",
-    "heartbeat.interval.ms": "30000",
+    "heartbeat.interval.ms": "10000",
     "heartbeat.topics.prefix": "__debezium_heartbeat",
     "schema.history.internal.kafka.bootstrap.servers": "kafka-1:9093,kafka-2:9093,kafka-3:9093",
     "schema.history.internal.kafka.topic": "schema-changes.dbserver1",
