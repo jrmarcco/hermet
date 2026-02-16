@@ -13,7 +13,8 @@ type Message struct {
 	SID uint64 `bson:"sid"` // Sender ID ( 发送者 ID )
 	MID uint64 `bson:"mid"` // Message ID ( 这里指的是网关消息的 ID )
 
-	DestinationID string `bson:"destinationId"` // Destination ID ( 目的地频道 ID )
+	DestinationID   string `bson:"destinationId"`   // Destination ID ( 目的地频道 ID )
+	DestinationType string `bson:"destinationType"` // Destination Type ( 目的地类型 )
 
 	Content     []byte `bson:"content"`     // Message Content
 	ContentType string `bson:"contentType"` // Message Content Type
