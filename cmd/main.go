@@ -3,6 +3,11 @@ package main
 import (
 	"fmt"
 
+	"github.com/spf13/viper"
+	"go.uber.org/fx"
+	"go.uber.org/fx/fxevent"
+	"go.uber.org/zap"
+
 	"github.com/jrmarcco/hermet/internal/api"
 	"github.com/jrmarcco/hermet/internal/app"
 	"github.com/jrmarcco/hermet/internal/bootstrap"
@@ -10,10 +15,6 @@ import (
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/hermet/internal/repo/dao"
 	"github.com/jrmarcco/hermet/internal/service"
-	"github.com/spf13/viper"
-	"go.uber.org/fx"
-	"go.uber.org/fx/fxevent"
-	"go.uber.org/zap"
 )
 
 func main() {
@@ -79,7 +80,7 @@ func main() {
 }
 
 func loadConfig() error {
-	viper.AddConfigPath("config")
+	viper.AddConfigPath("etc")
 	viper.SetConfigType("yaml")
 
 	// 读取基础配置。
