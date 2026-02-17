@@ -8,11 +8,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
 	"github.com/jrmarcco/hermet/internal/errs"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin/xsession"
 	"github.com/jrmarcco/hermet/internal/service"
-	"go.uber.org/zap"
 )
 
 var _ xgin.RouteRegistry = (*AuthHandler)(nil)
@@ -62,7 +63,8 @@ func (h *AuthHandler) SignIn(ctx *gin.Context, req signInReq) (xgin.R, error) {
 	}
 
 	// 创建 seesion。
-	if err := h.CreateSession(ctx, au.SID, au.UID); err != nil {
+	err = h.CreateSession(ctx, au.SID, au.UID)
+	if err != nil {
 		return xgin.R{}, err
 	}
 
@@ -91,12 +93,14 @@ func (h *AuthHandler) RefreshToken(ctx *gin.Context, req refreshTokenRequest) (x
 	}
 
 	// 校验 session。
-	if err := h.CheckSession(ctx, au.SID, au.UID); err != nil {
+	err = h.CheckSession(ctx, au.SID, au.UID)
+	if err != nil {
 		return xgin.R{}, fmt.Errorf("%w: %w", errs.ErrUnauthorized, err)
 	}
 
 	// 刷新 session 过期时间。
-	if err := h.RefreshSession(ctx, au.SID); err != nil {
+	err = h.RefreshSession(ctx, au.SID)
+	if err != nil {
 		// 刷新失败不中断流程，记录日志即可。
 		h.logger.Error("[user-handler] failed to refresh session", zap.Error(err))
 	}

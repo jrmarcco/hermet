@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/jrmarcco/jit/bean/option"
-	"go.uber.org/zap"
+	"go.uber.org/zap" //nolint:depguard // 替换 gorm 默认日志库。
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )

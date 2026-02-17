@@ -7,14 +7,15 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/jrmarcco/hermet/internal/cdc/event"
 	"github.com/jrmarcco/hermet/internal/domain"
 	"github.com/jrmarcco/hermet/internal/errs"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/repo"
-	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -95,20 +96,20 @@ func NewDefaultCDCService(
 }
 
 func (s *DefaultCDCService) ProcessContactReview(ctx context.Context, msg *xmq.Message) error {
-	var event event.ContactReviewCDCEvent
-	if err := json.Unmarshal(msg.Val, &event); err != nil {
+	var evt event.ContactReviewCDCEvent
+	if err := json.Unmarshal(msg.Val, &evt); err != nil {
 		return fmt.Errorf("failed to unmarshal contact application cdc event: %w", err)
 	}
 
-	if !event.IsApproved() {
+	if !evt.IsApproved() {
 		// 只处理审批通过事件。
 		return nil
 	}
 
 	// 幂等性判断 ( 防止重复处理相同的联系人申请事件 )。
-	cacheKey := fmt.Sprintf("contact:review:%d", event.ID)
+	cacheKey := fmt.Sprintf("contact:review:%d", evt.ID)
 	if exists, _ := s.rdb.Exists(ctx, cacheKey).Result(); exists > 0 {
-		s.logger.Debug("[cdc-contact-review] contact review already processed", zap.Uint64("review_id", event.ID))
+		s.logger.Debug("[cdc-contact-review] contact review already processed", zap.Uint64("review_id", evt.ID))
 		return nil
 	}
 
@@ -118,29 +119,29 @@ func (s *DefaultCDCService) ProcessContactReview(ctx context.Context, msg *xmq.M
 	// 创建 A -> B 的联系人关系。
 	eg.Go(func() error {
 		return s.createContact(ctx, domain.Contact{
-			UserID:     event.ApplicantID,
-			ContactID:  event.TargetID,
-			RemarkName: event.ApplicantName,
-			Source:     event.Source,
-			AddedAt:    event.CreatedAt,
+			UserID:     evt.ApplicantID,
+			ContactID:  evt.TargetID,
+			RemarkName: evt.ApplicantName,
+			Source:     evt.Source,
+			AddedAt:    evt.CreatedAt,
 		})
 	})
 
 	// 创建 B -> A 的联系人关系。
 	eg.Go(func() error {
 		return s.createContact(ctx, domain.Contact{
-			UserID:     event.TargetID,
-			ContactID:  event.ApplicantID,
-			RemarkName: event.ApplicantName,
-			Source:     event.Source,
-			AddedAt:    event.ReviewedAt,
+			UserID:     evt.TargetID,
+			ContactID:  evt.ApplicantID,
+			RemarkName: evt.ApplicantName,
+			Source:     evt.Source,
+			AddedAt:    evt.ReviewedAt,
 		})
 	})
 
 	if err := eg.Wait(); err != nil {
 		s.logger.Error(
 			"[cdc-contact-review] failed to create contact relation",
-			zap.Uint64("review_id", event.ID),
+			zap.Uint64("review_id", evt.ID),
 			zap.Error(err),
 		)
 		return err
@@ -173,12 +174,12 @@ func (s *DefaultCDCService) createContact(ctx context.Context, contact domain.Co
 
 // createContactSync 创建联系人关系。
 func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message) error {
-	var event event.ContactCDCEvent
-	if err := json.Unmarshal(msg.Val, &event); err != nil {
+	var evt event.ContactCDCEvent
+	if err := json.Unmarshal(msg.Val, &evt); err != nil {
 		return fmt.Errorf("failed to unmarshal user contact cdc event: %w", err)
 	}
 
-	if !(event.IsCreate() || event.IsUpdate()) {
+	if !(evt.IsCreate() || evt.IsUpdate()) {
 		// 只处理 create 和 update 事件。
 		// - create: 创建联系人关系事件。
 		// - update: 联系人被删除 ( 逻辑删除 DeletedAt != 0 )
@@ -186,27 +187,27 @@ func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message
 		return nil
 	}
 
-	if event.IsUpdate() && event.DeletedAt != 0 {
+	if evt.IsUpdate() && evt.DeletedAt != 0 {
 		// TODO: cdc 事件为删除用户联系人 ( 逻辑删除 )。
 		return nil
 	}
 
 	// cdc 事件为创建联系人关系事件，创建会话。
 	return s.createChannel(ctx, domain.Channel{
-		UserID:      event.UserID,
-		TargetID:    event.ContactID,
+		UserID:      evt.UserID,
+		TargetID:    evt.ContactID,
 		ChannelType: domain.ChannelTypeSingle,
-		OpenedAt:    event.AddedAt,
+		OpenedAt:    evt.AddedAt,
 	})
 }
 
 func (s *DefaultCDCService) ProcessUserGroup(ctx context.Context, msg *xmq.Message) error {
-	var event event.UserGroupCDCEvent
-	if err := json.Unmarshal(msg.Val, &event); err != nil {
+	var evt event.UserGroupCDCEvent
+	if err := json.Unmarshal(msg.Val, &evt); err != nil {
 		return fmt.Errorf("failed to unmarshal user group cdc event: %w", err)
 	}
 
-	if !(event.IsCreate() || event.IsUpdate()) {
+	if !(evt.IsCreate() || evt.IsUpdate()) {
 		// 只处理 create 和 update 事件。
 		// - create: 创建联系人关系事件。
 		// - update: 联系人被删除 ( 逻辑删除 LeftAt != 0 )
@@ -214,16 +215,16 @@ func (s *DefaultCDCService) ProcessUserGroup(ctx context.Context, msg *xmq.Messa
 		return nil
 	}
 
-	if event.IsUpdate() && event.LeftAt != 0 {
+	if evt.IsUpdate() && evt.LeftAt != 0 {
 		// TODO: cdc 事件为聊天群成员离开事件 ( 逻辑删除 )。
 		return nil
 	}
 
 	return s.createChannel(ctx, domain.Channel{
-		UserID:      event.UserID,
-		TargetID:    event.GroupID,
+		UserID:      evt.UserID,
+		TargetID:    evt.GroupID,
 		ChannelType: domain.ChannelTypeGroup,
-		OpenedAt:    event.JoinedAt,
+		OpenedAt:    evt.JoinedAt,
 	})
 }
 
@@ -295,12 +296,12 @@ func (s *DefaultCDCService) fillInChannelRedundant(ctx context.Context, channel 
 }
 
 func (s *DefaultCDCService) ProcessGroupMember(ctx context.Context, msg *xmq.Message) error {
-	var event event.GroupMemberCDCEvent
-	if err := json.Unmarshal(msg.Val, &event); err != nil {
+	var evt event.GroupMemberCDCEvent
+	if err := json.Unmarshal(msg.Val, &evt); err != nil {
 		return fmt.Errorf("failed to unmarshal group member cdc event: %w", err)
 	}
 
-	if !(event.IsCreate() || event.IsUpdate()) {
+	if !(evt.IsCreate() || evt.IsUpdate()) {
 		// 只处理 create 和 update 事件。
 		// - create: 聊天群成员添加事件。
 		// - update:
@@ -309,27 +310,27 @@ func (s *DefaultCDCService) ProcessGroupMember(ctx context.Context, msg *xmq.Mes
 		return nil
 	}
 
-	if event.IsUpdate() && event.LeftAt != 0 {
+	if evt.IsUpdate() && evt.LeftAt != 0 {
 		// TODO: cdc 事件为聊天群成员离开事件 ( 逻辑删除 )。
 		return nil
 	}
 
 	// cdc 事件为聊天群成员添加事件，创建聊天群成员视图。
-	user, err := s.userRepo.FindByID(ctx, event.UserID)
+	user, err := s.userRepo.FindByID(ctx, evt.UserID)
 	if err != nil {
 		if errors.Is(err, errs.ErrRecordNotFound) {
-			s.logger.Error("[cdc-group-member] user not found", zap.Uint64("user_id", event.UserID), zap.Error(err))
+			s.logger.Error("[cdc-group-member] user not found", zap.Uint64("user_id", evt.UserID), zap.Error(err))
 			return err
 		}
 		return fmt.Errorf("failed to find user: %w", err)
 	}
 	gmv := domain.GroupMemberView{
-		ID: event.ID,
+		ID: evt.ID,
 
-		GroupID: event.GroupID,
-		UserID:  event.UserID,
+		GroupID: evt.GroupID,
+		UserID:  evt.UserID,
 
-		MemberRole: domain.GroupMemberRole(event.MemberRole),
+		MemberRole: domain.GroupMemberRole(evt.MemberRole),
 
 		MemberNickname: user.Nickname,
 		MemberAvatar:   user.Avatar,
@@ -337,8 +338,8 @@ func (s *DefaultCDCService) ProcessGroupMember(ctx context.Context, msg *xmq.Mes
 		MemberRemark:   user.Nickname,
 		MemberInfoVer:  user.InfoVer,
 
-		JoinedAt: event.JoinedAt,
-		LeftAt:   event.LeftAt,
+		JoinedAt: evt.JoinedAt,
+		LeftAt:   evt.LeftAt,
 	}
 	return s.createGmv(ctx, gmv)
 }
@@ -365,20 +366,20 @@ func (s *DefaultCDCService) createGmv(ctx context.Context, gmv domain.GroupMembe
 }
 
 func (s *DefaultCDCService) ProcessOutboxEvent(ctx context.Context, msg *xmq.Message) error {
-	var event event.OutboxCDCEvent
-	if err := json.Unmarshal(msg.Val, &event); err != nil {
+	var evt event.OutboxCDCEvent
+	if err := json.Unmarshal(msg.Val, &evt); err != nil {
 		return fmt.Errorf("failed to unmarshal outbox cdc event: %w", err)
 	}
 
 	// 只处理创建事件。
 	// 这里的创建事件是数据库表层面的。
 	// 业务层面的操作来行由 EventType 来决定。
-	if !event.IsCreate() {
+	if !evt.IsCreate() {
 		return nil
 	}
 
 	var gmOutboxEvent domain.GroupMemberOutboxEvent
-	if err := json.Unmarshal([]byte(event.Payload), &gmOutboxEvent); err != nil {
+	if err := json.Unmarshal([]byte(evt.Payload), &gmOutboxEvent); err != nil {
 		return fmt.Errorf("failed to unmarshal group member outbox event payload: %w", err)
 	}
 
@@ -392,7 +393,7 @@ func (s *DefaultCDCService) ProcessOutboxEvent(ctx context.Context, msg *xmq.Mes
 		return nil
 	}
 
-	op := domain.OutboxEventType(event.EventType)
+	op := domain.OutboxEventType(evt.EventType)
 	var err error
 	switch op {
 	case domain.OutboxEventTypeGmCreate:

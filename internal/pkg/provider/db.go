@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xgorm"
 	"github.com/jrmarcco/jit/xsync"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
@@ -13,6 +12,8 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"github.com/jrmarcco/hermet/internal/pkg/xgorm"
 )
 
 func newDBShardingClients(zapLogger *zap.Logger, lc fx.Lifecycle) (*xsync.Map[string, *gorm.DB], error) {
@@ -61,23 +62,15 @@ func newDBShardingClients(zapLogger *zap.Logger, lc fx.Lifecycle) (*xsync.Map[st
 			),
 		})
 		if err != nil {
-			// 清理已打开的连接
-			for _, openedDB := range openedDBs {
-				if sqlDB, _ := openedDB.DB(); sqlDB != nil {
-					_ = sqlDB.Close()
-				}
-			}
+			// 清理已打开的连接。
+			closeOpenedDBs(openedDBs)
 			return nil, fmt.Errorf("failed to open db [ %s ]: %w", s.Name, err)
 		}
 
-		sqlDB, err := db.DB()
+		innerDB, err := db.DB()
 		if err != nil {
-			// 清理已打开的连接
-			for _, openedDB := range openedDBs {
-				if sqlDB, _ := openedDB.DB(); sqlDB != nil {
-					_ = sqlDB.Close()
-				}
-			}
+			// 清理已打开的连接。
+			closeOpenedDBs(openedDBs)
 			return nil, fmt.Errorf("failed to get sql db [ %s ]: %w", s.Name, err)
 		}
 
@@ -87,7 +80,7 @@ func newDBShardingClients(zapLogger *zap.Logger, lc fx.Lifecycle) (*xsync.Map[st
 		// 注册关闭 Hook。
 		lc.Append(fx.Hook{
 			OnStop: func(_ context.Context) error {
-				if err := sqlDB.Close(); err != nil {
+				if err := innerDB.Close(); err != nil {
 					zapLogger.Error("[ioc-db] failed to close db connection", zap.Error(err))
 					return fmt.Errorf("failed to close db connection: %w", err)
 				}
@@ -97,4 +90,12 @@ func newDBShardingClients(zapLogger *zap.Logger, lc fx.Lifecycle) (*xsync.Map[st
 		})
 	}
 	return &dbs, nil
+}
+
+func closeOpenedDBs(openedDBs []*gorm.DB) {
+	for _, openedDB := range openedDBs {
+		if db, _ := openedDB.DB(); db != nil {
+			_ = db.Close()
+		}
+	}
 }

@@ -7,9 +7,9 @@ type MessageRepo interface{}
 var _ MessageRepo = (*DefaultMessageRepo)(nil)
 
 type DefaultMessageRepo struct {
-	dao dao.MessageDao
+	messageDao dao.MessageDao
 }
 
-func NewDefaultMessageRepo(dao dao.MessageDao) *DefaultMessageRepo {
-	return &DefaultMessageRepo{dao: dao}
+func NewDefaultMessageRepo(messageDao dao.MessageDao) *DefaultMessageRepo {
+	return &DefaultMessageRepo{messageDao: messageDao}
 }

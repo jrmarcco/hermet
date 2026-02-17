@@ -4,12 +4,13 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/jrmarcco/hermet/internal/errs"
-	"github.com/jrmarcco/hermet/internal/pkg/xgin"
-	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/jit/xjwt"
 	authv1 "github.com/jrmarcco/synp-api/api/go/auth/v1"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/jrmarcco/hermet/internal/errs"
+	"github.com/jrmarcco/hermet/internal/pkg/xgin"
+	"github.com/jrmarcco/hermet/internal/repo"
 )
 
 type AuthService interface {
@@ -23,20 +24,20 @@ const accountTypeEmail = "email"
 var _ AuthService = (*DefaultAuthService)(nil)
 
 type DefaultAuthService struct {
-	repo repo.UserRepo
+	userRepo repo.UserRepo
 
 	atManager xjwt.Manager[authv1.JwtPayload]
 	rtManager xjwt.Manager[authv1.JwtPayload]
 }
 
 func NewDefaultAuthService(
-	repo repo.UserRepo,
+	userRepo repo.UserRepo,
 
 	atManager xjwt.Manager[authv1.JwtPayload],
 	rtManager xjwt.Manager[authv1.JwtPayload],
 ) *DefaultAuthService {
 	return &DefaultAuthService{
-		repo: repo,
+		userRepo: userRepo,
 
 		atManager: atManager,
 		rtManager: rtManager,
@@ -53,7 +54,7 @@ func (s *DefaultAuthService) SignIn(ctx context.Context, account, accountType, c
 }
 
 func (s *DefaultAuthService) signInByEmail(ctx context.Context, account, credential string) (xgin.ContextUser, error) {
-	user, err := s.repo.FindByEmail(ctx, account)
+	user, err := s.userRepo.FindByEmail(ctx, account)
 	if err != nil {
 		return xgin.ContextUser{}, err
 	}
