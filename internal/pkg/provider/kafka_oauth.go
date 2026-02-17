@@ -135,7 +135,7 @@ var _ sasl.StateMachine = (*kafkaOAuthSession)(nil)
 type kafkaOAuthSession struct{}
 
 func (s *kafkaOAuthSession) Next(_ context.Context, _ []byte) (done bool, response []byte, err error) {
-	// OAUTHBEARER 是单次往返认证，第一次响应后就完成，
+	// OAUTHBEARER 是单次往返认证，第一次响应后就完成。
 	// 服务器可能发送空的成功响应。
 	return true, nil, nil
 }

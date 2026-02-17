@@ -12,8 +12,6 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-
-	"github.com/jrmarcco/hermet/internal/pkg/xgorm"
 )
 
 func newDBShardingClients(zapLogger *zap.Logger, lc fx.Lifecycle) (*xsync.Map[string, *gorm.DB], error) {
@@ -54,11 +52,11 @@ func newDBShardingClients(zapLogger *zap.Logger, lc fx.Lifecycle) (*xsync.Map[st
 	var dbs xsync.Map[string, *gorm.DB]
 	for _, s := range cfg.Sharding {
 		db, err := gorm.Open(postgres.Open(s.DSN), &gorm.Config{
-			Logger: xgorm.NewZapLogger(
+			Logger: NewGormLogger(
 				zapLogger,
-				xgorm.WithLogLevel(level),
-				xgorm.WithSlowThreshold(cfg.SlowThreshold),
-				xgorm.WithIgnoreRecordNotFoundError(cfg.IgnoreRecordNotFoundError),
+				WithLogLevel(level),
+				WithSlowThreshold(cfg.SlowThreshold),
+				WithIgnoreRecordNotFoundError(cfg.IgnoreRecordNotFoundError),
 			),
 		})
 		if err != nil {
