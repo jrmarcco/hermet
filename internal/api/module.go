@@ -1,8 +1,9 @@
 package api
 
 import (
-	"github.com/jrmarcco/hermet/internal/pkg/xgin"
 	"go.uber.org/fx"
+
+	"github.com/jrmarcco/hermet/internal/pkg/xgin"
 )
 
 var APIFxModule = fx.Module(
@@ -36,7 +37,7 @@ var APIFxModule = fx.Module(
 			fx.ResultTags(`group:"api_registry"`),
 		),
 
-		// TODO: 临时 api 接口。
+		// FIXME: 临时 api 接口。
 		fx.Annotate(
 			NewAdminHandler,
 			fx.As(new(xgin.RouteRegistry)),

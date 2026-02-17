@@ -7,13 +7,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmongo"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/jrmarcco/hermet/internal/pkg/xmongo"
 )
 
 type mongoFxResult struct {
@@ -30,7 +31,7 @@ type mongoConfig struct {
 
 	AuthSource string `mapstructure:"auth_source"`
 	Username   string `mapstructure:"username"`
-	Password   string `mapstructure:"password"`
+	Password   string `mapstructure:"password"` //#nosec G117 -- Configuration field for MongoDB authentication
 
 	MaxPoolSize            uint64        `mapstructure:"max_pool_size"`
 	MaxConnIdleTime        time.Duration `mapstructure:"max_conn_idle_time"`

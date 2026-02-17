@@ -46,8 +46,8 @@ type CDCService interface {
 	ProcessGroupMember(ctx context.Context, msg *xmq.Message) error
 
 	// ProcessOutboxEvent 处理 outbox 事件。
-	// 现有的 outbox 事件包含:
-	// - group_member 表的分流 ( 用于保证 user_group 的创建 )。
+	// 现有的 outbox 事件包含：
+	// 	1. group_member 表的分流 ( 用于保证 user_group 的创建 )。
 	// msg 是 debezium 推送到 kafka 的消息。
 	ProcessOutboxEvent(ctx context.Context, msg *xmq.Message) error
 }
@@ -209,9 +209,12 @@ func (s *DefaultCDCService) ProcessUserGroup(ctx context.Context, msg *xmq.Messa
 
 	if !(evt.IsCreate() || evt.IsUpdate()) {
 		// 只处理 create 和 update 事件。
-		// - create: 创建联系人关系事件。
-		// - update: 联系人被删除 ( 逻辑删除 LeftAt != 0 )
-		// 注意: 重新添加需要重新审批，所以不会触发 update 事件 ( LeftAt != 0 -> LeftAt = 0 )。
+		// - create
+		//   创建联系人关系事件。
+		// - update
+		//   联系人被删除 ( 逻辑删除 LeftAt != 0 )。
+		// 注意：
+		//  重新添加需要重新审批，所以不会触发 update 事件 ( LeftAt != 0 -> LeftAt = 0 )。
 		return nil
 	}
 
@@ -258,8 +261,8 @@ func (s *DefaultCDCService) createChannel(ctx context.Context, channel domain.Ch
 
 // fillInChannelRedundant 填充会话冗余信息。
 // 根据会话类型填充会话冗余信息。
-// - 单聊: 填充用户信息。
-// - 群聊: 填充群组信息。
+// - 单聊：填充用户信息。
+// - 群聊：填充群组信息。
 func (s *DefaultCDCService) fillInChannelRedundant(ctx context.Context, channel *domain.Channel) error {
 	switch channel.ChannelType {
 	case domain.ChannelTypeSingle:
@@ -303,8 +306,9 @@ func (s *DefaultCDCService) ProcessGroupMember(ctx context.Context, msg *xmq.Mes
 
 	if !(evt.IsCreate() || evt.IsUpdate()) {
 		// 只处理 create 和 update 事件。
-		// - create: 聊天群成员添加事件。
-		// - update:
+		// - create
+		// 	 聊天群成员添加事件。
+		// - update
 		// 	 1. 聊天群成员离开 ( 逻辑删除 LeftAt != 0 )。
 		//   2. 聊天群成员重新加入 ( LeftAt != 0 -> LeftAt = 0 )。
 		return nil

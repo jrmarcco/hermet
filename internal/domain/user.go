@@ -32,7 +32,7 @@ type BizUser struct {
 	// 账号信息。
 	Email  string // 邮箱
 	Mobile string // 手机号
-	Passwd string // 密码
+	Passwd string //#nosec G117 -- Database model field for user password hash
 
 	// 个人信息。
 	Avatar   string     // 头像

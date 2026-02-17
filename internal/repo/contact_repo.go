@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jrmarcco/jit/xsync"
+	"gorm.io/gorm"
+
 	"github.com/jrmarcco/hermet/internal/domain"
 	"github.com/jrmarcco/hermet/internal/errs"
 	"github.com/jrmarcco/hermet/internal/pkg/sharding"
 	"github.com/jrmarcco/hermet/internal/repo/dao"
-	"github.com/jrmarcco/jit/xsync"
-	"gorm.io/gorm"
 )
 
 type ContactRepo interface {
@@ -63,7 +64,7 @@ func NewTxContactRepo(
 }
 
 // Create 创建用户联系人。
-// 这里需要在同一个事务内写入多个数据表:
+// 这里需要在同一个事务内写入多个数据表：
 //   - contact
 //   - contact_view
 //   - contact_reverse_index
@@ -89,7 +90,7 @@ func (r *TxContactRepo) Create(ctx context.Context, contact domain.Contact) erro
 	}
 
 	// 4. 获取视图表以及反向索引表的分片信息。
-	//	注意:
+	//	注意：
 	// 	视图表和反向索引表和联系人表使用同一个 Sharder。
 	//	理论上这里不会出现 error，因此忽略 error 返回值。
 	cvDst, _ := r.cvShardHelper.DstFromSharder(sharder)
