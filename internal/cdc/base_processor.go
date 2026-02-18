@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocess"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocessor"
 )
 
 // ProcessorConfig 是 CDC 处理器的配置。
@@ -23,27 +23,27 @@ var _ Processor = (*BaseProcessor)(nil)
 
 // BaseProcessor 是 CDC 基础处理器，封装了分片消费的逻辑。
 type BaseProcessor struct {
-	*xprocess.ConsumeProcessor
+	*xprocessor.ConsumeProcessor
 }
 
 // NewBaseProcessor 创建一个新的 CDC 基础处理器。
 func NewBaseProcessor(
 	cfg ProcessorConfig,
-	handler xprocess.MsgHandler,
-	factory xconsume.ConsumerFactory,
+	handler xprocessor.MsgHandler,
+	factory xconsumer.ConsumerFactory,
 ) *BaseProcessor {
-	topics := make([]xprocess.TopicConfig, 0, cfg.DBShardCount*cfg.TBShardCount)
+	topics := make([]xprocessor.TopicConfig, 0, cfg.DBShardCount*cfg.TBShardCount)
 	for i := 0; i < cfg.DBShardCount; i++ {
 		for j := 0; j < cfg.TBShardCount; j++ {
-			topics = append(topics, xprocess.TopicConfig{
+			topics = append(topics, xprocessor.TopicConfig{
 				Topic:   fmt.Sprintf(cfg.TopicPattern, i, j),
 				GroupID: cfg.GroupID,
 			})
 		}
 	}
 
-	consumerProcessor := xprocess.NewConsumeProcessor(
-		xprocess.ConsumeProcessorConfig{
+	consumerProcessor := xprocessor.NewConsumeProcessor(
+		xprocessor.ConsumeProcessorConfig{
 			Topics:        topics,
 			Handler:       handler,
 			HandleTimeout: cfg.HandleTimeout,

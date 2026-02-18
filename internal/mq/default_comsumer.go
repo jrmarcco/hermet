@@ -5,21 +5,21 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocess"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocessor"
 )
 
 var _ Consumer = (*DefaultConsumer)(nil)
 
 type DefaultConsumer struct {
-	consumer *xprocess.ConsumeProcessor
+	consumer *xprocessor.ConsumeProcessor
 }
 
 func NewDefaultConsumer(
-	factory xconsume.ConsumerFactory,
+	factory xconsumer.ConsumerFactory,
 	topic, groupID string,
 	partitions int32,
-	handler xprocess.MsgHandler,
+	handler xprocessor.MsgHandler,
 	handleTimeout time.Duration,
 ) (*DefaultConsumer, error) {
 	if topic == "" || groupID == "" || partitions <= 0 || handler == nil {
@@ -27,17 +27,17 @@ func NewDefaultConsumer(
 	}
 
 	// 为每个分区创建主题配置 ( Kafka 会自动分配分区 )。
-	topics := make([]xprocess.TopicConfig, partitions)
+	topics := make([]xprocessor.TopicConfig, partitions)
 	for i := range partitions {
-		topics[i] = xprocess.TopicConfig{
+		topics[i] = xprocessor.TopicConfig{
 			Topic:   topic,
 			GroupID: groupID,
 		}
 	}
 
 	// 创建消费处理器。
-	consumer := xprocess.NewConsumeProcessor(
-		xprocess.ConsumeProcessorConfig{
+	consumer := xprocessor.NewConsumeProcessor(
+		xprocessor.ConsumeProcessorConfig{
 			Topics:        topics,
 			Handler:       handler,
 			HandleTimeout: handleTimeout,

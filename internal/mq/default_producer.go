@@ -4,22 +4,22 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocess"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproduce"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocessor"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproducer"
 )
 
 var _ Producer = (*DefaultProducer)(nil)
 
 type DefaultProducer struct {
-	producer *xprocess.ProduceProcessor
+	producer *xprocessor.ProduceProcessor
 }
 
-func NewDefaultProducer(topic string, producer xproduce.Producer) (*DefaultProducer, error) {
+func NewDefaultProducer(topic string, producer xproducer.Producer) (*DefaultProducer, error) {
 	if topic == "" {
 		return nil, fmt.Errorf("topic is required")
 	}
 
-	pp, err := xprocess.NewProduceProcessor(topic, producer)
+	pp, err := xprocessor.NewProduceProcessor(topic, producer)
 	if err != nil {
 		return nil, err
 	}

@@ -4,13 +4,14 @@ import (
 	"context"
 	"time"
 
-	"github.com/jrmarcco/hermet/internal/mq"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproduce"
-	"github.com/jrmarcco/hermet/internal/service"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/jrmarcco/hermet/internal/mq"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproducer"
+	"github.com/jrmarcco/hermet/internal/service"
 )
 
 // mq_module.go 负责配置消息队列相关的依赖注入。
@@ -46,8 +47,8 @@ type mqConfig struct {
 type gmpFxParams struct {
 	fx.In
 
-	Producer xproduce.Producer
-	Factory  xconsume.ConsumerFactory
+	Producer xproducer.Producer
+	Factory  xconsumer.ConsumerFactory
 
 	GroupService service.GroupService
 
@@ -92,7 +93,7 @@ func newGroupMemberMqProcessor(params gmpFxParams) (*mq.LoopbackProcessor, error
 	return gmp, nil
 }
 
-func newDMsgProducer(producer xproduce.Producer) (*mq.DefaultProducer, error) {
+func newDMsgProducer(producer xproducer.Producer) (*mq.DefaultProducer, error) {
 	cfg := mqConfig{}
 	if err := viper.UnmarshalKey("mq.message_downstream", &cfg); err != nil {
 		return nil, err
@@ -109,7 +110,7 @@ func newDMsgProducer(producer xproduce.Producer) (*mq.DefaultProducer, error) {
 type umConsumerFxParams struct {
 	fx.In
 
-	Factory        xconsume.ConsumerFactory
+	Factory        xconsumer.ConsumerFactory
 	MessageService service.MessageService
 	Logger         *zap.Logger
 	Lifecycle      fx.Lifecycle

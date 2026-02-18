@@ -1,11 +1,12 @@
 package provider
 
 import (
+	"go.uber.org/fx"
+
 	"github.com/jrmarcco/hermet/internal/pkg/xgin"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin/xsession"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproduce"
-	"go.uber.org/fx"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproducer"
 )
 
 var (
@@ -31,8 +32,8 @@ var (
 		"kafka-producer",
 		fx.Provide(
 			fx.Annotate(
-				xproduce.NewKafkaProducer,
-				fx.As(new(xproduce.Producer)),
+				xproducer.NewKafkaProducer,
+				fx.As(new(xproducer.Producer)),
 			),
 		),
 	)
@@ -40,8 +41,8 @@ var (
 		"kafka-consumer",
 		fx.Provide(
 			fx.Annotate(
-				xconsume.NewKafkaConsumerFactory,
-				fx.As(new(xconsume.ConsumerFactory)),
+				xconsumer.NewKafkaConsumerFactory,
+				fx.As(new(xconsumer.ConsumerFactory)),
 			),
 		),
 	)

@@ -3,8 +3,8 @@ package cdc
 import (
 	"time"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocess"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocessor"
 )
 
 type UserGroupProcessor struct {
@@ -15,8 +15,8 @@ func NewUserGroupProcessor(
 	dbShardCount, tbShardCount int,
 	groupID string,
 	handleTimeout time.Duration,
-	factory xconsume.ConsumerFactory,
-	handler xprocess.MsgHandler,
+	factory xconsumer.ConsumerFactory,
+	handler xprocessor.MsgHandler,
 ) *UserGroupProcessor {
 	return &UserGroupProcessor{
 		BaseProcessor: NewBaseProcessor(

@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocess"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproduce"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocessor"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproducer"
 )
 
 var _ Processor = (*LoopbackProcessor)(nil)
@@ -19,11 +19,11 @@ type LoopbackProcessor struct {
 
 // NewLoopbackProcessor 创建一个新的回环处理器。
 func NewLoopbackProcessor(
-	producer xproduce.Producer,
-	factory xconsume.ConsumerFactory,
+	producer xproducer.Producer,
+	factory xconsumer.ConsumerFactory,
 	topic, groupID string,
 	partitions int32,
-	handler xprocess.MsgHandler,
+	handler xprocessor.MsgHandler,
 	handleTimeout time.Duration,
 ) (*LoopbackProcessor, error) {
 	dp, err := NewDefaultProducer(topic, producer)

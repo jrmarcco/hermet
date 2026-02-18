@@ -4,12 +4,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/jrmarcco/hermet/internal/cdc"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
-	"github.com/jrmarcco/hermet/internal/service"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/jrmarcco/hermet/internal/cdc"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
+	"github.com/jrmarcco/hermet/internal/service"
 )
 
 // cdc_module.go 负责配置 CDC ( Change Data Capture ) 相关的依赖注入。
@@ -33,7 +34,7 @@ type cdcProcessorConfig struct {
 
 func newContactReviewCdcProcessor(
 	cdcService service.CDCService,
-	factory xconsume.ConsumerFactory,
+	factory xconsumer.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
 ) (*cdc.ContactReviewProcessor, error) {
@@ -69,7 +70,7 @@ func newContactReviewCdcProcessor(
 
 func newContactCdcProcessor(
 	cdcService service.CDCService,
-	factory xconsume.ConsumerFactory,
+	factory xconsumer.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
 ) (*cdc.ContactProcessor, error) {
@@ -105,7 +106,7 @@ func newContactCdcProcessor(
 
 func newUserGroupCdcProcessor(
 	cdcService service.CDCService,
-	factory xconsume.ConsumerFactory,
+	factory xconsumer.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
 ) (*cdc.UserGroupProcessor, error) {
@@ -138,7 +139,7 @@ func newUserGroupCdcProcessor(
 
 func newGroupMemberCdcProcessor(
 	cdcService service.CDCService,
-	factory xconsume.ConsumerFactory,
+	factory xconsumer.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
 ) (*cdc.GroupMemberProcessor, error) {
@@ -171,7 +172,7 @@ func newGroupMemberCdcProcessor(
 
 func newOutboxEventCdcProcessor(
 	cdcService service.CDCService,
-	factory xconsume.ConsumerFactory,
+	factory xconsumer.ConsumerFactory,
 	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
 ) (*cdc.OutboxEventProcessor, error) {

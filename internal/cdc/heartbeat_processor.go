@@ -9,11 +9,12 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/jrmarcco/hermet/internal/cdc/event"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocess"
-	"go.uber.org/zap"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocessor"
 )
 
 // HeartbeatStatus 心跳状态。
@@ -146,7 +147,7 @@ type HeartbeatProcessor struct {
 
 func NewHeartbeatProcessor(
 	config HeartbeatProcessorConfig,
-	factory xconsume.ConsumerFactory,
+	factory xconsumer.ConsumerFactory,
 	monitor *HeartbeatMonitor,
 	logger *zap.Logger,
 ) (*HeartbeatProcessor, error) {
@@ -163,16 +164,16 @@ func NewHeartbeatProcessor(
 		logger:  logger,
 	}
 
-	topics := make([]xprocess.TopicConfig, 0, len(config.DataSources))
+	topics := make([]xprocessor.TopicConfig, 0, len(config.DataSources))
 	for _, ds := range config.DataSources {
-		topics = append(topics, xprocess.TopicConfig{
+		topics = append(topics, xprocessor.TopicConfig{
 			Topic:   fmt.Sprintf(config.TopicPattern, ds),
 			GroupID: config.GroupID,
 		})
 	}
 
-	consumerProcessor := xprocess.NewConsumeProcessor(
-		xprocess.ConsumeProcessorConfig{
+	consumerProcessor := xprocessor.NewConsumeProcessor(
+		xprocessor.ConsumeProcessorConfig{
 			Topics:        topics,
 			Handler:       processor.processHeartbeat,
 			HandleTimeout: time.Second,

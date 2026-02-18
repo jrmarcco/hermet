@@ -15,14 +15,14 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
 )
 
 type kafkaFxResult struct {
 	fx.Out
 
 	Writer           *kafka.Writer
-	ReaderCreateFunc xconsume.KafkaReaderCreateFunc
+	ReaderCreateFunc xconsumer.KafkaReaderCreateFunc
 }
 
 type kafkaConfig struct {

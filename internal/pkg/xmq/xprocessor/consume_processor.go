@@ -1,4 +1,4 @@
-package xprocess
+package xprocessor
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsume"
+	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
 )
 
 // TopicConfig 定义单个消费者的配置。
@@ -27,14 +27,14 @@ type ConsumeProcessorConfig struct {
 // 它负责管理多个消费者的生命周期，并将消息分发给处理函数。
 type ConsumeProcessor struct {
 	cfg     ConsumeProcessorConfig
-	factory xconsume.ConsumerFactory
+	factory xconsumer.ConsumerFactory
 
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 }
 
 // NewConsumeProcessor 创建一个新的消费处理器。
-func NewConsumeProcessor(cfg ConsumeProcessorConfig, factory xconsume.ConsumerFactory) *ConsumeProcessor {
+func NewConsumeProcessor(cfg ConsumeProcessorConfig, factory xconsumer.ConsumerFactory) *ConsumeProcessor {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &ConsumeProcessor{
 		cfg:     cfg,

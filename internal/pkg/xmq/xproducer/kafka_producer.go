@@ -1,11 +1,12 @@
-package xproduce
+package xproducer
 
 import (
 	"context"
 	"log/slog"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/segmentio/kafka-go"
+
+	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 )
 
 var _ Producer = (*KafkaProducer)(nil)

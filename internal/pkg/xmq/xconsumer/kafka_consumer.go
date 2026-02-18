@@ -1,4 +1,4 @@
-package xconsume
+package xconsumer
 
 import (
 	"context"
@@ -7,8 +7,9 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/segmentio/kafka-go"
+
+	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 )
 
 const defaultMessageChanSize = 1024
