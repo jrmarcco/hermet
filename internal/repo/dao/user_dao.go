@@ -18,7 +18,7 @@ type BizUser struct {
 	// 账号信息。
 	Email  string `gorm:"column:email"`
 	Mobile string `gorm:"column:mobile"`
-	Passwd string `gorm:"column:passwd"` //#nosec G117 -- Database model field for user password hash
+	Passwd string `gorm:"column:passwd"` //nolint:gosec // Database model field for user password hash
 
 	// 个人信息。
 	Nickname string `gorm:"column:nickname"`

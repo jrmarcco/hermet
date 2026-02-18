@@ -68,7 +68,7 @@ type kafkaSaslConfig struct {
 
 	// SCRAM 认证配置
 	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"` //#nosec G117 -- Configuration field for Kafka SASL authentication
+	Password string `mapstructure:"password"` //nolint:gosec // Configuration field for Kafka SASL authentication
 
 	// OAuth 认证配置
 	OAuth kafkaOAuthConfig `mapstructure:"oauth"`
@@ -77,7 +77,7 @@ type kafkaSaslConfig struct {
 type kafkaOAuthConfig struct {
 	Endpoint     string `mapstructure:"endpoint"`
 	ClientID     string `mapstructure:"client_id"`
-	ClientSecret string `mapstructure:"client_secret"` //#nosec G117 -- Configuration field for OAuth client authentication
+	ClientSecret string `mapstructure:"client_secret"` //nolint:gosec // Configuration field for OAuth client authentication
 }
 
 func newKafkaClient(zapLogger *zap.Logger, lifecycle fx.Lifecycle) (kafkaFxResult, error) {
