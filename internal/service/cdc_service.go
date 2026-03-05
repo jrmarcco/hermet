@@ -7,15 +7,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/jrmarcco/hermet/internal/cdc/event"
 	"github.com/jrmarcco/hermet/internal/domain"
 	"github.com/jrmarcco/hermet/internal/errs"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/repo"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 const (

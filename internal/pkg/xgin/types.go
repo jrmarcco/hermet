@@ -2,6 +2,8 @@ package xgin
 
 import "github.com/gin-gonic/gin"
 
+//go:generate mockgen -source=types.go -destination=mock/xgin.mock.go -package=xginmock -typed RouteRegistry,HandlerFuncBuilder
+
 const (
 	HeaderNameAccessToken = "x-access-token"
 	ContextKeyAuthUser    = "auth-user"

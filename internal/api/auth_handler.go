@@ -8,12 +8,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-
 	"github.com/jrmarcco/hermet/internal/errs"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin/xsession"
 	"github.com/jrmarcco/hermet/internal/service"
+	"go.uber.org/zap"
 )
 
 var _ xgin.RouteRegistry = (*AuthHandler)(nil)

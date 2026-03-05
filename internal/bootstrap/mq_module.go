@@ -4,14 +4,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/spf13/viper"
-	"go.uber.org/fx"
-	"go.uber.org/zap"
-
 	"github.com/jrmarcco/hermet/internal/mq"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproducer"
 	"github.com/jrmarcco/hermet/internal/service"
+	"github.com/spf13/viper"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
 // mq_module.go 负责配置消息队列相关的依赖注入。

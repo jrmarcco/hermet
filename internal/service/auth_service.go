@@ -4,13 +4,12 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/jrmarcco/jit/xjwt"
-	authv1 "github.com/jrmarcco/synp-api/api/go/auth/v1"
-	"golang.org/x/crypto/bcrypt"
-
 	"github.com/jrmarcco/hermet/internal/errs"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin"
 	"github.com/jrmarcco/hermet/internal/repo"
+	"github.com/jrmarcco/jit/xjwt"
+	authv1 "github.com/jrmarcco/synp-api/api/go/auth/v1"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService interface {

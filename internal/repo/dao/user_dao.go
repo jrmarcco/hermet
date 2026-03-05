@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jrmarcco/hermet/internal/pkg/sharding"
 	"github.com/jrmarcco/jit/xsync"
 	"gorm.io/gorm"
-
-	"github.com/jrmarcco/hermet/internal/pkg/sharding"
 )
 
 // BizUser 业务用户表。

@@ -9,12 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/jrmarcco/hermet/internal/cdc/event"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocessor"
+	"go.uber.org/zap"
 )
 
 // HeartbeatStatus 心跳状态。

@@ -1,9 +1,8 @@
 package api
 
 import (
-	"go.uber.org/fx"
-
 	"github.com/jrmarcco/hermet/internal/pkg/xgin"
+	"go.uber.org/fx"
 )
 
 var APIFxModule = fx.Module(

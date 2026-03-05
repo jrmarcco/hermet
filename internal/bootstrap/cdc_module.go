@@ -4,13 +4,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/spf13/viper"
-	"go.uber.org/fx"
-	"go.uber.org/zap"
-
 	"github.com/jrmarcco/hermet/internal/cdc"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
 	"github.com/jrmarcco/hermet/internal/service"
+	"github.com/spf13/viper"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
 // cdc_module.go 负责配置 CDC ( Change Data Capture ) 相关的依赖注入。

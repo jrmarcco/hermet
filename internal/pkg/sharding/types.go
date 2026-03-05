@@ -5,6 +5,8 @@ import (
 	"fmt"
 )
 
+//go:generate mockgen -source=types.go -destination=mock/sharding.mock.go -package=shardingmock -typed ShardValExtractor,Strategy
+
 // ShardValExtractor 是提取分片值的接口。
 type ShardValExtractor interface {
 	ExtractShardVal(id uint64) uint64
