@@ -1,16 +1,23 @@
 mq:
-  group_member_add:
-    topic: event_group_member_add
-    group_id: hermet-group-member-add-group
-    partitions: 6
-    handle_timeout: 16s  # 成员添加有指数退避重试机制 ( 1s -> 2s -> 4s ) 需要一个稍长的超时时间
-  message_upstream:
-    topic: event_message_upstream
-    group_id: hermet-message-upstream-group
-    partitions: 6
-    handle_timeout: 16s
-  message_downstream:
-    topic: event_message_downstream
+  producer:
+    group_member_add:
+      topic: event_group_member_add
+    message_downstream:
+      topic: event_message_downstream
+  consumer:
+    group_member_add:
+      topic: event_group_member_add
+      group_id: hermet-group-member-add-group
+      partitions: 6
+      handle_timeout: 16s  # 成员添加有指数退避重试机制 ( 1s -> 2s -> 4s ) 需要一个稍长的超时时间
+    message_upstream:
+      topic: event_message_upstream
+      group_id: hermet-message-upstream-group
+      partitions: 6
+      handle_timeout: 16s
+
+
+
 
   cdc:
     user:

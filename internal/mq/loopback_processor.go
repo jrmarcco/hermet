@@ -1,58 +1,49 @@
 package mq
 
-import (
-	"context"
-	"time"
+// var _ Processor = (*LoopbackProcessor)(nil)
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocessor"
-	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproducer"
-)
+// // LoopbackProcessor 是回环处理器 ( 即消费和生产同一个 Topic 的消息 )。
+// type LoopbackProcessor struct {
+// 	consumer *DefaultConsumer
+// 	producer *DefaultProducer
+// }
 
-var _ Processor = (*LoopbackProcessor)(nil)
+// // NewLoopbackProcessor 创建一个新的回环处理器。
+// func NewLoopbackProcessor(
+// 	producer xproducer.Producer,
+// 	factory xconsumer.ConsumerFactory,
+// 	topic, groupID string,
+// 	partitions int32,
+// 	handler xprocessor.MsgHandler,
+// 	handleTimeout time.Duration,
+// ) (*LoopbackProcessor, error) {
+// 	dp, err := NewDefaultProducer(topic, producer)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-// LoopbackProcessor 是回环处理器 ( 即消费和生产同一个 Topic 的消息 )。
-type LoopbackProcessor struct {
-	consumer *DefaultConsumer
-	producer *DefaultProducer
-}
+// 	dc, err := NewDefaultConsumer(factory, topic, groupID, partitions, handler, handleTimeout)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-// NewLoopbackProcessor 创建一个新的回环处理器。
-func NewLoopbackProcessor(
-	producer xproducer.Producer,
-	factory xconsumer.ConsumerFactory,
-	topic, groupID string,
-	partitions int32,
-	handler xprocessor.MsgHandler,
-	handleTimeout time.Duration,
-) (*LoopbackProcessor, error) {
-	dp, err := NewDefaultProducer(topic, producer)
-	if err != nil {
-		return nil, err
-	}
+// 	return &LoopbackProcessor{
+// 		producer: dp,
+// 		consumer: dc,
+// 	}, nil
+// }
 
-	dc, err := NewDefaultConsumer(factory, topic, groupID, partitions, handler, handleTimeout)
-	if err != nil {
-		return nil, err
-	}
+// // Start 启动处理器 ( 仅用于兼容 xprocess.Processor 接口 )。
+// func (p *LoopbackProcessor) Start(ctx context.Context) error {
+// 	return p.consumer.Start(ctx)
+// }
 
-	return &LoopbackProcessor{
-		producer: dp,
-		consumer: dc,
-	}, nil
-}
+// // Stop 停止处理器。
+// func (p *LoopbackProcessor) Stop(ctx context.Context) error {
+// 	return p.consumer.Stop(ctx)
+// }
 
-// Start 启动处理器 ( 仅用于兼容 xprocess.Processor 接口 )。
-func (p *LoopbackProcessor) Start(ctx context.Context) error {
-	return p.consumer.Start(ctx)
-}
-
-// Stop 停止处理器。
-func (p *LoopbackProcessor) Stop(ctx context.Context) error {
-	return p.consumer.Stop(ctx)
-}
-
-// Produce 发送消息到主题。
-func (p *LoopbackProcessor) Produce(ctx context.Context, key, val []byte) error {
-	return p.producer.Produce(ctx, key, val)
-}
+// // Produce 发送消息到主题。
+// func (p *LoopbackProcessor) Produce(ctx context.Context, key, val []byte) error {
+// 	return p.producer.Produce(ctx, key, val)
+// }

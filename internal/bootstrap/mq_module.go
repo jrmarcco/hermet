@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jrmarcco/hermet/internal/mq"
@@ -19,20 +20,19 @@ var MqFxModule = fx.Module(
 	"mq",
 	fx.Provide(
 		fx.Annotate(
-			newGroupMemberMqProcessor,
+			newGroupMemberProducer,
 			fx.As(new(mq.Producer)),
 			fx.ResultTags(`name:"group_member_producer"`),
 		),
 		fx.Annotate(
-			newDMsgProducer,
+			newDownwstreamMsgProducer,
 			fx.As(new(mq.Producer)),
 			fx.ResultTags(`name:"downstream_msg_producer"`),
 		),
-		fx.Annotate(
-			newUMsgConsumer,
-			fx.As(new(mq.Consumer)),
-			fx.ResultTags(`name:"upstream_msg_consumer"`),
-		),
+	),
+	fx.Invoke(
+		startGroupMemberConsumer,
+		startUpstreamMsgConsumer,
 	),
 )
 
@@ -43,59 +43,26 @@ type mqConfig struct {
 	HandleTimeout time.Duration `mapstructure:"handle_timeout"`
 }
 
-type gmpFxParams struct {
-	fx.In
-
-	Producer xproducer.Producer
-	Factory  xconsumer.ConsumerFactory
-
-	GroupService service.GroupService
-
-	Logger    *zap.Logger
-	Lifecycle fx.Lifecycle
-}
-
-// newGroupMemberProcessor 创建一个新的聊天群成员处理器。
-func newGroupMemberMqProcessor(params gmpFxParams) (*mq.LoopbackProcessor, error) {
+// newGroupMemberProducer 创建一个聊天群成员消息生产者。
+func newGroupMemberProducer(producer xproducer.Producer) (*mq.DefaultProducer, error) {
 	cfg := mqConfig{}
-	if err := viper.UnmarshalKey("mq.group_member_add", &cfg); err != nil {
-		return nil, err
+	if err := viper.UnmarshalKey("mq.producer.group_member_add", &cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal group member producer config: %w", err)
 	}
 
-	gmp, err := mq.NewLoopbackProcessor(
-		params.Producer,
-		params.Factory,
-
-		cfg.Topic,
-		cfg.GroupID,
-		cfg.Partitions,
-
-		params.GroupService.ProcessAddMembersMsg,
-		cfg.HandleTimeout,
-	)
+	gmp, err := mq.NewDefaultProducer(cfg.Topic, producer)
 	if err != nil {
 		return nil, err
 	}
 
-	params.Lifecycle.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			if err := gmp.Start(ctx); err != nil {
-				params.Logger.Error("failed to start group member consumer", zap.Error(err))
-				return err
-			}
-			return nil
-		},
-		OnStop: func(ctx context.Context) error {
-			return gmp.Stop(ctx)
-		},
-	})
 	return gmp, nil
 }
 
-func newDMsgProducer(producer xproducer.Producer) (*mq.DefaultProducer, error) {
+// newDownwstreamMsgProducer 创建一个下游消息生产者。
+func newDownwstreamMsgProducer(producer xproducer.Producer) (*mq.DefaultProducer, error) {
 	cfg := mqConfig{}
-	if err := viper.UnmarshalKey("mq.message_downstream", &cfg); err != nil {
-		return nil, err
+	if err := viper.UnmarshalKey("mq.producer.message_downstream", &cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal downstream message producer config: %w", err)
 	}
 
 	dp, err := mq.NewDefaultProducer(cfg.Topic, producer)
@@ -106,19 +73,65 @@ func newDMsgProducer(producer xproducer.Producer) (*mq.DefaultProducer, error) {
 	return dp, nil
 }
 
-type umConsumerFxParams struct {
+type gmcFxParams struct {
+	fx.In
+
+	Factory      xconsumer.ConsumerFactory
+	GroupService service.GroupService
+
+	Logger    *zap.Logger
+	Lifecycle fx.Lifecycle
+}
+
+// startGroupMemberConsumer 注册聊天群成员消费者生命周期。
+func startGroupMemberConsumer(params gmcFxParams) error {
+	cfg := mqConfig{}
+	if err := viper.UnmarshalKey("mq.consumer.group_member_add", &cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal group member consumer config: %w", err)
+	}
+
+	consumer, err := mq.NewDefaultConsumer(
+		params.Factory,
+		cfg.Topic,
+		cfg.GroupID,
+		cfg.Partitions,
+		params.GroupService.ProcessAddMembersMsg,
+		cfg.HandleTimeout,
+	)
+	if err != nil {
+		return err
+	}
+
+	params.Lifecycle.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			if err := consumer.Start(ctx); err != nil {
+				params.Logger.Error("failed to start group member consumer", zap.Error(err))
+				return err
+			}
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			return consumer.Stop(ctx)
+		},
+	})
+	return nil
+}
+
+type umcFxParams struct {
 	fx.In
 
 	Factory        xconsumer.ConsumerFactory
 	MessageService service.MessageService
-	Logger         *zap.Logger
-	Lifecycle      fx.Lifecycle
+
+	Logger    *zap.Logger
+	Lifecycle fx.Lifecycle
 }
 
-func newUMsgConsumer(params umConsumerFxParams) (*mq.DefaultConsumer, error) {
+// startUpstreamMsgConsumer 注册上游消息消费者生命周期。
+func startUpstreamMsgConsumer(params umcFxParams) error {
 	cfg := mqConfig{}
-	if err := viper.UnmarshalKey("mq.message_upstream", &cfg); err != nil {
-		return nil, err
+	if err := viper.UnmarshalKey("mq.consumer.message_upstream", &cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal upstream message consumer config: %w", err)
 	}
 
 	dc, err := mq.NewDefaultConsumer(
@@ -132,7 +145,7 @@ func newUMsgConsumer(params umConsumerFxParams) (*mq.DefaultConsumer, error) {
 		cfg.HandleTimeout,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	params.Lifecycle.Append(fx.Hook{
@@ -151,5 +164,5 @@ func newUMsgConsumer(params umConsumerFxParams) (*mq.DefaultConsumer, error) {
 			return nil
 		},
 	})
-	return dc, nil
+	return nil
 }

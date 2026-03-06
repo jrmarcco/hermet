@@ -28,6 +28,9 @@ var ServiceFxModule = fx.Module(
 
 		// Channel service
 		fx.Annotate(NewDefaultChannelService, fx.As(new(ChannelService))),
+
+		// Message service
+		fx.Annotate(NewDefaultMessageService, fx.As(new(MessageService))),
 	),
 )
 

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -29,21 +30,19 @@ type App struct {
 func (app *App) Start() error {
 	go func() {
 		if err := app.svr.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			app.logger.Fatal("[ioc] failed to start http server", zap.Error(err))
+			app.logger.Fatal("[app] failed to start http server", zap.Error(err))
 		}
 	}()
 
+	app.logger.Info("[app] http server started")
 	return nil
 }
 
 func (app *App) Stop(ctx context.Context) error {
-	app.logger.Info("[ioc] stopping http server ...")
 	if err := app.svr.Shutdown(ctx); err != nil {
-		app.logger.Error("[ioc] failed to shutdown http server", zap.Error(err))
+		app.logger.Error("[app] failed to shutdown http server", zap.Error(err))
 		return err
 	}
-
-	app.logger.Info("[ioc] http server stopped")
 	return nil
 }
 
@@ -60,8 +59,19 @@ type appFxParams struct {
 	Lifecycle fx.Lifecycle
 }
 
-func InitApp(params appFxParams) *App {
-	cfg := loadWebConfig()
+type webConfig struct {
+	Addr              string        `mapstructure:"addr"`
+	ReadHeaderTimeout time.Duration `mapstructure:"read_header_timeout"` // 读取请求头超时，防止 Slowloris 攻击
+	ReadTimeout       time.Duration `mapstructure:"read_timeout"`        // 读取整个请求超时，IM 请求通常较小
+	WriteTimeout      time.Duration `mapstructure:"write_timeout"`       // 写响应超时，历史记录数据量可能较大
+	IdleTimeout       time.Duration `mapstructure:"idle_timeout"`        // Keep-Alive 空闲超时，IM 客户端会频繁请求
+}
+
+func InitApp(params appFxParams) (*App, error) {
+	cfg, err := loadWebConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load web config: %w", err)
+	}
 
 	// 注册 Middleware ( AOP )。
 	if len(params.Builders) > 0 {
@@ -101,21 +111,13 @@ func InitApp(params appFxParams) *App {
 		},
 	})
 
-	return app
+	return app, nil
 }
 
-type webConfig struct {
-	Addr              string        `mapstructure:"addr"`
-	ReadHeaderTimeout time.Duration `mapstructure:"read_header_timeout"` // 读取请求头超时，防止 Slowloris 攻击
-	ReadTimeout       time.Duration `mapstructure:"read_timeout"`        // 读取整个请求超时，IM 请求通常较小
-	WriteTimeout      time.Duration `mapstructure:"write_timeout"`       // 写响应超时，历史记录数据量可能较大
-	IdleTimeout       time.Duration `mapstructure:"idle_timeout"`        // Keep-Alive 空闲超时，IM 客户端会频繁请求
-}
-
-func loadWebConfig() *webConfig {
+func loadWebConfig() (*webConfig, error) {
 	cfg := &webConfig{}
 	if err := viper.UnmarshalKey("hermet.web", cfg); err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to unmarshal web config: %w", err)
 	}
-	return cfg
+	return cfg, nil
 }

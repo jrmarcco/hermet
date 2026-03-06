@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 
-	"github.com/jrmarcco/hermet/internal/mq"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 )
 
@@ -13,16 +12,10 @@ type MessageService interface {
 
 var _ MessageService = (*DefaultMessageService)(nil)
 
-type DefaultMessageService struct {
-	uMsgConsumer mq.Consumer
-	dMsgProducer mq.Producer
-}
+type DefaultMessageService struct{}
 
-func NewDefaultMessageService(uMsgConsumer mq.Consumer, dMsgProducer mq.Producer) *DefaultMessageService {
-	return &DefaultMessageService{
-		uMsgConsumer: uMsgConsumer,
-		dMsgProducer: dMsgProducer,
-	}
+func NewDefaultMessageService() *DefaultMessageService {
+	return &DefaultMessageService{}
 }
 
 func (s *DefaultMessageService) ProcessUpstreamMsg(_ context.Context, _ *xmq.Message) error {

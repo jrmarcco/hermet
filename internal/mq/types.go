@@ -6,7 +6,7 @@ import (
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocessor"
 )
 
-//go:generate mockgen -source=types.go -destination=mock/mq.mock.go -package=mqmock -typed Producer,Consumer,Processor
+//go:generate mockgen -source=types.go -destination=mock/mq.mock.go -package=mqmock -typed Producer,Consumer
 
 // Producer 是业务消息生产者接口。
 type Producer interface {
@@ -16,10 +16,4 @@ type Producer interface {
 // Consumer 是业务消息消费者接口。
 type Consumer interface {
 	xprocessor.Processor
-}
-
-// Processor 是业务消息处理器接口 ( 组合了 Producer 和 Consumer )。
-type Processor interface {
-	Producer
-	Consumer
 }
