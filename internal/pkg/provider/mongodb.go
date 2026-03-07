@@ -49,7 +49,7 @@ type mongoTLSConfig struct {
 	CertPem string `mapstructure:"cert_pem"`
 }
 
-func newMongoClient(zapLogger *zap.Logger, lifecycle fx.Lifecycle) (mongoFxResult, error) {
+func newMongoClient(logger *zap.Logger, lifecycle fx.Lifecycle) (mongoFxResult, error) {
 	cfg := mongoConfig{}
 	if err := viper.UnmarshalKey("mongodb", &cfg); err != nil {
 		return mongoFxResult{}, err
@@ -57,12 +57,10 @@ func newMongoClient(zapLogger *zap.Logger, lifecycle fx.Lifecycle) (mongoFxResul
 
 	caCertPool := x509.NewCertPool()
 	if !caCertPool.AppendCertsFromPEM([]byte(cfg.TLS.CaCert)) {
-		zapLogger.Error("[ioc] failed to append CA certificate to pool for MongoDB")
 		return mongoFxResult{}, fmt.Errorf("failed to append CA certificate to pool for MongoDB")
 	}
 	clientCert, err := tls.X509KeyPair([]byte(cfg.TLS.CertPem), []byte(cfg.TLS.CertKey))
 	if err != nil {
-		zapLogger.Error("[ioc] failed to load client cert for MongoDB", zap.Error(err))
 		return mongoFxResult{}, fmt.Errorf("failed to load client cert for MongoDB: %w", err)
 	}
 	tlsConfig := &tls.Config{
@@ -105,7 +103,7 @@ func newMongoClient(zapLogger *zap.Logger, lifecycle fx.Lifecycle) (mongoFxResul
 				return err
 			}
 
-			zapLogger.Info("[ioc] successfully connected to mongodb", zap.String("uri", cfg.URI))
+			logger.Info("[ioc] successfully connected to mongodb", zap.String("uri", cfg.URI))
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
@@ -113,11 +111,11 @@ func newMongoClient(zapLogger *zap.Logger, lifecycle fx.Lifecycle) (mongoFxResul
 			defer cancel()
 
 			if err := client.Disconnect(stopCtx); err != nil {
-				zapLogger.Error("[ioc] failed to disconnect from mongodb", zap.Error(err))
+				logger.Error("[ioc] failed to disconnect from mongodb", zap.Error(err))
 				return err
 			}
 
-			zapLogger.Info("[ioc] successfully disconnected from mongodb")
+			logger.Info("[ioc] successfully disconnected from mongodb")
 			return nil
 		},
 	})
