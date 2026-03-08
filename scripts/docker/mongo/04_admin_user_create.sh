@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
 echo "=========================================="
 echo "MongoDB 管理员用户创建脚本"

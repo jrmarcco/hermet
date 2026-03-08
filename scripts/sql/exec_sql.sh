@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
 # SQL 脚本批量执行工具
 # 用法: ./execute-sql.sh [选项]

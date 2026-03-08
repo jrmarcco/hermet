@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
 # ====== 配置参数 ======
 URI="http://localhost:8080"

@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
 # Debezium Connector 管理脚本。
 # 用于便捷地注册、更新、查看和删除 Debezium 连接器。

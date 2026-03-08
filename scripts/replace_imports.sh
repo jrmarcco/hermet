@@ -1,9 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
 # 替换Go文件中import块内的指定前缀
 # 用法: ./replace_imports.sh <目录路径> <原前缀> <新前缀>
-
-set -e
 
 # 颜色定义。
 RED='\033[0;31m'

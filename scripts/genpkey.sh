@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
 # ./scripts/genpkey.sh -d internal/api/grpc/interceptor/jwt/key
 

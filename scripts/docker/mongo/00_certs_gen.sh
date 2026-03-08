@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
 # 配置变量
 KEY_SIZE=2048              # RSA 密钥长度

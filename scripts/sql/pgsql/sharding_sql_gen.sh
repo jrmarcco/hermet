@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
 # 分库分表 SQL 脚本生成工具 ( PostgreSQL 版本 )
 # 用法: ./sharding-sql-gen.sh [选项]

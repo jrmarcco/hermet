@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
 echo "=========================================="
 echo "MongoDB 数据库初始化脚本"

@@ -1,6 +1,5 @@
-#!/bin/sh
-
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 CONNECT_HOST="${CONNECT_HOST:-debezium-connect-1}"
 CONNECT_PORT="${CONNECT_PORT:-8083}"
