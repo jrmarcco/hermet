@@ -9,4 +9,3 @@ db:
       dsn: "postgres://hermet_0:%3Cpasswd%3E@192.168.3.3:15432/hermet_0?sslmode=disable&connect_timeout=1&statement_timeout=3000&idle_in_transaction_session_timeout=3000"
     - name: hermet_1
       dsn: "postgres://hermet_1:%3Cpasswd%3E@192.168.3.3:25432/hermet_1?sslmode=disable&connect_timeout=1&statement_timeout=3000&idle_in_transaction_session_timeout=3000"
-

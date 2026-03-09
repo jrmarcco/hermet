@@ -30,7 +30,7 @@ type mongoConfig struct {
 
 	AuthSource string `mapstructure:"auth_source"`
 	Username   string `mapstructure:"username"`
-	Password   string `mapstructure:"password"` //nolint:gosec // Configuration field for MongoDB authentication
+	Password   string `mapstructure:"password"`
 
 	MaxPoolSize            uint64        `mapstructure:"max_pool_size"`
 	MaxConnIdleTime        time.Duration `mapstructure:"max_conn_idle_time"`

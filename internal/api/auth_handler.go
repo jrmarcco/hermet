@@ -48,8 +48,8 @@ type signInReq struct {
 }
 
 type tokenResp struct {
-	AccessToken  string `json:"accessToken"`  //nolint:gosec // API response field for authentication token
-	RefreshToken string `json:"refreshToken"` //nolint:gosec // API response field for refresh token
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken"`
 }
 
 func (h *AuthHandler) SignIn(ctx *gin.Context, req signInReq) (xgin.R, error) {
@@ -82,7 +82,7 @@ func (h *AuthHandler) SignIn(ctx *gin.Context, req signInReq) (xgin.R, error) {
 }
 
 type refreshTokenRequest struct {
-	RefreshToken string `json:"refreshToken"` //nolint:gosec // API request field for token refresh
+	RefreshToken string `json:"refreshToken"`
 }
 
 func (h *AuthHandler) RefreshToken(ctx *gin.Context, req refreshTokenRequest) (xgin.R, error) {
