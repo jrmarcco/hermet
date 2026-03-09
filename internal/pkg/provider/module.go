@@ -11,9 +11,11 @@ import (
 
 var (
 	ZapLoggerFxModule  = fx.Module("zap-logger", fx.Provide(newZapLogger))
+	EtcdFxModule       = fx.Module("etcd", fx.Provide(newEtcdClient))
 	RedisFxModule      = fx.Module("redis", fx.Provide(newRedisCmdable))
 	MongoFxModule      = fx.Module("mongo", fx.Provide(newMongoClient))
 	JwtManagerFxModule = fx.Module("jwt-manager", fx.Provide(newJwtManager))
+	GrpcClientFxModule = fx.Module("grpc-client", fx.Provide(newGrpcPushClient))
 )
 
 var DBFxModule = fx.Module(

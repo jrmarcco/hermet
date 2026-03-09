@@ -21,6 +21,14 @@ hermet:
     - /api/v1/auth/sign-in
     - /api/v1/auth/refresh-token
 
+  grpc:
+    client:
+      message_push:
+        key_prefix: /synp
+        resolver_timeout: 1s
+        keepalive_time: 1m
+        keepalive_timeout: 10s
+
 jwt:
   access:
     expiration: 1h   # Access Token 过期时间

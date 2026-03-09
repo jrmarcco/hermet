@@ -10,6 +10,7 @@ import (
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/hermet/internal/repo/dao"
 	"github.com/jrmarcco/hermet/internal/service"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
@@ -28,6 +29,9 @@ func main() {
 
 		// 初始化 zap.logger。
 		provider.ZapLoggerFxModule,
+
+		// 初始化 etcd client。
+		provider.EtcdFxModule,
 
 		// 初始化 redis client。
 		provider.RedisFxModule,
@@ -55,6 +59,9 @@ func main() {
 		// 初始化 sharding。
 		provider.ShardingFxModule,
 
+		// 初始化 grpc client。
+		provider.GrpcClientFxModule,
+
 		// 初始化 dao。
 		dao.DaoFxModule,
 
@@ -79,7 +86,10 @@ func main() {
 }
 
 func loadConfig() error {
-	viper.AddConfigPath("etc")
+	configPath := pflag.String("config-dir", "etc", "config directory")
+	pflag.Parse()
+
+	viper.AddConfigPath(*configPath)
 	viper.SetConfigType("yaml")
 
 	// 读取基础配置。
