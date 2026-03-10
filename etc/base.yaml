@@ -3,7 +3,7 @@ profile:
 
 hermet:
   web:
-    addr: :10080
+    addr: :10081
     read_header_timeout: 5s # 读取请求头超时，防止 Slowloris 攻击
     read_timeout: 15s       # 读取整个请求超时，IM 请求通常较小
     write_timeout: 90s      # 写响应超时，历史记录数据量可能较大
