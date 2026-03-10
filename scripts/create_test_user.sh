@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ====== 配置参数 ======
-URI="http://localhost:8080"
+URI="http://localhost:10080"
 ACCOUNT="jrmarcco@gmail.com"
 ACCOUNT_TYPE="email"
 CREDENTIAL="<passwd>"

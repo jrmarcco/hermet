@@ -98,7 +98,7 @@ func loadConfig() error {
 		return fmt.Errorf("failed to read base config: %w", err)
 	}
 
-	subConfigNames := []string{"redis", "db", "mongodb", "kafka", "sharding", "mq"}
+	subConfigNames := []string{"etcd", "redis", "db", "mongodb", "kafka", "sharding", "mq"}
 	for _, subConfigName := range subConfigNames {
 		viper.SetConfigName(subConfigName)
 		if err := viper.MergeInConfig(); err != nil {

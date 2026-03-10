@@ -4,8 +4,6 @@ set -euo pipefail
 # Debezium Connector 管理脚本。
 # 用于便捷地注册、更新、查看和删除 Debezium 连接器。
 
-set -e
-
 # 检测终端是否支持颜色。
 if [ -t 1 ] && [ "$TERM" != "dumb" ] && command -v tput &> /dev/null && tput setaf 1 &> /dev/null; then
     # 终端支持颜色
@@ -15,7 +13,7 @@ if [ -t 1 ] && [ "$TERM" != "dumb" ] && command -v tput &> /dev/null && tput set
     BLUE='\033[0;34m'
     NC='\033[0m' # No Color
 else
-    # 终端不支持颜色，使用空字符串
+    # 终端不支持颜色，使用空字符串。
     RED=''
     GREEN=''
     YELLOW=''

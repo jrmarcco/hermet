@@ -6,7 +6,7 @@ mongodb:
 
   # 认证信息
   username: jrmarcco
-  password: passwd
+  password: <passwd>
   auth_source: admin
 
   # 连接池配置

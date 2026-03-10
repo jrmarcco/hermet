@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -euo
 
 # 分库分表 SQL 脚本生成工具 ( PostgreSQL 版本 )
 # 用法: ./sharding-sql-gen.sh [选项]
@@ -12,8 +12,6 @@ set -euo pipefail
 #   -p, --db-prefix PREFIX    数据库名前缀 ( 必填 )
 #   --all                     处理所有 ./*.sql 文件
 #   -h, --help                显示帮助信息
-
-set -e
 
 # 默认配置。
 DB_COUNT=2
