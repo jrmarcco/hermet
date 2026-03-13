@@ -35,8 +35,12 @@ func NewDefaultMessageService(
 	}
 }
 
-func (s *DefaultMessageService) ProcessUpstreamMsg(_ context.Context, msg *xmq.Message) error {
+// ProcessUpstreamMsg 处理上游消息。
+//
+// 这里需要做 2 件事：
+//  1. 保存消息到数据库 ( 这里是 MongoDB )。
+//  2. 调用网关 grpc 接口进行消息推送。
+func (s *DefaultMessageService) ProcessUpstreamMsg(_ context.Context, _ *xmq.Message) error {
 	// TODO: not implemented
-	s.logger.Debug("processing upstream message", zap.Any("message", msg))
 	return nil
 }
