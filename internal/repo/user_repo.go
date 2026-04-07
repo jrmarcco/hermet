@@ -13,7 +13,7 @@ import (
 //go:generate mockgen -source=user_repo.go -destination=mock/user_repo.mock.go -package=repomock -typed UserRepo
 
 type UserRepo interface {
-	Create(ctx context.Context, user domain.BizUser) (domain.BizUser, error)
+	Create(ctx context.Context, user domain.BizUser) error
 
 	FindByID(ctx context.Context, id uint64) (domain.BizUser, error)
 	FindByEmail(ctx context.Context, email string) (domain.BizUser, error)
@@ -29,12 +29,9 @@ func NewDefaultUserRepo(userDao dao.UserDao) *DefaultUserRepo {
 	return &DefaultUserRepo{userDao: userDao}
 }
 
-func (r *DefaultUserRepo) Create(ctx context.Context, user domain.BizUser) (domain.BizUser, error) {
-	entity, err := r.userDao.Create(ctx, r.toEntity(user))
-	if err != nil {
-		return domain.BizUser{}, err
-	}
-	return r.toDomain(entity), nil
+func (r *DefaultUserRepo) Create(ctx context.Context, user domain.BizUser) error {
+	_, err := r.userDao.Create(ctx, r.toEntity(user))
+	return err
 }
 
 func (r *DefaultUserRepo) FindByID(ctx context.Context, id uint64) (domain.BizUser, error) {

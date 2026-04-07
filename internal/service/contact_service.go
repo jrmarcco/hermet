@@ -79,8 +79,7 @@ func (s *DefaultContactService) Apply(ctx context.Context, event domain.ContactA
 		Source:             event.Source,
 	}
 
-	_, err = s.contactApplicationRepo.Create(ctx, ca)
-	if err != nil {
+	if err := s.contactApplicationRepo.Create(ctx, ca); err != nil {
 		return err
 	}
 

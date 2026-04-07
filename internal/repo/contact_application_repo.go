@@ -8,7 +8,7 @@ import (
 )
 
 type ContactApplicationRepo interface {
-	Create(ctx context.Context, application domain.ContactApplication) (domain.ContactApplication, error)
+	Create(ctx context.Context, application domain.ContactApplication) error
 
 	UpdateStatus(ctx context.Context, applicationID uint64, status domain.ApplicationStatus) error
 
@@ -28,12 +28,9 @@ func NewDefaultContactApplicationRepo(contactApplicationDao dao.ContactApplicati
 	}
 }
 
-func (r *DefaultContactApplicationRepo) Create(ctx context.Context, application domain.ContactApplication) (domain.ContactApplication, error) {
-	entity, err := r.contactApplicationDao.Create(ctx, r.toEntity(application))
-	if err != nil {
-		return domain.ContactApplication{}, err
-	}
-	return r.toDomain(entity), nil
+func (r *DefaultContactApplicationRepo) Create(ctx context.Context, application domain.ContactApplication) error {
+	_, err := r.contactApplicationDao.Create(ctx, r.toEntity(application))
+	return err
 }
 
 func (r *DefaultContactApplicationRepo) UpdateStatus(ctx context.Context, applicationID uint64, status domain.ApplicationStatus) error {

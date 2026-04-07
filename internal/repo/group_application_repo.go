@@ -8,7 +8,7 @@ import (
 )
 
 type GroupApplicationRepo interface {
-	Create(ctx context.Context, application domain.GroupApplication) (domain.GroupApplication, error)
+	Create(ctx context.Context, application domain.GroupApplication) error
 }
 
 var _ GroupApplicationRepo = (*DefaultGroupApplicationRepo)(nil)
@@ -25,12 +25,9 @@ func NewDefaultGroupApplicationRepo(
 	}
 }
 
-func (r *DefaultGroupApplicationRepo) Create(ctx context.Context, application domain.GroupApplication) (domain.GroupApplication, error) {
-	entity, err := r.groupApplicationDao.Create(ctx, r.toEntity(application))
-	if err != nil {
-		return domain.GroupApplication{}, err
-	}
-	return r.toDomain(entity), nil
+func (r *DefaultGroupApplicationRepo) Create(ctx context.Context, application domain.GroupApplication) error {
+	_, err := r.groupApplicationDao.Create(ctx, r.toEntity(application))
+	return err
 }
 
 func (r *DefaultGroupApplicationRepo) toEntity(application domain.GroupApplication) dao.GroupApplication {
@@ -51,26 +48,5 @@ func (r *DefaultGroupApplicationRepo) toEntity(application domain.GroupApplicati
 
 		CreatedAt: application.CreatedAt,
 		UpdatedAt: application.UpdatedAt,
-	}
-}
-
-func (r *DefaultGroupApplicationRepo) toDomain(entity dao.GroupApplication) domain.GroupApplication {
-	return domain.GroupApplication{
-		ID: entity.ID,
-
-		ApplicantID: entity.ApplicantID,
-
-		GroupID:     entity.GroupID,
-		GroupName:   entity.GroupName,
-		GroupAvatar: entity.GroupAvatar,
-
-		ApplicationStatus:  domain.ApplicationStatus(entity.ApplicationStatus),
-		ApplicationMessage: entity.ApplicationMessage,
-
-		ReviewerID: entity.ReviewerID,
-		ReviewedAt: entity.ReviewedAt,
-
-		CreatedAt: entity.CreatedAt,
-		UpdatedAt: entity.UpdatedAt,
 	}
 }

@@ -14,7 +14,8 @@ type Message struct {
 	SID uint64 // Sender ID ( 发送者 ID )
 	MID uint64 // Message ID ( 这里指的是网关消息的 ID )
 
-	DestinationID string // Destination ID ( 目的地频道 ID )
+	DestinationID   string      // Destination ID ( 目的地 ID：用户 ID 或 群 ID )
+	DestinationType ChannelType // Destination Type ( 目的地类型 )
 
 	Content     []byte      // 消息内容
 	ContentType ContentType // 消息类型
