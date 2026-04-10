@@ -28,6 +28,11 @@ hermet:
         resolver_timeout: 1s
         keepalive_time: 1m
         keepalive_timeout: 10s
+      node_locate:
+        key_prefix: /synp
+        resolver_timeout: 1s
+        keepalive_time: 1m
+        keepalive_timeout: 10s
 
 jwt:
   access:
