@@ -7,6 +7,7 @@ import (
 	"github.com/jrmarcco/hermet/internal/pkg/xgin/xsession"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproducer"
+	"github.com/jrmarcco/jit/xpool"
 )
 
 var (
@@ -54,6 +55,16 @@ var (
 			),
 		),
 	)
+)
+
+var XpoolFxModule = fx.Module(
+	"xpool",
+	fx.Provide(
+		fx.Annotate(
+			newBlockTaskPool,
+			fx.As(new(xpool.TaskPool)),
+		),
+	),
 )
 
 var JwtHandlerFxModule = fx.Module(

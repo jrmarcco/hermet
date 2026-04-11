@@ -4,17 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/jrmarcco/hermet/internal/domain"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/jit/xpool"
+	commonv1 "github.com/jrmarcco/synp-api/api/go/common/v1"
 	messagev1 "github.com/jrmarcco/synp-api/api/go/message/v1"
 	nodev1 "github.com/jrmarcco/synp-api/api/go/node/v1"
 	"github.com/jrmarcco/xgrpc/client"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
+
+// TODO: 后续建议按照业务分级配置超时时间
+const defaultPushTimeout = 800 * time.Millisecond
 
 type MessageService interface {
 	ProcessUpstreamMsg(ctx context.Context, upstreamMsg *xmq.Message) error
@@ -23,10 +28,11 @@ type MessageService interface {
 var _ MessageService = (*DefaultMessageService)(nil)
 
 type DefaultMessageService struct {
-	rdb           redis.Cmdable
-	messageRepo   repo.MessageRepo
-	blockTaskPool *xpool.BlockTaskPool
+	rdb         redis.Cmdable
+	taskPool    xpool.TaskPool
+	messageRepo repo.MessageRepo
 
+	pushServiceName      string
 	pushServiceClients   *client.Manager[messagev1.PushServiceClient]
 	locateServiceName    string
 	locateServiceClients *client.Manager[nodev1.LocateServiceClient]
@@ -35,16 +41,16 @@ type DefaultMessageService struct {
 
 func NewDefaultMessageService(
 	rdb redis.Cmdable,
+	taskPool xpool.TaskPool,
 	messageRepo repo.MessageRepo,
-	blockTaskPool *xpool.BlockTaskPool,
 	pushServiceClients *client.Manager[messagev1.PushServiceClient],
 	locateServiceClients *client.Manager[nodev1.LocateServiceClient],
 	logger *zap.Logger,
 ) *DefaultMessageService {
 	return &DefaultMessageService{
-		rdb:           rdb,
-		messageRepo:   messageRepo,
-		blockTaskPool: blockTaskPool,
+		rdb:         rdb,
+		taskPool:    taskPool,
+		messageRepo: messageRepo,
 
 		pushServiceClients:   pushServiceClients,
 		locateServiceClients: locateServiceClients,
@@ -85,8 +91,16 @@ func (s *DefaultMessageService) pushSingleMsg(ctx context.Context, msg *domain.M
 	}
 
 	for _, addr := range addrs {
-		// TODO: 使用线程池进行消息推送。
+		// 使用线程池进行消息推送。
 		s.logger.Debug("pushing single message to user", zap.Uint64("user_id", msg.DestinationID), zap.String("addr", addr))
+
+		submitCtx := xpool.WithTaskExecTimeoutInContext(ctx, defaultPushTimeout)
+		err := s.taskPool.Submit(submitCtx, xpool.TaskFunc(func(ctx context.Context) error {
+			return s.pushMsg(ctx, msg)
+		}))
+		if err != nil {
+			return fmt.Errorf("failed to submit push message task: %w", err)
+		}
 	}
 	return nil
 }
@@ -126,4 +140,33 @@ func (s *DefaultMessageService) locateUserAddr(ctx context.Context, uid uint64) 
 		addrs = append(addrs, location.ServiceAddr)
 	}
 	return addrs, nil
+}
+
+func (s *DefaultMessageService) pushMsg(ctx context.Context, msg *domain.Message) error {
+	grpcClient, err := s.pushServiceClients.Get(s.pushServiceName)
+	if err != nil {
+		return fmt.Errorf("failed to get push service client: %w", err)
+	}
+
+	pushMsg := &messagev1.PushMessage{
+		MessageId:     msg.ID,
+		BusinessId:    msg.DestinationID,
+		ReceiverId:    msg.DestinationID,
+		SerializeType: commonv1.SerializeType_SERIALIZE_TYPE_PROTOBUF,
+		Body:          msg.Content,
+	}
+
+	resp, err := grpcClient.Push(ctx, &messagev1.PushRequest{
+		Message:     pushMsg,
+		ShouldRetry: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to call the push service grpc api: %w", err)
+	}
+
+	if resp.Status != messagev1.PushStatus_PUSH_STATUS_SUCCESS {
+		return fmt.Errorf("failed to push message: %s", resp.ErrorMessage)
+	}
+
+	return nil
 }

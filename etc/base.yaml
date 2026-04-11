@@ -34,6 +34,19 @@ hermet:
         keepalive_time: 1m
         keepalive_timeout: 10s
 
+  task_pool:
+    init_goroutines: 64
+    core_goroutines: 128
+    max_goroutines: 256
+    queue_size: 1024
+    queue_backlog_rate: 0.30
+    max_idle_time: 20s
+    submit_timeout: 80ms
+    task_exec_timeout: 800ms
+    err_queue_size: 1024
+    err_worker_cnt: 2
+    err_handle_timeout: 500ms
+
 jwt:
   access:
     expiration: 1h   # Access Token 过期时间

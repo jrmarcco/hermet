@@ -62,6 +62,9 @@ func main() {
 		// 初始化 grpc client。
 		provider.GrpcClientFxModule,
 
+		// 初始化 xpool。
+		provider.XpoolFxModule,
+
 		// 初始化 dao。
 		dao.DaoFxModule,
 
