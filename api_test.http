@@ -78,3 +78,16 @@ Content-Type: application/json
 GET {{uri}}/api/v1/channel/channels
 x-access-token: Bearer {{signIn.response.body.$.data.accessToken}}
 Content-Type: application/json
+
+
+
+### Send Message
+POST {{uri}}/api/v1/admin/message
+x-access-token: Bearer {{signIn.response.body.$.data.accessToken}}
+Content-Type: application/json
+
+{
+    "destinationId": 134605228232032256,
+    "destinationType": "single",
+    "content": "hello hello!!!"
+}

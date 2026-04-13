@@ -32,9 +32,7 @@ type DefaultMessageService struct {
 	taskPool    xpool.TaskPool
 	messageRepo repo.MessageRepo
 
-	pushServiceName      string
 	pushServiceClients   *client.Manager[messagev1.PushServiceClient]
-	locateServiceName    string
 	locateServiceClients *client.Manager[nodev1.LocateServiceClient]
 	logger               *zap.Logger
 }
@@ -84,19 +82,20 @@ func (s *DefaultMessageService) ProcessUpstreamMsg(ctx context.Context, upstream
 
 // pushSingleMsg 推送单聊消息。
 func (s *DefaultMessageService) pushSingleMsg(ctx context.Context, msg *domain.Message) error {
-	// 1. 查询目标用户所在节点。
-	addrs, err := s.locateUserAddr(ctx, msg.DestinationID)
+	// 1.查询目标用户所在节点。
+	addrs, err := s.locateUser(ctx, msg.DestinationID)
 	if err != nil {
 		return fmt.Errorf("failed to push single message to user: %w", err)
 	}
 
 	for _, addr := range addrs {
-		// 使用线程池进行消息推送。
+		// 2.使用线程池进行消息推送。
 		s.logger.Debug("pushing single message to user", zap.Uint64("user_id", msg.DestinationID), zap.String("addr", addr))
 
+		// 推荐在这里使用 WithTaskExecTimeoutInContext 设置超时时间。
 		submitCtx := xpool.WithTaskExecTimeoutInContext(ctx, defaultPushTimeout)
 		err := s.taskPool.Submit(submitCtx, xpool.TaskFunc(func(ctx context.Context) error {
-			return s.pushMsg(ctx, msg)
+			return s.pushMsg(ctx, addr, msg)
 		}))
 		if err != nil {
 			return fmt.Errorf("failed to submit push message task: %w", err)
@@ -112,10 +111,11 @@ func (s *DefaultMessageService) pushGroupMsg(_ context.Context, _ *domain.Messag
 	return nil
 }
 
-// locateUserAddr 定位用户所在的网关地址列表。
+// locateUser 定位用户所在的网关地址列表。
 // 这里只需要地址，推送消息通过地址定向调用。
-func (s *DefaultMessageService) locateUserAddr(ctx context.Context, uid uint64) ([]string, error) {
-	grpcClient, err := s.locateServiceClients.Get(s.locateServiceName)
+func (s *DefaultMessageService) locateUser(ctx context.Context, uid uint64) ([]string, error) {
+	// TODO: 这里需要优化，不要硬编码服务名称。
+	grpcClient, err := s.locateServiceClients.Get("synp-gateway")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get locate service client: %w", err)
 	}
@@ -142,8 +142,9 @@ func (s *DefaultMessageService) locateUserAddr(ctx context.Context, uid uint64) 
 	return addrs, nil
 }
 
-func (s *DefaultMessageService) pushMsg(ctx context.Context, msg *domain.Message) error {
-	grpcClient, err := s.pushServiceClients.Get(s.pushServiceName)
+func (s *DefaultMessageService) pushMsg(ctx context.Context, addr string, msg *domain.Message) error {
+	// TODO: 这里需要优化，不要硬编码服务名称。
+	grpcClient, err := s.pushServiceClients.GetByAddr("synp-gateway", addr)
 	if err != nil {
 		return fmt.Errorf("failed to get push service client: %w", err)
 	}
