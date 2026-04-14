@@ -10,7 +10,6 @@ import (
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/jit/xpool"
-	commonv1 "github.com/jrmarcco/synp-api/api/go/common/v1"
 	messagev1 "github.com/jrmarcco/synp-api/api/go/message/v1"
 	nodev1 "github.com/jrmarcco/synp-api/api/go/node/v1"
 	"github.com/jrmarcco/xgrpc/client"
@@ -150,11 +149,10 @@ func (s *DefaultMessageService) pushMsg(ctx context.Context, addr string, msg *d
 	}
 
 	pushMsg := &messagev1.PushMessage{
-		MessageId:     msg.ID,
-		BusinessId:    msg.DestinationID,
-		ReceiverId:    msg.DestinationID,
-		SerializeType: commonv1.SerializeType_SERIALIZE_TYPE_PROTOBUF,
-		Body:          msg.Content,
+		MessageId:  msg.ID,
+		BusinessId: msg.DestinationID,
+		ReceiverId: msg.DestinationID,
+		Body:       msg.Content,
 	}
 
 	resp, err := grpcClient.Push(ctx, &messagev1.PushRequest{
