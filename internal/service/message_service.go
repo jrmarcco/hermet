@@ -13,12 +13,27 @@ import (
 	messagev1 "github.com/jrmarcco/synp-api/api/go/message/v1"
 	nodev1 "github.com/jrmarcco/synp-api/api/go/node/v1"
 	"github.com/jrmarcco/xgrpc/client"
+	gocache "github.com/patrickmn/go-cache"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
 // TODO: 后续建议按照业务分级配置超时时间
 const defaultPushTimeout = 800 * time.Millisecond
+
+const (
+	// 在线路由缓存可稍长，减少 Locate RPC 频率。
+	locateUserPositiveCacheTTL = 10 * time.Second
+	// 离线路由缓存应更短，避免用户上线后感知延迟。
+	locateUserNegativeCacheTTL = 2 * time.Second
+	// TTL 增加约 20% 抖动，降低同批 key 同时失效概率。
+	locateUserCacheJitterDivisor = 5
+)
+
+type userLocateCacheEntry struct {
+	Addrs []string
+	Found bool
+}
 
 type MessageService interface {
 	ProcessUpstreamMsg(ctx context.Context, upstreamMsg *xmq.Message) error
@@ -33,7 +48,11 @@ type DefaultMessageService struct {
 
 	pushServiceClients   *client.Manager[messagev1.PushServiceClient]
 	locateServiceClients *client.Manager[nodev1.LocateServiceClient]
-	logger               *zap.Logger
+
+	// 本地缓存，用于缓存用户所在的网关路由信息。
+	localCache *gocache.Cache
+
+	logger *zap.Logger
 }
 
 func NewDefaultMessageService(
@@ -42,6 +61,7 @@ func NewDefaultMessageService(
 	messageRepo repo.MessageRepo,
 	pushServiceClients *client.Manager[messagev1.PushServiceClient],
 	locateServiceClients *client.Manager[nodev1.LocateServiceClient],
+	localCache *gocache.Cache,
 	logger *zap.Logger,
 ) *DefaultMessageService {
 	return &DefaultMessageService{
@@ -51,6 +71,8 @@ func NewDefaultMessageService(
 
 		pushServiceClients:   pushServiceClients,
 		locateServiceClients: locateServiceClients,
+
+		localCache: localCache,
 
 		logger: logger,
 	}
@@ -113,6 +135,19 @@ func (s *DefaultMessageService) pushGroupMsg(_ context.Context, _ *domain.Messag
 // locateUser 定位用户所在的网关地址列表。
 // 这里只需要地址，推送消息通过地址定向调用。
 func (s *DefaultMessageService) locateUser(ctx context.Context, uid uint64) ([]string, error) {
+	cacheKey := s.cacheKey(uid)
+	if s.localCache != nil {
+		if cached, found := s.localCache.Get(cacheKey); found {
+			if entry, ok := cached.(userLocateCacheEntry); ok {
+				if !entry.Found {
+					return nil, nil
+				}
+				return append([]string(nil), entry.Addrs...), nil
+			}
+			s.localCache.Delete(cacheKey)
+		}
+	}
+
 	// TODO: 这里需要优化，不要硬编码服务名称。
 	grpcClient, err := s.locateServiceClients.Get("synp-gateway")
 	if err != nil {
@@ -131,6 +166,13 @@ func (s *DefaultMessageService) locateUser(ctx context.Context, uid uint64) ([]s
 
 	// 用户不在线直接返回空列表。
 	if len(resp.Locations) == 0 {
+		if s.localCache != nil {
+			s.localCache.Set(
+				cacheKey,
+				userLocateCacheEntry{Found: false},
+				s.cacheTTLWithJitter(uid, locateUserNegativeCacheTTL),
+			)
+		}
 		return nil, nil
 	}
 
@@ -138,7 +180,36 @@ func (s *DefaultMessageService) locateUser(ctx context.Context, uid uint64) ([]s
 	for _, location := range resp.Locations {
 		addrs = append(addrs, location.ServiceAddr)
 	}
+	if s.localCache != nil {
+		s.localCache.Set(
+			cacheKey,
+			userLocateCacheEntry{
+				Addrs: append([]string(nil), addrs...),
+				Found: true,
+			},
+			s.cacheTTLWithJitter(uid, locateUserPositiveCacheTTL),
+		)
+	}
 	return addrs, nil
+}
+
+func (s *DefaultMessageService) cacheKey(uid uint64) string {
+	return fmt.Sprintf("locate:user:%d", uid)
+}
+
+func (s *DefaultMessageService) cacheTTLWithJitter(uid uint64, baseTTL time.Duration) time.Duration {
+	if baseTTL <= 0 {
+		return baseTTL
+	}
+
+	jitter := baseTTL / locateUserCacheJitterDivisor
+	if jitter <= 0 {
+		return baseTTL
+	}
+
+	span := uint64(jitter*2 + 1)
+	offset := time.Duration(uid%span) - jitter
+	return baseTTL + offset
 }
 
 func (s *DefaultMessageService) pushMsg(ctx context.Context, addr string, msg *domain.Message) error {

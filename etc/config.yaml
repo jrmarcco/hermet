@@ -1,0 +1,526 @@
+profile:
+  env: dev
+
+hermet:
+  web:
+    addr: :10081
+    read_header_timeout: 5s # 读取请求头超时，防止 Slowloris 攻击
+    read_timeout: 15s       # 读取整个请求超时，IM 请求通常较小
+    write_timeout: 90s      # 写响应超时，历史记录数据量可能较大
+    idle_timeout: 120s      # Keep-Alive 空闲超时，IM 客户端会频繁请求
+
+  session:
+    expiration: 12h
+
+  cors:
+    max_age: 86400s
+    hostnames:
+      - localhost
+
+  ignores:
+    - /api/v1/auth/sign-in
+    - /api/v1/auth/refresh-token
+
+  grpc:
+    client:
+      message_push:
+        key_prefix: /synp
+        resolver_timeout: 1s
+        keepalive_time: 1m
+        keepalive_timeout: 10s
+      node_locate:
+        key_prefix: /synp
+        resolver_timeout: 1s
+        keepalive_time: 1m
+        keepalive_timeout: 10s
+
+  task_pool:
+    init_goroutines: 64
+    core_goroutines: 128
+    max_goroutines: 256
+    queue_size: 1024
+    queue_backlog_rate: 0.30
+    max_idle_time: 20s
+    submit_timeout: 80ms
+    task_exec_timeout: 800ms
+    err_queue_size: 1024
+    err_worker_cnt: 2
+    err_handle_timeout: 500ms
+
+jwt:
+  access:
+    expiration: 1h   # Access Token 过期时间
+    issuer: hermet-access
+    private: |
+      -----BEGIN PRIVATE KEY-----
+      MC4CAQAwBQYDK2VwBCIEINuchwbkYeYD/jnGLyPjRAufQGP+WUckh+PK6U4u7fk1
+      -----END PRIVATE KEY-----
+    public: |
+      -----BEGIN PUBLIC KEY-----
+      MCowBQYDK2VwAyEA818wiIDR2aqxvLKcyQL2qvVCYlSs2A/izQi/K109rlU=
+      -----END PUBLIC KEY-----
+
+  refresh:
+    expiration: 168h  # Refresh Token 过期时间
+    issuer: hermet-refresh
+    private: |
+      -----BEGIN PRIVATE KEY-----
+      MC4CAQAwBQYDK2VwBCIEIKPTxPL86hZ9ogcHUcl8RFnEK5+31567wtfNNi2fwOMv
+      -----END PRIVATE KEY-----
+    public: |
+      -----BEGIN PUBLIC KEY-----
+      MCowBQYDK2VwAyEAuulBhGrO5+ic3KquuV0hfO1KrOIjYC3OVtjzle+MqQI=
+      -----END PUBLIC KEY-----
+
+etcd:
+  endpoints:
+    - 192.168.3.3:12379
+    - 192.168.3.3:22379
+    - 192.168.3.3:32379
+  username: hermet
+  password: <passwd>
+  dial_timeout: 10s
+  tls:
+    enabled: true
+    server_name: synp
+    insecure_skip_verify: false
+    cert_pem: |
+      -----BEGIN CERTIFICATE-----
+      MIICKzCCAd2gAwIBAgIUJOaz8vBHmLNISw9doSwZw5K0WYIwBQYDK2VwMF8xCzAJ
+      BgNVBAYTAkNOMRAwDgYDVQQIDAdCZWlqaW5nMRAwDgYDVQQHDAdCZWlqaW5nMQ0w
+      CwYDVQQKDARTeW5wMQswCQYDVQQLDAJDQTEQMA4GA1UEAwwHZXRjZC1jYTAeFw0y
+      NjAzMDcwOTIzMTdaFw0yNzAzMDcwOTIzMTdaMHYxCzAJBgNVBAYTAkNOMRAwDgYD
+      VQQIDAdCZWlqaW5nMRAwDgYDVQQHDAdCZWlqaW5nMQ0wCwYDVQQKDARTeW5wMRkw
+      FwYDVQQLDBBzeW5wLWV0Y2QtY2xpZW50MRkwFwYDVQQDDBBzeW5wLWV0Y2QtY2xp
+      ZW50MCowBQYDK2VwAyEAReTAvSwLjxsrzIuq001cukVpUH/eGTmy7NMzJXZVLXuj
+      gZMwgZAwCQYDVR0TBAIwADALBgNVHQ8EBAMCBeAwEwYDVR0lBAwwCgYIKwYBBQUH
+      AwIwIQYDVR0RBBowGIIQc3lucC1ldGNkLWNsaWVudIcEfwAAATAdBgNVHQ4EFgQU
+      QCbrF5CaCoqjSSiHnotaqCZWpWgwHwYDVR0jBBgwFoAUewDihDVtIGdG4iKpslG0
+      /otZCKwwBQYDK2VwA0EAt8JWS+qyNnkGZ9DvX405mxHUiYb/J5pMAxiKsiK4nWGu
+      C5F5dukOvWxwyeTdMM5kNUQSIVwpDVMuXbbsMttpAw==
+      -----END CERTIFICATE-----
+
+    cert_key: |
+      -----BEGIN PRIVATE KEY-----
+      MC4CAQAwBQYDK2VwBCIEIPUrWstlCsnf8lV7ioS7XTnm+GOvfs291j65sfu3j3mU
+      -----END PRIVATE KEY-----
+
+    ca_cert: |
+      -----BEGIN CERTIFICATE-----
+      MIIB0zCCAYWgAwIBAgIUbL6WFUxfu1r8RuA3/fax2iUy+DowBQYDK2VwMF8xCzAJ
+      BgNVBAYTAkNOMRAwDgYDVQQIDAdCZWlqaW5nMRAwDgYDVQQHDAdCZWlqaW5nMQ0w
+      CwYDVQQKDARTeW5wMQswCQYDVQQLDAJDQTEQMA4GA1UEAwwHZXRjZC1jYTAeFw0y
+      NjAzMDcwOTIzMTdaFw0yNzAzMDcwOTIzMTdaMF8xCzAJBgNVBAYTAkNOMRAwDgYD
+      VQQIDAdCZWlqaW5nMRAwDgYDVQQHDAdCZWlqaW5nMQ0wCwYDVQQKDARTeW5wMQsw
+      CQYDVQQLDAJDQTEQMA4GA1UEAwwHZXRjZC1jYTAqMAUGAytlcAMhABBNjYVko1pc
+      UPYz+SAfIMTcT8F3b/d77zMv1ERRRMZ7o1MwUTAdBgNVHQ4EFgQUewDihDVtIGdG
+      4iKpslG0/otZCKwwHwYDVR0jBBgwFoAUewDihDVtIGdG4iKpslG0/otZCKwwDwYD
+      VR0TAQH/BAUwAwEB/zAFBgMrZXADQQAvJnfb2NC9k6mxSZPyLCVCzi/qbP3r6KhJ
+      7cZnHNtIDgtKVzeOQTpv2tsJxreBCftV1GcicM+47ltUNHwYgxcB
+      -----END CERTIFICATE-----
+
+# Redis 配置
+redis:
+  addr: 192.168.3.3:6379
+  password: <passwd>
+
+go_cache:
+  default_expiration: 1s
+  cleanup_interval: 1s
+
+# Kafka 配置
+kafka:
+  # Kafka Broker
+  brokers:
+    - 192.168.3.3:19092
+    - 192.168.3.3:29092
+    - 192.168.3.3:39092
+
+  # Producer 配置
+  producer:
+    required_acks: -1            # all
+    compression: snappy          # 使用 snappy 压缩
+    max_message_bytes: 1024000   # 最大消息大小 1024000 字节 = 1MB
+    retry_max: 3                 # 最大重试次数 3
+    batch_size: 100              # 批量大小 100
+    batch_timeout: 10ms          # 批量超时 10ms
+    write_timeout: 10s           # 写入超时 10s
+    idempotent_enabled: true     # 启用幂等性
+
+  # Consumer 配置
+  consumer:
+    read_timeout: 10s            # 读取超时 10s
+    commit_interval: 1s          # 每秒提交一次
+    start_offset: -1             # 从最新消息开始 ( kafka.LastOffset )
+    min_bytes: 1                 # 最小 1 字节
+    max_bytes: 10e6              # 最大 10MB
+    max_wait: 500ms              # 最大等待 500ms
+
+  # TLS 配置
+  tls:
+    # 必填: CA 证书文件路径
+    ca_cert: |
+      -----BEGIN CERTIFICATE-----
+      MIIDqTCCApGgAwIBAgIUAmIaBsnW02M2Khva2axHLYWBkY4wDQYJKoZIhvcNAQEL
+      BQAwZDERMA8GA1UEAwwIa2Fma2EtY2ExDjAMBgNVBAsMBUthZmthMQ4wDAYDVQQK
+      DAVLYWZrYTEQMA4GA1UEBwwHQmVpamluZzEQMA4GA1UECAwHQmVpamluZzELMAkG
+      A1UEBhMCQ04wHhcNMjYwMTE5MTUzMTM4WhcNMzYwMTE3MTUzMTM4WjBkMREwDwYD
+      VQQDDAhrYWZrYS1jYTEOMAwGA1UECwwFS2Fma2ExDjAMBgNVBAoMBUthZmthMRAw
+      DgYDVQQHDAdCZWlqaW5nMRAwDgYDVQQIDAdCZWlqaW5nMQswCQYDVQQGEwJDTjCC
+      ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAKESyEG467CJ9j8NsVhpIgEl
+      L0rAnn/9uiF7xDRo33D6IRuGqrt07VbBFS9nRYTmKo5Ky8DxuQFl+WQ9IXJWpaD0
+      vo8JLdhbwQwGssmQuykbBN4eHmM8ofJyCEU5YBS8tQ3MQVyWzoE97I+pZEhqOkmv
+      FhNJ10+1hIRFw9BKsiH8pLcW2NZAkwR1Ol/KHy6FzFUxgqLdWeaQOv0pejKwMW1n
+      b7mlelXZP3VTPSb7lv2SuKPvhhVFagBvVRl8B/lkiSzhDtcr4w2QmMalqpWGNjCH
+      8RRxD00zA0PWoInekIByY2SFwybPthmKN+cWkjWc2w3yuUy3bCTzxlNTV4twvisC
+      AwEAAaNTMFEwHQYDVR0OBBYEFPqAY9DvxQUvzWnVi9bnn/F9uB5FMB8GA1UdIwQY
+      MBaAFPqAY9DvxQUvzWnVi9bnn/F9uB5FMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZI
+      hvcNAQELBQADggEBAGxMkS6H9ALZjZJjnSa5ZrmpDlYJ6ACSNroSeViDZGeKUrgY
+      ru0cCqN1bafB7JwcAU/0xZ7vam/oG4U9RWplQNMWN6mXsghhpkp3y0EblLfgjNSN
+      8xlqy3NxI6zuPW0qnt8zYVKmJpYbB8LISioo+Sb8CaWyCwxyPLNdOp5Gj4qmey51
+      2TEJuYIhKNosx+8TJF7fkKzsdU460XFHr9rHMtQOTrmycju9Qx2LpCXbVuNqhJUe
+      IJ3YbmMrK0yLxQgNMBbQjZ+tREKe6+SIRFDxJVJ3U1skUySKfAurDaA2ui4zsCcv
+      tT0rFdjzRkV7BhHmpfoKKHvzrJw2+xJ11lTRaBk=
+      -----END CERTIFICATE-----
+
+    cert_key: |
+      -----BEGIN PRIVATE KEY-----
+      MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCWP8Pxhl6HbPGU
+      TrlVghVMVGR7FMpOFcScsRbVp0rKCsr0TwBMQ3o4CeN3YpHa/mZF6Vw2uMEP/kal
+      g/7WKhCZWycxZ7BbwsldPGjBFxSx+sGxWIdOjdFBAlBWBeLfMkx/cf4dfyyh3orz
+      dXXibT4CRSYqNLOmutJsALg0/+UAwvwEWN9cZiLNFwgICeCzo9vXW4/vUT2oBxhn
+      krVLRas9FewI34I0Mo5npYEtMJzXKOaes8k6JpdEvmGjoCY5FG18RJ4GkhAobmPC
+      2B3d5dHdnj6A3Q5k3jVdYhlW+uKxb/1iu3r/XJU4FDLkBG1lnEhOpn8qALikdp4F
+      9YafX+0jAgMBAAECggEAR/BiDjuq+Sa1iLAk1wdA0Vo6/h+XOcn8aJX1+/hsu85t
+      HIrS9rD8TOaXLetZMMTMDT9NsrnFXrX993P6yWo8pmDZpDMkYtsh9O1ers0xUIJi
+      yVo89uS6Q2krM/T/iqSXshHPfSoOIbbfSvB7sB1kKkwXmO/A8NzUsXequ12mtTTr
+      ATcJszy5P5G/1di0N/yh13O4NdC+C3pbIxIY5TawHLsX2o/2SQPsxFHLmLu+jioA
+      izRG87RrO0D7oDTZZqbopTi+C6AWGhxnph3iNoQd4cSuaXowdCVqGumDeDT9R0du
+      2wL5lAgXlQQ9HIiGOx15vCBvz/JjneVh9EWxkl2vAQKBgQC/1+bbn/YqltWNWgdD
+      zsGBi9OWAo8ai17v0jBg/2Tzu0+/K8NDd23p04rBxHMRB6QAqZfpRwMv/b6kso7s
+      zIYgTYHzM0Ar0VmhQG0Vu5+XIt7KoEG9JnoL2uiN7rXyrz+1wdMzYYlO9IwVGZHs
+      NDzEuf9PVi3l6ub/yILHbJiFowKBgQDIfuSdgHyP45qUw+Ls57+9BKnT8YgGzP7o
+      u6cjCK5canS516M5yyp15QW1Q5fBIliVq3LoEUOSfIpQ+Q79/JBlUFyDxthA61BN
+      G1/HXJhyG+7w1kw/WYsRL+IOxl8tzCiLa6riMTMtv0U7wAHyOrd+m3rtrTd51mzX
+      JatqdRZygQKBgQC+YfZ6kj5reZCoXGXFRxQGCcuKnTOC9jja6s6UFCANOSAk6bs3
+      4vezCvoy3VAL4HdDKQrWuGBTag+dxo3MNhQNTp3dykius22tdxBKdw4joLlUgMF8
+      gwivZylOYU0zb/Nb3uRHo03uiwXRkrSboiOEX8kc5Ltb5kgkIsqWOhEK3QKBgQCu
+      kkYumVxb0Nqco37ntdWuF+xjHU/KVB2zuQiLKZjf4NVnp0l5HdwHsPTqYkM1J9mn
+      4BN52uZSGtw4KtOR9KIphPI4zx8mT32o1afsp0QZPxcqXf0fv7Cls2KKaNEgyD2Z
+      P5MXxa0BLSR0JPfM2LFCrNA5OHQwQrKcFjGNzQtRgQKBgDwMh7IMTvhNoOvQdRAy
+      58rMKatjcIUP7M5YO16T1ezSjgf0r0oBof1AIBMzWyshkpdHZ/7kGFFOVDXM0Pre
+      GyakRH+l3SCneIeCRofif8c69W3DHE6D7Vj5a2xMBJk5SYVjpW62fJb5xYSfymTx
+      XbkIgeZ3XYL6mh5fi+jfKMnL
+      -----END PRIVATE KEY-----
+
+    cert_pem: |
+      -----BEGIN CERTIFICATE-----
+      MIIDUzCCAjsCFCBctINGPkegPBc9qiR8acNZ1BBpMA0GCSqGSIb3DQEBCwUAMGQx
+      ETAPBgNVBAMMCGthZmthLWNhMQ4wDAYDVQQLDAVLYWZrYTEOMAwGA1UECgwFS2Fm
+      a2ExEDAOBgNVBAcMB0JlaWppbmcxEDAOBgNVBAgMB0JlaWppbmcxCzAJBgNVBAYT
+      AkNOMB4XDTI2MDExOTE1MzE0MFoXDTM2MDExNzE1MzE0MFowaDELMAkGA1UEBhMC
+      Q04xEDAOBgNVBAgTB0JlaWppbmcxEDAOBgNVBAcTB0JlaWppbmcxDjAMBgNVBAoT
+      BUthZmthMQ4wDAYDVQQLEwVLYWZrYTEVMBMGA1UEAxMMa2Fma2EtY2xpZW50MIIB
+      IjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlj/D8YZeh2zxlE65VYIVTFRk
+      exTKThXEnLEW1adKygrK9E8ATEN6OAnjd2KR2v5mRelcNrjBD/5GpYP+1ioQmVsn
+      MWewW8LJXTxowRcUsfrBsViHTo3RQQJQVgXi3zJMf3H+HX8sod6K83V14m0+AkUm
+      KjSzprrSbAC4NP/lAML8BFjfXGYizRcICAngs6Pb11uP71E9qAcYZ5K1S0WrPRXs
+      CN+CNDKOZ6WBLTCc1yjmnrPJOiaXRL5ho6AmORRtfESeBpIQKG5jwtgd3eXR3Z4+
+      gN0OZN41XWIZVvrisW/9Yrt6/1yVOBQy5ARtZZxITqZ/KgC4pHaeBfWGn1/tIwID
+      AQABMA0GCSqGSIb3DQEBCwUAA4IBAQA3A7/mGp7V8ubGVcTAKMivRfdhdwChpNDm
+      BeALt8Aw1AVs5avLcwpox/gk6W4Uehj8Stz9smzqkRnkcs3ML0wjdR+RgKA/lZNh
+      raCOEvS8iUrivCbWVmVVx1lnIulm8rk5yPf/SG2nZU89irIFXuJmF1Do38ZfsRDI
+      1gWPnA3szwlI3YMAn0l6lgmHbVpS8W6hjAo7ty7uqfEVL4GA6Idvfqo5MhiCil7j
+      JhSmu413TOPgtiQPqoOzHm4T7tRQVwvxvdKoFJ0kmqZxR8NiK50qjNXL3LYYLTHg
+      HbKX4wo5ENhr8UB6RfPf+o4XUWoUz01iqwVT4rClJMH9d9sSnvwS
+      -----END CERTIFICATE-----
+
+  # SASL 配置
+  # 支持两种认证机制：
+  # 1. SCRAM-SHA-256
+  # 2. OAUTHBEARER
+  # sasl:
+    # 可选：认证机制类型 ( "" / oauth / scram 默认为 "" )
+    # mechanism: oauth
+
+    # SCRAM 认证配置 ( 当 mechanism 为 scram 或未设置时使用 )
+    # username: synp
+    # password: synp-secret
+    # 建议使用环境变量存储密码
+    # password: ${KAFKA_PASSWORD}
+
+    # OAuth 认证配置 ( 当 mechanism 为 oauth 时使用 )
+    # oauth:
+    #   endpoint: http://192.168.3.3:18080/realms/kafka/protocol/openid-connect/token
+    #   client_id: kafka-client
+    #   client_secret: b7rQYTc0y3eqDkGXFYD2UIPjYJeFCaAC
+      # 建议使用环境变量存储敏感信息
+      # client_secret: ${KAFKA_OAUTH_CLIENT_SECRET}
+
+mq:
+  producer:
+    group_member_add:
+      topic: hermet.group_member.add
+  consumer:
+    group_member_add:
+      topic: hermet.group_member.add
+      group_id: hermet-group-member-add-group
+      partitions: 6
+      handle_timeout: 16s  # 成员添加有指数退避重试机制 ( 1s -> 2s -> 4s ) 需要一个稍长的超时时间
+    message_upstream:
+      topic: synp.message.upstream
+      group_id: hermet-message-upstream-group
+      partitions: 6
+      handle_timeout: 16s
+
+  cdc:
+    user:
+      group_id: hermet-user-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    contact_review:
+      group_id: hermet-contact-review-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    contact:
+      group_id: hermet-contact-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    group:
+      group_id: hermet-group-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    group_member:
+      group_id: hermet-group-member-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    user_group:
+      group_id: hermet-user-group-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    outbox_event:
+      group_id: hermet-group-member-outbox-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+
+# 数据库配置
+db:
+  log_level: info
+  slow_threshold: 200ms # 慢查询阈值
+  ignore_record_not_found_error: true
+  # sslmode=disable 用于开发环境，线上一般推荐使用 sslmode=require / sslmode=verify-ca ( 更高安全性 ) / sslmode=verify-full ( 最高安全性 )
+  sharding:
+    - name: hermet_0
+      dsn: "postgres://hermet_0:%3Cpasswd%3E@192.168.3.3:15432/hermet_0?sslmode=disable&connect_timeout=1&statement_timeout=3000&idle_in_transaction_session_timeout=3000"
+    - name: hermet_1
+      dsn: "postgres://hermet_1:%3Cpasswd%3E@192.168.3.3:25432/hermet_1?sslmode=disable&connect_timeout=1&statement_timeout=3000&idle_in_transaction_session_timeout=3000"
+
+sharding:
+  # 用户表
+  biz_user:
+    db_prefix: hermet
+    tb_prefix: biz_user
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 联系人申请表
+  contact_application:
+    db_prefix: hermet
+    tb_prefix: contact_application
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 联系人表
+  contact:
+    db_prefix: hermet
+    tb_prefix: contact
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 联系人视图表
+  contact_view:
+    db_prefix: hermet
+    tb_prefix: contact_view
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 联系人反向索引表
+  contact_reverse_index:
+    db_prefix: hermet
+    tb_prefix: contact_reverse_index
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 聊天群申请表
+  group_application:
+    db_prefix: hermet
+    tb_prefix: group_application
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 聊天群表
+  chat_group:
+    db_prefix: hermet
+    tb_prefix: chat_group
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 聊天群成员表
+  group_member:
+    db_prefix: hermet
+    tb_prefix: group_member
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 聊天群成员视图表
+  group_member_view:
+    db_prefix: hermet
+    tb_prefix: group_member_view
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 用户群组表
+  user_group:
+    db_prefix: hermet
+    tb_prefix: user_group
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 用户群组视图表
+  user_group_view:
+    db_prefix: hermet
+    tb_prefix: user_group_view
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 用户群组反向索引表
+  user_group_reverse_index:
+    db_prefix: hermet
+    tb_prefix: user_group_reverse_index
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 聊天频道表 ( 会话 )
+  channel:
+    db_prefix: hermet
+    tb_prefix: channel
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 会话反向索引表
+  channel_reverse_index:
+    db_prefix: hermet
+    tb_prefix: channel_reverse_index
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # outbox 事件表
+  outbox_event:
+    db_prefix: hermet
+    tb_prefix: outbox_event
+    db_shard_count: 2
+    tb_shard_count: 4
+
+# MongoDB 配置
+mongodb:
+  uri: mongodb://192.168.3.3:27017
+  db_name: hermet
+  app_name: hermet
+
+  # 认证信息
+  username: jrmarcco
+  password: <passwd>
+  auth_source: admin
+
+  # 连接池配置
+  max_pool_size: 100
+  max_conn_idle_time: 10s
+  connect_timeout: 1s
+  server_selection_timeout: 1s
+  startup_timeout: 1s
+  shutdown_timeout: 1s
+
+  tls:
+    ca_cert: |
+      -----BEGIN CERTIFICATE-----
+      MIIDSTCCAjGgAwIBAgIUcUyxnveLP7h2ZomRyTosUyhKyDYwDQYJKoZIhvcNAQEL
+      BQAwNDETMBEGA1UEAwwKTW9uZ29EQi1DQTEQMA4GA1UECgwHTW9uZ29EQjELMAkG
+      A1UEBhMCQ04wHhcNMjUxMjI0MDk0ODM3WhcNMzUxMjIyMDk0ODM3WjA0MRMwEQYD
+      VQQDDApNb25nb0RCLUNBMRAwDgYDVQQKDAdNb25nb0RCMQswCQYDVQQGEwJDTjCC
+      ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMSr5Uu3/5MsnGtaYozsvJWw
+      PYphfo493X81DmD7M5h6cHP9ejlG0XTuULm5SZfmkpfIFHwlRHhMKegUNPjOTLdd
+      +veLQYzffpoDW2fHXy0dqiBCO7SJXonH9mEkzfJsf+ZH+FG9DizHlnMWpWaTSUy7
+      PQpRnSTa1j8xRYWZjqc0LpSfc8qFdohk3cAWY9rxvt/6QXBcc/MMG2NO3KozOd9s
+      Y4eUg0HqVyEmnjJGX/Lw87FbiwsD6Rc2c9poHagTqCBfvSy2tNwu/MV1BGhY7adY
+      d2dRxzdW1FOlDpuoS+AwA5xbC54mj/oJYh4B+vHuCs/oPjGuxhAG9sTlJnYPMlsC
+      AwEAAaNTMFEwHQYDVR0OBBYEFOvvpLaQR/InG5wi4ziCcUY/M7sSMB8GA1UdIwQY
+      MBaAFOvvpLaQR/InG5wi4ziCcUY/M7sSMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZI
+      hvcNAQELBQADggEBAGC4E5g0y34wh2gVBDI1FlP1JFgDk2tOuMlLVJyV3oK9o2St
+      TWV4D9jfmD2ral5Oz/Qm/YdUqS/NIClMfdMc4cW5CfE1GL0TRT17YnN/X2ZVkTud
+      qrwbk2FKitbmwzmIbWxdzrt5VBfghNY6xrpR4rokmhRZWYEDQLcLyuNa4ArQIsEi
+      IWJI04sahjtqv1bgabzpkI3kq/y8wmjd3MpBrGKDBOkiqRNz0EgWkmCm+rCSFBMf
+      Iz2qPGt5W1ysA90VcYNW+5VI+sPBOu2LoKY/R4o4OAJYNMikmnurf24aG2FRzODR
+      UPIspN2/olAJBD4ITqd81nfVgV3FvM8VcKhoHoE=
+      -----END CERTIFICATE-----
+
+    cert_key: |
+      -----BEGIN PRIVATE KEY-----
+      MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCX6ir9f9AQoAKP
+      50TpJ8sy3XU6XvTnYT2DuozWnp20S7EzKFK2vcOfIVgBs+xrdDil3GTIFwKHal/4
+      ysy65oLIn3+jhuKwYczsBqy6GqAZqD9iot5QM0dvlt6PXAFLtZIu0fkXVrE7oNB2
+      SWEuF63r4fQxp01pNveK4G8dUrphBIbNfEWvRVryIsy2SriJ6G/6adfUciREtj9i
+      19Iq093DVTTFU5wUfJwBylDee+0K6qVipJKQzCT1kqCYdlXXa8dc7W8lGC0ul/oW
+      VN0PFxDsNBqjbJzBDHP/00XAM2mJ6farip4dOMNgdswhv4dptq6nUbTX2+axoRSc
+      LgS2WunXAgMBAAECggEAS1mccjmDv8NGEg+RqB4TVUrwGwA/dEbQpraQpeFt8qA6
+      p9e/0yFj1tnIl6uhQBkZAffDy1VSbU1vhe09SBUO2Kj4O+mrJfaUmJuk7/hF4gQI
+      UIndQCV3MNvBz5TAlcddVzjR1ugqp5tX2twBxkV7gE0GfNxxcpcPiIRSyNYgWP8M
+      gtqQKFxOu0pjru0pw83oeKAivcbWXFJ08IUgrUmdBDyQR9g0dfGpg78dghaUc1cg
+      FE+Wf08YCKS9kJVuh5qfsWNIuWv0P4hdo1/qsvKzDYsB/UNSFH6tPWwRgwsnSepQ
+      u7sMSmfH1dogQzzb/0kmodtNf75NDqP4qbPhyukX+QKBgQDMwI+CLa59DHKb3Qaq
+      CdAOv1TbFvL5R5b2d7lWbSx8S1zKw62br6QnSwrNxqkU+FNO46v4EqgLmMY7F+Ap
+      zOPS2dIw/sNT44QB80L5/wy0HPJfUWiitF7vVRNAiYm2fL9iaM3nEugLPUnLsCdO
+      aOCsLXsi0OluMYqH3t6TKNNZvwKBgQC98A+lv/NWoSTqXaPMt8TF35/t3EXisBhJ
+      GIceHIqnK6tflIgbtlu9AJ0oZiGl/W72K05YCpbZGwyGGIaV+N+S67T8A872baBS
+      iEODTKtt3JvjcXGQPuSXtnZUzQiSNO2aZCt0O+ztyYPnwW4Ub9d+rI5Qs2UtPXNa
+      uss2ayKF6QKBgQCHo1yuOULpNhDKbg5XIG8DBf7ZsIc/WgyIs+FEfshEgswyypQ8
+      mYteOFks3ljuOl892Jb4nKtUG13ekb9/EWsvJ/sVV//fl83AWP1ajXpF6xMoz85I
+      UsK9O5eoXjSrflJuh803MZAkufIkDErNp66GgQ6cjtbEl+8UeTDrPdVdEwKBgQCx
+      VWUGl8SV6TYSKwM3q4voQvWKmtIU59yEwoXEs1kw4zDJuF+roALe36fbhB9+XrQu
+      2hf3U0urv/ldaaCefRIgljkP4m5k3c2FwPtnpzmXBRX2sIAa8N10WEL6wcNy3j/I
+      miWIDDsVd8PTqWEha5qDBpCJADVCm9ELsMLyN+yvoQKBgB7Fsgb3W0EeOM+3Oy7K
+      TtF2LCgtLNlzsK/KuS8FAO0iONvHKstcgkhixywy4juaJAcxzZJSnWUdnbJ5OO0y
+      Pt6jX/47txYUwSt886MOd8ZgCjvjVxsfOENVMJ8QlP1p3ghDUpxwvgrA8kNf2w8D
+      FiaFDnXPRrkDhFIHEKhJyTCr
+      -----END PRIVATE KEY-----
+
+    cert_pem: |
+      -----BEGIN CERTIFICATE-----
+      MIIDjDCCAnSgAwIBAgIUVwOcU/qM7ZlkGql0qvhjRlKowiQwDQYJKoZIhvcNAQEL
+      BQAwNDETMBEGA1UEAwwKTW9uZ29EQi1DQTEQMA4GA1UECgwHTW9uZ29EQjELMAkG
+      A1UEBhMCQ04wHhcNMjUxMjI0MDk0ODM3WhcNMzUxMjIyMDk0ODM3WjA9MRUwEwYD
+      VQQDDAxhZG1pbi1jbGllbnQxFzAVBgNVBAoMDk1vbmdvREItQ2xpZW50MQswCQYD
+      VQQGEwJDTjCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAJfqKv1/0BCg
+      Ao/nROknyzLddTpe9OdhPYO6jNaenbRLsTMoUra9w58hWAGz7Gt0OKXcZMgXAodq
+      X/jKzLrmgsiff6OG4rBhzOwGrLoaoBmoP2Ki3lAzR2+W3o9cAUu1ki7R+RdWsTug
+      0HZJYS4Xrevh9DGnTWk294rgbx1SumEEhs18Ra9FWvIizLZKuInob/pp19RyJES2
+      P2LX0irT3cNVNMVTnBR8nAHKUN577QrqpWKkkpDMJPWSoJh2Vddrx1ztbyUYLS6X
+      +hZU3Q8XEOw0GqNsnMEMc//TRcAzaYnp9quKnh04w2B2zCG/h2m2rqdRtNfb5rGh
+      FJwuBLZa6dcCAwEAAaOBjDCBiTAOBgNVHQ8BAf8EBAMCBaAwEwYDVR0lBAwwCgYI
+      KwYBBQUHAwIwIgYDVR0RBBswGYIMYWRtaW4tY2xpZW50gglsb2NhbGhvc3QwHQYD
+      VR0OBBYEFOhRmYQYJqlSFCeVvEftFBqiiaDRMB8GA1UdIwQYMBaAFOvvpLaQR/In
+      G5wi4ziCcUY/M7sSMA0GCSqGSIb3DQEBCwUAA4IBAQBYVuibtkPFb+h38GjQlzOH
+      wTUZ5rCo6vGgXqRQ7XAbG62rR0kemMDvx55Iex8+159e0daQGkZjfSrLUYFZIfJS
+      PmxLFti6cvB/GrPnewrStfDfMqL+wneGpU1K/OQO1ZI3lAVoyGkJRRgtsOjookVN
+      e0it4KnQI9KzX6CIjyJhjY593MkxiqvPD01BGZqa2PZPSKr3DtsIBScmc4Em5c74
+      KENCB0/2M4/2xD5lo4pPl24PErCA4HZs+yr7Tn+H2OCAsnuDJA8ayzcKj8Vumac7
+      IPtFXdJ36zk689PNAM1Jf7uERSAa7fkL0V3qxRamj3F0AuGvg99HQUZxFIGQpqdy
+      -----END CERTIFICATE-----
+
+
