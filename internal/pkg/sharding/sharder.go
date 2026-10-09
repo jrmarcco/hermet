@@ -53,7 +53,7 @@ func NewBizSharder(bizID uint64, bizKey string) BizSharder {
 func (s BizSharder) ShardVal() (uint64, error) {
 	h := xxhash.New()
 
-	// 写入 bizID 的二进制表示
+	// 写入 bizID 的二进制表示。
 	buf := make([]byte, 8) //nolint:mnd // 8 bytes is enough for uint64
 	binary.BigEndian.PutUint64(buf, s.bizID)
 	if _, err := h.Write(buf); err != nil {
