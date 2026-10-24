@@ -7,12 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jrmarcco/hermet/internal/pkg/auth"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin/middleware"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin/xsession"
-	"github.com/jrmarcco/jit/xjwt"
 	"github.com/jrmarcco/jit/xset"
-	authv1 "github.com/jrmarcco/synp-api/api/go/auth/v1"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
 )
@@ -49,8 +48,8 @@ func newCorsBuilder() (*middleware.CorsBuilder, error) {
 type jwtBuilderFxParams struct {
 	fx.In
 
-	Handler   xsession.Handler
-	AtManager xjwt.Manager[authv1.JwtPayload] `name:"access-token-manager"`
+	Handler xsession.Handler
+	Signer  *auth.RS256Signer
 }
 
 func newJwtBuilder(params jwtBuilderFxParams) (*middleware.JwtBuilder, error) {
@@ -66,5 +65,5 @@ func newJwtBuilder(params jwtBuilderFxParams) (*middleware.JwtBuilder, error) {
 	for _, ignore := range ignores {
 		ts.Add(ignore)
 	}
-	return middleware.NewJwtBuilder(params.Handler, params.AtManager, ts), nil
+	return middleware.NewJwtBuilder(params.Handler, params.Signer.Verifier(), ts), nil
 }

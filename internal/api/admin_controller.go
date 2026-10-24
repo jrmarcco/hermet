@@ -11,7 +11,10 @@ import (
 	"github.com/jrmarcco/hermet/internal/pkg/xgin"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/service"
+	messagev1 "github.com/jrmarcco/synp-api/api/go/message/v1"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var _ xgin.RouteRegistry = (*AdminHandler)(nil)
@@ -71,30 +74,51 @@ func (h *AdminHandler) AddUser(ctx *gin.Context, req addUserRequest) (xgin.R, er
 }
 
 type sendMsgRequest struct {
+	SenderID        uint64 `json:"senderId"`
 	DestinationID   uint64 `json:"destinationId"`
 	DestinationType string `json:"destinationType"`
 	Content         string `json:"content"`
 }
 
 func (h *AdminHandler) SendMessage(ctx *gin.Context, req sendMsgRequest) (xgin.R, error) {
-	msg := domain.Message{
-		ID:  uuid.New().String(),
-		SID: 1,
-		MID: 1,
+	body := domain.Message{
+		ID:  uuid.NewString(),
+		SID: req.SenderID,
 
 		DestinationID:   req.DestinationID,
 		DestinationType: domain.ChannelType(req.DestinationType),
-		Content:         []byte(req.Content),
-		ContentType:     domain.ContentTypeText,
-		SendAt:          time.Now().UnixMilli(),
+
+		Content:     []byte(req.Content),
+		ContentType: domain.ContentTypeText,
+
+		SendAt: time.Now().UnixMilli(),
 	}
 
-	val, err := json.Marshal(msg)
+	bodyVal, err := json.Marshal(body)
 	if err != nil {
 		return xgin.R{}, err
 	}
 
-	if err := h.messageService.ProcessUpstreamMsg(ctx, &xmq.Message{Val: val}); err != nil {
+	// 模拟网关盖章后的 UpstreamMessage ( protojson 编码 )。
+	senderID := req.SenderID
+	if senderID == 0 {
+		senderID = 1
+	}
+	upstream := &messagev1.UpstreamMessage{
+		MessageId:  body.ID,
+		BusinessId: service.DefaultBusinessID,
+		UserId:     senderID,
+
+		Body: bodyVal,
+
+		OccurredAt: timestamppb.Now(),
+	}
+	upstreamVal, err := protojson.Marshal(upstream)
+	if err != nil {
+		return xgin.R{}, err
+	}
+
+	if err := h.messageService.ProcessUpstreamMsg(ctx, &xmq.Message{Val: upstreamVal}); err != nil {
 		return xgin.R{}, err
 	}
 

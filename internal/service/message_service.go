@@ -3,38 +3,27 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jrmarcco/hermet/internal/domain"
+	"github.com/jrmarcco/hermet/internal/errs"
+	"github.com/jrmarcco/hermet/internal/mq"
+	"github.com/jrmarcco/hermet/internal/pkg/sharding"
+	"github.com/jrmarcco/hermet/internal/pkg/sharding/idgen"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/repo"
-	"github.com/jrmarcco/jit/xpool"
 	messagev1 "github.com/jrmarcco/synp-api/api/go/message/v1"
-	nodev1 "github.com/jrmarcco/synp-api/api/go/node/v1"
-	"github.com/jrmarcco/xgrpc/client"
-	gocache "github.com/patrickmn/go-cache"
-	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
-// TODO: 后续建议按照业务分级配置超时时间
-const defaultPushTimeout = 800 * time.Millisecond
+// channel.last_message_content 列宽 ( scripts/sql/pgsql/02_read_side.sql )。
+const lastMessageContentMaxRunes = 512
 
-const (
-	// 在线路由缓存可稍长，减少 Locate RPC 频率。
-	locateUserPositiveCacheTTL = 10 * time.Second
-	// 离线路由缓存应更短，避免用户上线后感知延迟。
-	locateUserNegativeCacheTTL = 2 * time.Second
-	// TTL 增加约 20% 抖动，降低同批 key 同时失效概率。
-	locateUserCacheJitterDivisor = 5
-)
-
-type userLocateCacheEntry struct {
-	Addrs []string
-	Found bool
-}
-
+// MessageService 处理网关投递到 Kafka 上行 topic 的业务消息。
 type MessageService interface {
 	ProcessUpstreamMsg(ctx context.Context, upstreamMsg *xmq.Message) error
 }
@@ -42,201 +31,236 @@ type MessageService interface {
 var _ MessageService = (*DefaultMessageService)(nil)
 
 type DefaultMessageService struct {
-	rdb         redis.Cmdable
-	taskPool    xpool.TaskPool
 	messageRepo repo.MessageRepo
+	contactRepo repo.ContactRepo
 
-	pushServiceClients   *client.Manager[messagev1.PushServiceClient]
-	locateServiceClients *client.Manager[nodev1.LocateServiceClient]
+	// notifyProducer 投递 NotifyMessage 到通知 topic ( 推送侧消费后下发 NOTIFY 帧 )。
+	notifyProducer mq.Producer
 
-	// 本地缓存，用于缓存用户所在的网关路由信息。
-	localCache *gocache.Cache
+	idgen idgen.Generator
 
 	logger *zap.Logger
 }
 
 func NewDefaultMessageService(
-	rdb redis.Cmdable,
-	taskPool xpool.TaskPool,
 	messageRepo repo.MessageRepo,
-	pushServiceClients *client.Manager[messagev1.PushServiceClient],
-	locateServiceClients *client.Manager[nodev1.LocateServiceClient],
-	localCache *gocache.Cache,
+	contactRepo repo.ContactRepo,
+
+	notifyProducer mq.Producer,
+
+	gen idgen.Generator,
+
 	logger *zap.Logger,
 ) *DefaultMessageService {
 	return &DefaultMessageService{
-		rdb:         rdb,
-		taskPool:    taskPool,
 		messageRepo: messageRepo,
+		contactRepo: contactRepo,
 
-		pushServiceClients:   pushServiceClients,
-		locateServiceClients: locateServiceClients,
+		notifyProducer: notifyProducer,
 
-		localCache: localCache,
+		idgen: gen,
 
 		logger: logger,
 	}
 }
 
-// ProcessUpstreamMsg 处理上游消息。
+// ProcessUpstreamMsg 处理上游消息 ( 网关盖章后的 UpstreamMessage，protojson 编码 )。
 //
-// 这里需要做 2 件事：
-//  1. 保存消息到数据库 ( 这里是 MongoDB )。
-//  2. 调用网关 grpc 接口推送消息。
+// 落库即事实: 消息只有在这里持久化并分配 seq 后才算成立；
+// 随后投递通知 ( 只携带 latest_seq，不携带消息本体 )，客户端经 SYNC 拉取增量。
+//
+// 错误语义:
+//   - 解析失败 / 校验不通过: 记录日志后返回 nil ( 毒消息与业务拒绝不重投，避免无限循环 )。
+//   - 落库失败: 返回 error，Kafka 按消费语义重投 ( 全链路幂等，重投安全 )。
+//   - 通知失败: 仅记录日志 ( 契约允许通知丢失，只影响实时性 )。
 func (s *DefaultMessageService) ProcessUpstreamMsg(ctx context.Context, upstreamMsg *xmq.Message) error {
-	// 保存消息到数据库。
-	domainMsg := domain.Message{}
-	if err := json.Unmarshal(upstreamMsg.Val, &domainMsg); err != nil {
-		return fmt.Errorf("failed to unmarshal message: %w", err)
+	stamped := &messagev1.UpstreamMessage{}
+	if err := protojson.Unmarshal(upstreamMsg.Val, stamped); err != nil {
+		s.logger.Error(
+			"[message-service] failed to unmarshal upstream message, skip",
+			zap.ByteString("val", upstreamMsg.Val),
+			zap.Error(err),
+		)
+		return nil
 	}
 
-	// 调用网关 grpc 接口推送消息。
-	// 这里要分情况处理 ( 单聊 / 群聊 )。
-	if domainMsg.DestinationType == domain.ChannelTypeSingle {
-		// 单聊：直接推送消息。
-		return s.pushSingleMsg(ctx, &domainMsg)
+	// 身份以网关盖章为准，body 内自报的 SID 仅作展示。
+	businessID := stamped.GetBusinessId()
+	if businessID == 0 {
+		businessID = DefaultBusinessID
+	}
+	senderID := stamped.GetUserId()
+
+	body := &domain.Message{}
+	if err := json.Unmarshal(stamped.GetBody(), body); err != nil {
+		s.logger.Error(
+			"[message-service] failed to unmarshal upstream body, skip",
+			zap.String("message_id", stamped.GetMessageId()),
+			zap.Uint64("sender_id", senderID),
+			zap.Error(err),
+		)
+		return nil
 	}
 
-	// 群聊：查询群成员列表，然后批量推送消息。
+	switch body.DestinationType {
+	case domain.ChannelTypeSingle:
+		return s.processSingleChat(ctx, stamped, businessID, senderID, body)
+	case domain.ChannelTypeGroup:
+		// 群聊走读扩散 ( conversation timeline + 指针扇出 )，暂未实现。
+		s.logger.Warn(
+			"[message-service] group message not supported yet, skip",
+			zap.String("message_id", stamped.GetMessageId()),
+			zap.Uint64("group_id", body.DestinationID),
+		)
+		return nil
+	default:
+		s.logger.Error(
+			"[message-service] unknown destination type, skip",
+			zap.String("message_id", stamped.GetMessageId()),
+			zap.String("destination_type", string(body.DestinationType)),
+		)
+		return nil
+	}
+}
+
+func (s *DefaultMessageService) processSingleChat(
+	ctx context.Context,
+	stamped *messagev1.UpstreamMessage,
+	businessID, senderID uint64,
+	body *domain.Message,
+) error {
+	receiverID := body.DestinationID
+	if receiverID == 0 || receiverID == senderID {
+		s.logger.Error(
+			"[message-service] invalid single chat destination, skip",
+			zap.String("message_id", stamped.GetMessageId()),
+			zap.Uint64("sender_id", senderID),
+			zap.Uint64("receiver_id", receiverID),
+		)
+		return nil
+	}
+
+	if err := s.validateContact(ctx, senderID, receiverID); err != nil {
+		// 业务级失败不通过 UPSTREAM_ACK 表达 ( 网关级回执与业务结果解耦，见契约 )，
+		// 后续可作为系统消息走同步链路下发，当前先记录日志。
+		s.logger.Warn(
+			"[message-service] single chat validation failed, skip",
+			zap.String("message_id", stamped.GetMessageId()),
+			zap.Uint64("sender_id", senderID),
+			zap.Uint64("receiver_id", receiverID),
+			zap.Error(err),
+		)
+		return nil
+	}
+
+	sentAt := time.Now().UnixMilli()
+	conversationID := domain.SingleConversationID(senderID, receiverID)
+
+	snowflakeID, err := s.nextSnowflakeID(conversationID)
+	if err != nil {
+		return fmt.Errorf("failed to generate message id: %w", err)
+	}
+
+	msg := domain.SingleChatMsg{
+		BusinessID: businessID,
+
+		MessageID:   stamped.GetMessageId(),
+		SnowflakeID: snowflakeID,
+
+		SenderID:   senderID,
+		ReceiverID: receiverID,
+
+		ConversationID: conversationID,
+
+		Body:           body.Content,
+		ContentType:    string(body.ContentType),
+		ContentPreview: contentPreview(body),
+
+		SentAt: sentAt,
+	}
+
+	result, err := s.messageRepo.StoreSingleChat(ctx, msg)
+	if err != nil {
+		// 返回 error 触发消费重投 ( 幂等 )。
+		return fmt.Errorf("failed to store single chat message: %w", err)
+	}
+
+	// 通知只携带 latest_seq ( 推送即通知，不携带消息本体 )。
+	// 分区键 hash(business_id, receiver_id) 保证同一接收者的通知有序。
+	s.notify(ctx, stamped.GetMessageId(), businessID, senderID, result.SenderSeq)
+	s.notify(ctx, stamped.GetMessageId(), businessID, receiverID, result.ReceiverSeq)
+
 	return nil
 }
 
-// pushSingleMsg 推送单聊消息。
-func (s *DefaultMessageService) pushSingleMsg(ctx context.Context, msg *domain.Message) error {
-	// 1.查询目标用户所在节点。
-	addrs, err := s.locateUser(ctx, msg.DestinationID)
+func (s *DefaultMessageService) validateContact(ctx context.Context, senderID, receiverID uint64) error {
+	contact, err := s.contactRepo.FindByUserIDAndContactID(ctx, senderID, receiverID)
 	if err != nil {
-		return fmt.Errorf("failed to push single message to user: %w", err)
+		if errors.Is(err, errs.ErrRecordNotFound) {
+			return fmt.Errorf("sender [ %d ] and receiver [ %d ] are not contacts", senderID, receiverID)
+		}
+		return err
 	}
 
-	for _, addr := range addrs {
-		// 2.使用线程池进行消息推送。
-		s.logger.Debug("pushing single message to user", zap.Uint64("user_id", msg.DestinationID), zap.String("addr", addr))
-
-		// 推荐在这里使用 WithTaskExecTimeoutInContext 设置超时时间。
-		submitCtx := xpool.WithTaskExecTimeoutInContext(ctx, defaultPushTimeout)
-		err := s.taskPool.Submit(submitCtx, xpool.TaskFunc(func(ctx context.Context) error {
-			return s.pushMsg(ctx, addr, msg)
-		}))
-		if err != nil {
-			return fmt.Errorf("failed to submit push message task: %w", err)
-		}
+	if contact.DeletedAt != 0 {
+		return fmt.Errorf("contact deleted between [ %d ] and [ %d ]", senderID, receiverID)
+	}
+	if contact.IsBlocked {
+		return fmt.Errorf("receiver [ %d ] is blocked by sender [ %d ]", receiverID, senderID)
 	}
 	return nil
 }
 
-// pushGroupMsg 推送群聊消息。
-//
-//nolint:unused // TODO: implement
-func (s *DefaultMessageService) pushGroupMsg(_ context.Context, _ *domain.Message) error {
-	return nil
-}
+func (s *DefaultMessageService) notify(ctx context.Context, messageID string, businessID, receiverID uint64, latestSeq int64) {
+	notifyMsg := &messagev1.NotifyMessage{
+		MessageId: messageID,
 
-// locateUser 定位用户所在的网关地址列表。
-// 这里只需要地址，推送消息通过地址定向调用。
-func (s *DefaultMessageService) locateUser(ctx context.Context, uid uint64) ([]string, error) {
-	cacheKey := s.cacheKey(uid)
-	if s.localCache != nil {
-		if cached, found := s.localCache.Get(cacheKey); found {
-			if entry, ok := cached.(userLocateCacheEntry); ok {
-				if !entry.Found {
-					return nil, nil
-				}
-				return append([]string(nil), entry.Addrs...), nil
-			}
-			s.localCache.Delete(cacheKey)
-		}
+		BusinessId: businessID,
+		ReceiverId: receiverID,
+
+		LatestSeq: uint64(latestSeq),
 	}
 
-	// TODO: 这里需要优化，不要硬编码服务名称。
-	grpcClient, err := s.locateServiceClients.Get("synp-gateway")
+	val, err := protojson.Marshal(notifyMsg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get locate service client: %w", err)
+		// proto 序列化失败属于代码缺陷，记录后丢弃该条通知 ( 通知可丢 )。
+		s.logger.Error(
+			"[message-service] failed to marshal notify message",
+			zap.String("message_id", messageID),
+			zap.Uint64("receiver_id", receiverID),
+			zap.Error(err),
+		)
+		return
 	}
 
-	// 用户 ID 作为 biz id 放入 context。
-	// 作为一致性哈希的 key。
-	ctx = client.ContextWithBizId(ctx, uid)
-	resp, err := grpcClient.LocateUser(ctx, &nodev1.LocateUserRequest{
-		UserId: uid,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to locate user: %w", err)
-	}
-
-	// 用户不在线直接返回空列表。
-	if len(resp.Locations) == 0 {
-		if s.localCache != nil {
-			s.localCache.Set(
-				cacheKey,
-				userLocateCacheEntry{Found: false},
-				s.cacheTTLWithJitter(uid, locateUserNegativeCacheTTL),
-			)
-		}
-		return nil, nil
-	}
-
-	addrs := make([]string, 0, len(resp.Locations))
-	for _, location := range resp.Locations {
-		addrs = append(addrs, location.ServiceAddr)
-	}
-	if s.localCache != nil {
-		s.localCache.Set(
-			cacheKey,
-			userLocateCacheEntry{
-				Addrs: append([]string(nil), addrs...),
-				Found: true,
-			},
-			s.cacheTTLWithJitter(uid, locateUserPositiveCacheTTL),
+	key := fmt.Appendf(nil, "%d:%d", businessID, receiverID)
+	if err := s.notifyProducer.Produce(ctx, key, val); err != nil {
+		// 通知失败无需重试 ( 只影响实时性，客户端重连/心跳时主动 SYNC 兜底 )。
+		s.logger.Warn(
+			"[message-service] failed to produce notify message",
+			zap.String("message_id", messageID),
+			zap.Uint64("receiver_id", receiverID),
+			zap.Error(err),
 		)
 	}
-	return addrs, nil
 }
 
-func (s *DefaultMessageService) cacheKey(uid uint64) string {
-	return fmt.Sprintf("locate:user:%d", uid)
-}
-
-func (s *DefaultMessageService) cacheTTLWithJitter(uid uint64, baseTTL time.Duration) time.Duration {
-	if baseTTL <= 0 {
-		return baseTTL
-	}
-
-	jitter := baseTTL / locateUserCacheJitterDivisor
-	if jitter <= 0 {
-		return baseTTL
-	}
-
-	span := uint64(jitter*2 + 1)
-	offset := time.Duration(uid%span) - jitter
-	return baseTTL + offset
-}
-
-func (s *DefaultMessageService) pushMsg(ctx context.Context, addr string, msg *domain.Message) error {
-	// TODO: 这里需要优化，不要硬编码服务名称。
-	grpcClient, err := s.pushServiceClients.GetByAddr("synp-gateway", addr)
+// nextSnowflakeID 生成消息正本表主键 ( 分片值取自 conversation_id 的哈希 )。
+func (s *DefaultMessageService) nextSnowflakeID(conversationID string) (uint64, error) {
+	shardVal, err := sharding.NewStringSharder(conversationID).ShardVal()
 	if err != nil {
-		return fmt.Errorf("failed to get push service client: %w", err)
+		return 0, err
+	}
+	return s.idgen.NextID(shardVal)
+}
+
+// contentPreview 生成会话列表展示用的内容摘要 ( 按 rune 截断至列宽 )。
+func contentPreview(body *domain.Message) string {
+	preview := string(body.Content)
+	if utf8.RuneCountInString(preview) <= lastMessageContentMaxRunes {
+		return preview
 	}
 
-	pushMsg := &messagev1.PushMessage{
-		MessageId:  msg.ID,
-		BusinessId: msg.DestinationID,
-		ReceiverId: msg.DestinationID,
-		Body:       msg.Content,
-	}
-
-	resp, err := grpcClient.Push(ctx, &messagev1.PushRequest{
-		Message:     pushMsg,
-		ShouldRetry: true,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to call the push service grpc api: %w", err)
-	}
-
-	if resp.Status != messagev1.PushStatus_PUSH_STATUS_SUCCESS {
-		return fmt.Errorf("failed to push message: %s", resp.ErrorMessage)
-	}
-
-	return nil
+	runes := []rune(preview)
+	return string(runes[:lastMessageContentMaxRunes])
 }

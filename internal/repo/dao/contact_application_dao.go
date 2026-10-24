@@ -93,7 +93,7 @@ func (d *DefaultContactApplicationDao) UpdateStatus(ctx context.Context, id uint
 		UpdateColumns(map[string]any{
 			"application_status": string(status),
 			"reviewed_at":        now,
-			"updated_at":         now,
+			colUpdatedAt:         now,
 		}).Error
 }
 

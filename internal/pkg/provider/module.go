@@ -15,15 +15,7 @@ var (
 	EtcdFxModule       = fx.Module("etcd", fx.Provide(newEtcdClient))
 	RedisFxModule      = fx.Module("redis", fx.Provide(newRedisCmdable))
 	GoCacheFxModule    = fx.Module("go-cache", fx.Provide(newGoCache))
-	MongoFxModule      = fx.Module("mongo", fx.Provide(newMongoClient))
 	JwtManagerFxModule = fx.Module("jwt-manager", fx.Provide(newJwtManager))
-)
-
-var GrpcClientFxModule = fx.Module(
-	"grpc-client", fx.Provide(
-		newGrpcLocateClient,
-		newGrpcPushClient,
-	),
 )
 
 var DBFxModule = fx.Module(
@@ -175,6 +167,17 @@ var ShardingFxModule = fx.Module(
 		fx.Annotate(
 			newOutboxEventShardHelper,
 			fx.ResultTags(`name:"outbox_event_shard_helper"`),
+		),
+
+		// 消息正本 ( 按 conversation_id 分片 )。
+		fx.Annotate(
+			newMessageShardHelper,
+			fx.ResultTags(`name:"message_shard_helper"`),
+		),
+		// 收件箱 ( seq 分配与条目同布局，共用一个 helper，按 user_id 分片 )。
+		fx.Annotate(
+			newInboxEntryShardHelper,
+			fx.ResultTags(`name:"inbox_entry_shard_helper"`),
 		),
 	),
 )

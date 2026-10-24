@@ -2,46 +2,90 @@ package dao
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/jrmarcco/hermet/internal/pkg/xmongo"
-	"go.mongodb.org/mongo-driver/v2/mongo"
+	"github.com/jrmarcco/hermet/internal/pkg/sharding"
+	"github.com/jrmarcco/jit/xsync"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
+// Message 消息正本表。
 type Message struct {
-	ID string `bson:"id"`
+	ID uint64 `gorm:"column:id"`
 
-	SID uint64 `bson:"sid"` // Sender ID ( 发送者 ID )
-	MID uint64 `bson:"mid"` // Message ID ( 这里指的是网关消息的 ID )
+	MessageID  string `gorm:"column:message_id"`
+	BusinessID uint64 `gorm:"column:business_id"`
 
-	DestinationID   string `bson:"destinationId"`   // Destination ID ( 目的地频道 ID )
-	DestinationType string `bson:"destinationType"` // Destination Type ( 目的地类型 )
+	ConversationID  string `gorm:"column:conversation_id"`
+	ConversationSeq int64  `gorm:"column:conversation_seq"`
+	SenderID        uint64 `gorm:"column:sender_id"`
 
-	Content     []byte `bson:"content"`     // Message Content
-	ContentType string `bson:"contentType"` // Message Content Type
+	Body        []byte `gorm:"column:body"`
+	ContentType string `gorm:"column:content_type"`
 
-	SendAt int64 `bson:"sendAt"` // Message Send Time
+	SentAt    int64 `gorm:"column:sent_at"`
+	CreatedAt int64 `gorm:"column:created_at"`
 }
 
 type MessageDao interface {
-	Save(ctx context.Context, message *Message) error
+	// SaveInTx 事务内写入消息正本 ( 按 ( business_id, message_id ) 幂等 )。
+	SaveInTx(ctx context.Context, tx *gorm.DB, tbName string, message Message) error
+
+	// ListByConversation 返回会话 timeline 内 ( conversation_seq > cursor ] 按序的至多 limit 条消息。
+	ListByConversation(ctx context.Context, businessID uint64, conversationID string, cursor int64, limit int) ([]Message, error)
 }
 
-var _ MessageDao = (*MongoMessageDao)(nil)
+var _ MessageDao = (*DefaultMessageDao)(nil)
 
-type MongoMessageDao struct {
-	coll *mongo.Collection
+type DefaultMessageDao struct {
+	dbs         *xsync.Map[string, *gorm.DB]
+	shardHelper *sharding.ShardHelper
 }
 
-func NewMongoMessageDao(collManager *xmongo.CollManager) *MongoMessageDao {
-	return &MongoMessageDao{
-		coll: collManager.Collection("message"),
+func NewDefaultMessageDao(
+	dbs *xsync.Map[string, *gorm.DB],
+	shardHelper *sharding.ShardHelper,
+) *DefaultMessageDao {
+	return &DefaultMessageDao{
+		dbs:         dbs,
+		shardHelper: shardHelper,
 	}
 }
 
-// Save 保存消息。
-// 注意：message 必须是指针类型，因为 MongoDB 的插入操作会修改 message 的值 ( 如 ID 回传) 。
-// 同时 Content 字段为 []byte，使用指针类型可以有效避免内存拷贝。
-func (d *MongoMessageDao) Save(ctx context.Context, message *Message) error {
-	_, err := d.coll.InsertOne(ctx, message)
-	return err
+func (d *DefaultMessageDao) SaveInTx(ctx context.Context, tx *gorm.DB, tbName string, message Message) error {
+	return tx.WithContext(ctx).Table(tbName).Model(&Message{}).
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "business_id"}, {Name: "message_id"}},
+			DoNothing: true,
+		}).
+		Create(&message).Error
+}
+
+func (d *DefaultMessageDao) ListByConversation(
+	ctx context.Context,
+	businessID uint64,
+	conversationID string,
+	cursor int64,
+	limit int,
+) ([]Message, error) {
+	dst, err := d.shardHelper.DstFromSharder(sharding.NewStringSharder(conversationID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get shard destination from conversation id [ %s ]: %w", conversationID, err)
+	}
+
+	db, ok := d.dbs.Load(dst.DB)
+	if !ok {
+		return nil, fmt.Errorf("failed to load database [ %s ]", dst.DB)
+	}
+
+	messages := make([]Message, 0, limit)
+	err = db.WithContext(ctx).Table(dst.TB).Model(&Message{}).
+		Where("business_id = ?", businessID).
+		Where("conversation_id = ?", conversationID).
+		Where("conversation_seq > ?", cursor).
+		Order("conversation_seq ASC").
+		Limit(limit).
+		Find(&messages).Error
+	return messages, err
 }

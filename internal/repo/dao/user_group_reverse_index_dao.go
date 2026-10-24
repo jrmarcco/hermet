@@ -37,7 +37,7 @@ func NewDefaultUserGroupRidxDao(dbs *xsync.Map[string, *gorm.DB], shardHelper *s
 func (d *DefaultUserGroupRidxDao) CreateInTx(ctx context.Context, tx *gorm.DB, tbName string, ugri UserGroupReverseIndex) error {
 	return tx.WithContext(ctx).Table(tbName).Model(&UserGroupReverseIndex{}).
 		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "user_id"}, {Name: "group_id"}},
+			Columns:   []clause.Column{{Name: colUserID}, {Name: colGroupID}},
 			DoNothing: true,
 		}).
 		Create(&ugri).Error

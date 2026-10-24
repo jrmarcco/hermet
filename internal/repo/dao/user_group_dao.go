@@ -51,7 +51,7 @@ func NewDefaultUserGroupDao(
 func (d *DefaultUserGroupDao) CreateInTx(ctx context.Context, tx *gorm.DB, tbName string, ug UserGroup) error {
 	return tx.WithContext(ctx).Table(tbName).Model(&UserGroup{}).
 		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "user_id"}, {Name: "group_id"}},
+			Columns:   []clause.Column{{Name: colUserID}, {Name: colGroupID}},
 			DoNothing: true,
 		}).
 		Create(&ug).Error

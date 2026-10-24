@@ -100,7 +100,17 @@ var DaoFxModule = fx.Module(
 			fx.ParamTags(`name:"db_sharding_clients"`, `name:"outbox_event_shard_helper"`),
 		),
 
-		// 消息 Dao ( MongoDB )。
-		fx.Annotate(NewMongoMessageDao, fx.As(new(MessageDao))),
+		// 消息正本 ( 按 conversation_id 分片 )。
+		fx.Annotate(
+			NewDefaultMessageDao,
+			fx.As(new(MessageDao)),
+			fx.ParamTags(`name:"db_sharding_clients"`, `name:"message_shard_helper"`),
+		),
+		// 收件箱 ( seq 分配 + 条目，按 user_id 分片 )。
+		fx.Annotate(
+			NewDefaultInboxDao,
+			fx.As(new(InboxDao)),
+			fx.ParamTags(`name:"db_sharding_clients"`, `name:"inbox_entry_shard_helper"`),
+		),
 	),
 )

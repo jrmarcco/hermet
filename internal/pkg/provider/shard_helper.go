@@ -153,6 +153,23 @@ func newOutboxEventShardHelper(gen idgen.Generator, extractor sharding.ShardValE
 	return newShardHelper(gen, extractor, cfg)
 }
 
+func newMessageShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
+	cfg := shardingConfig{}
+	if err := viper.UnmarshalKey("sharding.message", &cfg); err != nil {
+		return nil, err
+	}
+	return newShardHelper(gen, extractor, cfg)
+}
+
+func newInboxEntryShardHelper(gen idgen.Generator, extractor sharding.ShardValExtractor) (*sharding.ShardHelper, error) {
+	// inbox_seq 与 inbox_entry 同布局 ( 按 user_id 路由 )，共用本 helper。
+	cfg := shardingConfig{}
+	if err := viper.UnmarshalKey("sharding.inbox_entry", &cfg); err != nil {
+		return nil, err
+	}
+	return newShardHelper(gen, extractor, cfg)
+}
+
 func newShardHelper(
 	gen idgen.Generator,
 	extractor sharding.ShardValExtractor,

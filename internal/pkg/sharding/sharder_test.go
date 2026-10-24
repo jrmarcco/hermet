@@ -100,7 +100,7 @@ func TestStringSharder_Uniformity(t *testing.T) {
 	// 验证分布均匀性。
 	// 计算标准差，判断分布是否均匀。
 	var sum, sumSquare float64
-	var minCnt, maxCnt int = totalUsers, 0
+	minCnt, maxCnt := totalUsers, 0
 
 	for _, count := range shardDistribution {
 		sum += float64(count)

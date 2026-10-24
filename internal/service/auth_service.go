@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jrmarcco/hermet/internal/errs"
+	"github.com/jrmarcco/hermet/internal/pkg/auth"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/jit/xjwt"
@@ -18,27 +19,36 @@ type AuthService interface {
 	VerifyRefreshToken(ctx context.Context, refreshToken string) (user xgin.ContextUser, err error)
 }
 
-const accountTypeEmail = "email"
+const (
+	accountTypeEmail = "email"
+
+	// DefaultBusinessID 默认业务 ID。
+	// 当前为单租户部署，business_id 以固定常量透传 ( 契约要求网关盖章该字段 )，
+	// 多租户化时需要把 business 维度引入用户与会话模型。
+	DefaultBusinessID = 1
+)
 
 var _ AuthService = (*DefaultAuthService)(nil)
 
 type DefaultAuthService struct {
 	userRepo repo.UserRepo
 
-	atManager xjwt.Manager[authv1.JwtPayload]
+	// signer 签发网关连接鉴权 token ( 同时用于后端 HTTP API 鉴权 )。
+	signer *auth.RS256Signer
+	// rtManager 签发与校验 refresh token ( 仅后端自身使用 )。
 	rtManager xjwt.Manager[authv1.JwtPayload]
 }
 
 func NewDefaultAuthService(
 	userRepo repo.UserRepo,
 
-	atManager xjwt.Manager[authv1.JwtPayload],
+	signer *auth.RS256Signer,
 	rtManager xjwt.Manager[authv1.JwtPayload],
 ) *DefaultAuthService {
 	return &DefaultAuthService{
 		userRepo: userRepo,
 
-		atManager: atManager,
+		signer:    signer,
 		rtManager: rtManager,
 	}
 }
@@ -63,24 +73,26 @@ func (s *DefaultAuthService) signInByEmail(ctx context.Context, account, credent
 	}
 
 	return xgin.ContextUser{
+		BID: DefaultBusinessID,
 		SID: uuid.NewString(),
 		UID: user.ID,
 	}, nil
 }
 
 func (s *DefaultAuthService) GenerateToken(_ context.Context, user xgin.ContextUser) (accessToken, refreshToken string, err error) {
-	at, err := s.atManager.Encrypt(authv1.JwtPayload{
-		BizId:     user.BID,
-		UserId:    user.UID,
-		SessionId: user.SID,
-	})
+	if user.BID == 0 {
+		user.BID = DefaultBusinessID
+	}
+
+	at, err := s.signer.Sign(user.BID, user.UID, user.SID)
 	if err != nil {
 		return "", "", err
 	}
+
 	rt, err := s.rtManager.Encrypt(authv1.JwtPayload{
-		BizId:     user.BID,
-		UserId:    user.UID,
-		SessionId: user.SID,
+		BusinessId: user.BID,
+		UserId:     user.UID,
+		SessionId:  user.SID,
 	})
 	if err != nil {
 		return "", "", err
@@ -94,7 +106,7 @@ func (s *DefaultAuthService) VerifyRefreshToken(_ context.Context, refreshToken 
 		return xgin.ContextUser{}, err
 	}
 	return xgin.ContextUser{
-		BID: decrypted.Data.BizId,
+		BID: decrypted.Data.BusinessId,
 		UID: decrypted.Data.UserId,
 		SID: decrypted.Data.SessionId,
 	}, nil

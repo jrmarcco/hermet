@@ -36,6 +36,13 @@ var APIFxModule = fx.Module(
 			fx.ResultTags(`group:"api_registry"`),
 		),
 
+		// JWKS 公钥发布端点 ( /.well-known/jwks.json，网关拉取公钥用 )。
+		fx.Annotate(
+			NewJwksHandler,
+			fx.As(new(xgin.RouteRegistry)),
+			fx.ResultTags(`group:"api_registry"`),
+		),
+
 		// FIXME: 临时 api 接口。
 		fx.Annotate(
 			NewAdminHandler,

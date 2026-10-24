@@ -61,7 +61,7 @@ func newEtcdClient(logger *zap.Logger, lifecycle fx.Lifecycle) (*clientv3.Client
 
 		etcdTLSConfig := &tls.Config{
 			MinVersion:         tls.VersionTLS13,
-			InsecureSkipVerify: cfg.TLS.InsecureSkipVerify,
+			InsecureSkipVerify: cfg.TLS.InsecureSkipVerify, //nolint:gosec // G402: 由配置项 tls.insecure_skip_verify 控制，仅开发环境开启
 			RootCAs:            caCertPool,
 			Certificates:       []tls.Certificate{clientCert},
 		}

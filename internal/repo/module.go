@@ -32,8 +32,8 @@ var RepoFxModule = fx.Module(
 		// channel repo ( 用户频道 )
 		fx.Annotate(newChannelRepo, fx.As(new(ChannelRepo))),
 
-		// message repo ( 消息 )
-		fx.Annotate(NewDefaultMessageRepo, fx.As(new(MessageRepo))),
+		// message repo ( 消息正本 + 收件箱写扩散 )
+		fx.Annotate(newMessageRepo, fx.As(new(MessageRepo))),
 	),
 )
 
@@ -139,5 +139,32 @@ func newChannelRepo(params channelRepoFxParams) ChannelRepo {
 		params.DBs,
 		params.CShardHelper,
 		params.CRidxShardHelper,
+	)
+}
+
+type messageRepoFxParams struct {
+	fx.In
+
+	MessageDao dao.MessageDao
+	InboxDao   dao.InboxDao
+	ChannelDao dao.ChannelDao
+
+	DBs *xsync.Map[string, *gorm.DB] `name:"db_sharding_clients"`
+
+	MsgShardHelper     *sharding.ShardHelper `name:"message_shard_helper"`
+	InboxShardHelper   *sharding.ShardHelper `name:"inbox_entry_shard_helper"`
+	ChannelShardHelper *sharding.ShardHelper `name:"channel_shard_helper"`
+}
+
+func newMessageRepo(params messageRepoFxParams) MessageRepo {
+	return NewTxMessageRepo(
+		params.MessageDao,
+		params.InboxDao,
+		params.ChannelDao,
+
+		params.DBs,
+		params.MsgShardHelper,
+		params.InboxShardHelper,
+		params.ChannelShardHelper,
 	)
 }

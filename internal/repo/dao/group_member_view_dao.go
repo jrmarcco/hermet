@@ -51,7 +51,7 @@ func NewDefaultGroupMemberViewDao(dbs *xsync.Map[string, *gorm.DB], shardHelper 
 func (d *DefaultGroupMemberViewDao) CreateInTx(ctx context.Context, tx *gorm.DB, tbName string, gmv GroupMemberView) error {
 	return tx.WithContext(ctx).Table(tbName).Model(&GroupMemberView{}).
 		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "group_id"}, {Name: "user_id"}},
+			Columns:   []clause.Column{{Name: colGroupID}, {Name: colUserID}},
 			DoNothing: true,
 		}).
 		Create(&gmv).Error

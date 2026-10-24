@@ -178,7 +178,7 @@ func (s *DefaultCDCService) ProcessContact(ctx context.Context, msg *xmq.Message
 		return fmt.Errorf("failed to unmarshal user contact cdc event: %w", err)
 	}
 
-	if !(evt.IsCreate() || evt.IsUpdate()) {
+	if !evt.IsCreate() && !evt.IsUpdate() {
 		// 只处理 create 和 update 事件。
 		// - create: 创建联系人关系事件。
 		// - update: 联系人被删除 ( 逻辑删除 DeletedAt != 0 )
@@ -206,7 +206,7 @@ func (s *DefaultCDCService) ProcessUserGroup(ctx context.Context, msg *xmq.Messa
 		return fmt.Errorf("failed to unmarshal user group cdc event: %w", err)
 	}
 
-	if !(evt.IsCreate() || evt.IsUpdate()) {
+	if !evt.IsCreate() && !evt.IsUpdate() {
 		// 只处理 create 和 update 事件。
 		// - create
 		//   创建联系人关系事件。
@@ -303,7 +303,7 @@ func (s *DefaultCDCService) ProcessGroupMember(ctx context.Context, msg *xmq.Mes
 		return fmt.Errorf("failed to unmarshal group member cdc event: %w", err)
 	}
 
-	if !(evt.IsCreate() || evt.IsUpdate()) {
+	if !evt.IsCreate() && !evt.IsUpdate() {
 		// 只处理 create 和 update 事件。
 		// - create
 		// 	 聊天群成员添加事件。

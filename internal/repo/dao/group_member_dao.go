@@ -94,7 +94,7 @@ func (d *DefaultGroupMemberDao) BatchCreate(ctx context.Context, groupID, creato
 	// 批量写入聊天群成员表。
 	return db.WithContext(ctx).Table(dst.TB).Model(&GroupMember{}).
 		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "group_id"}, {Name: "user_id"}},
+			Columns:   []clause.Column{{Name: colGroupID}, {Name: colUserID}},
 			DoNothing: true,
 		}).
 		CreateInBatches(&members, groupMemberBatchSize).Error

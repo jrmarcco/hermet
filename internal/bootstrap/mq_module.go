@@ -25,9 +25,9 @@ var MqFxModule = fx.Module(
 			fx.ResultTags(`name:"group_member_producer"`),
 		),
 		fx.Annotate(
-			newDownwstreamMsgProducer,
+			newMessageNotifyProducer,
 			fx.As(new(mq.Producer)),
-			fx.ResultTags(`name:"downstream_msg_producer"`),
+			fx.ResultTags(`name:"message_notify_producer"`),
 		),
 	),
 	fx.Invoke(
@@ -58,19 +58,20 @@ func newGroupMemberProducer(producer xproducer.Producer) (*mq.DefaultProducer, e
 	return gmp, nil
 }
 
-// newDownwstreamMsgProducer 创建一个下游消息生产者。
-func newDownwstreamMsgProducer(producer xproducer.Producer) (*mq.DefaultProducer, error) {
+// newMessageNotifyProducer 创建通知 topic 生产者。
+// 消息落库后投递 NotifyMessage ( 仅携带 latest_seq )，推送侧消费后下发 NOTIFY 帧。
+func newMessageNotifyProducer(producer xproducer.Producer) (*mq.DefaultProducer, error) {
 	cfg := mqConfig{}
-	if err := viper.UnmarshalKey("mq.producer.message_downstream", &cfg); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal downstream message producer config: %w", err)
+	if err := viper.UnmarshalKey("mq.producer.message_notify", &cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal message notify producer config: %w", err)
 	}
 
-	dp, err := mq.NewDefaultProducer(cfg.Topic, producer)
+	np, err := mq.NewDefaultProducer(cfg.Topic, producer)
 	if err != nil {
 		return nil, err
 	}
 
-	return dp, nil
+	return np, nil
 }
 
 type gmcFxParams struct {

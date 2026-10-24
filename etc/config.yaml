@@ -20,19 +20,18 @@ hermet:
   ignores:
     - /api/v1/auth/sign-in
     - /api/v1/auth/refresh-token
+    - /.well-known/jwks.json
 
+  # gRPC 服务端 ( SyncService，网关经服务发现调用 synp:///synp-backend )。
   grpc:
-    client:
-      message_push:
-        key_prefix: /synp
-        resolver_timeout: 1s
-        keepalive_time: 1m
-        keepalive_timeout: 10s
-      node_locate:
-        key_prefix: /synp
-        resolver_timeout: 1s
-        keepalive_time: 1m
-        keepalive_timeout: 10s
+    server:
+      name: synp-backend
+      addr: 192.168.3.3:10091
+      group: synp
+      registry:
+        key_prefix: synp
+        lease_ttl: 30 # 单位：秒 ( 与 etcd api 保持一致 )
+        timeout: 10s
 
   task_pool:
     init_goroutines: 64
@@ -48,16 +47,53 @@ hermet:
     err_handle_timeout: 500ms
 
 jwt:
-  access:
-    expiration: 1h   # Access Token 过期时间
-    issuer: hermet-access
+  # 网关连接鉴权 token ( RS256 + JWKS，契约见 synp-api proto/auth/v1/auth.proto )。
+  # 同一 token 兼作后端 HTTP API 的 access token。
+  # 密钥生成: sh ./scripts/gen_jwt_rsa_keys.sh
+  gateway:
+    # 公钥指纹 ( DER 公钥 SHA-256 前 16 位 hex )，轮换时新旧公钥需在 JWKS 中并存一段重叠期。
+    kid: 4a2469b1ea848841
+    expiration: 2h    # 契约建议 exp - iat <= 2h
+    issuer: synp-auth # 契约约定，网关侧校验
+    audience: synp-gateway # 契约约定 ( 网关服务标识 )，网关侧校验
     private: |
       -----BEGIN PRIVATE KEY-----
-      MC4CAQAwBQYDK2VwBCIEINuchwbkYeYD/jnGLyPjRAufQGP+WUckh+PK6U4u7fk1
+      MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC2eXB/vqVOwynj
+      XS6Uitpifi0zHaYaFJUwZ2OKIma/Zffs4/fIVoNoKgkDQrVCcmrfmS/jexlk26i6
+      c3SzJlj7Ik+T7qm02A0koAzUkT8ZylJvGrH7QexH5OkUazkW+RRKd5QETNgAnxdN
+      X8ZzWK583BVdUrn1sLTk1Xp7fOOGM9waZ9Z5pra7pLo2/JUoUsys+nsosjGzqE0Q
+      rQx4lMVGewK0Qqme/pAfYKATQELwhD+voSv6beVgN5Vyp3Yey8zbnkyan1OMLcth
+      ZuZAL9OTlNiFEeo8t8VgtcuFyFSIwHvc4XbPXHsyvWJkVCsYVI5lFOJRMPsh3fvO
+      w4rq1SnZAgMBAAECggEAE9nDMMpzHk3h7S+SZStz1XonfaOQkc7CahkdPYY/ijvU
+      DEvChWNP+VF1WIr1wAxFbxyxlnwqR4wT33C29dRKostZP90bTiagy2az7p38cNhP
+      PnH3gb9qrmmLJ6MAe2zOVcmLaypW5z5nYQ31v0+a789bbaMVwtId47ULlYqBD/S+
+      P4pj2dbXvxFn7NHiCEE2J7MsQ5MEH/zX0ILs2BialC/oT15xK3XWsOJjn+mEfMkG
+      HUE/1TQE7F6rp5Dd+NyibIOeJM1ylHPmj3fG2zJdEObKXMsfWiv5K7t34chGTXzB
+      ylJFyXjyvCRHlISz/7QrIZTxERwgCf6D2mL2THdFAQKBgQDh0WRzMYPoo77OEsAU
+      EOdWDZ6kpCn7IVbJZOiP9leL0pv8TU5bSHVSo4brIiXKtteoKwj1mZRSIsL28FfG
+      7fGK3HqUnlojzurz7bX1WSs8E+L0i3MtQVdUJUPmYlrsXqGZ8Ep1p3UGptQWHnto
+      bEBfu1bMycP6OSPg7I+LT9+0mQKBgQDO3P/kCV0B6RsMG9dJjl8UIeMsXOFq1ZLa
+      wEML2WxvoEVXr58PoTRnc4Rfhp2bK4a/1OfjIRohtKVcvJHgt23BDHo/zpxtV3J0
+      Oix8YnoNdlQJqBfratIhRw5NcIzgX0wGmbtbSr5aIjM9oUYrPLTxypzmiut7KyvU
+      FAfqcM0nQQKBgHNLisL51ASSnhfvINzd6I9aMtaS7tBGrF31RHxEZVyBcpz2B3y5
+      2RURYxBohe0jP6agGlnzSPRKxUp5Wge6cynX+kopM5K20eUrSEz1cwqgiK8dB/hi
+      NSlEQY++RfgLNO0473t0vV5hDUYh2BZvtspqBx5WIdZ/GB9+CKgzZt95AoGAGOkc
+      F4XZIWXE0Ax6PG1cnbwG80ysCIV3jcghSsf/+uE9+HU5nlQ3T03l3usDB7CSJX+p
+      /Pv7fZuXXjeHCZyNJvYtsola5P/m1IA84y2orP5W2GLZnovaig9YdZLcJBjVuuXA
+      Xhn+GjSMHxvQq1xAHe3cPxbzjH2CZaOT4HN9AQECgYBsP/dTtlyzjPFP6ZeaAck7
+      fPhpIoCfrLXDarrTXtUtba/3qFuuLJCo3/etZP+yZdrfTx2K2Gpn6v3xy9qPmr1N
+      BXziAOBDn119Ppa0ln+tM2bYZ47ZS7yeHMnHrB/7DCAhsbNQAlr2GqqJZGIACEOc
+      joHlPTT8yPPsqX+EQR29mQ==
       -----END PRIVATE KEY-----
     public: |
       -----BEGIN PUBLIC KEY-----
-      MCowBQYDK2VwAyEA818wiIDR2aqxvLKcyQL2qvVCYlSs2A/izQi/K109rlU=
+      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtnlwf76lTsMp410ulIra
+      Yn4tMx2mGhSVMGdjiiJmv2X37OP3yFaDaCoJA0K1QnJq35kv43sZZNuounN0syZY
+      +yJPk+6ptNgNJKAM1JE/GcpSbxqx+0HsR+TpFGs5FvkUSneUBEzYAJ8XTV/Gc1iu
+      fNwVXVK59bC05NV6e3zjhjPcGmfWeaa2u6S6NvyVKFLMrPp7KLIxs6hNEK0MeJTF
+      RnsCtEKpnv6QH2CgE0BC8IQ/r6Er+m3lYDeVcqd2HsvM255Mmp9TjC3LYWbmQC/T
+      k5TYhRHqPLfFYLXLhchUiMB73OF2z1x7Mr1iZFQrGFSOZRTiUTD7Id37zsOK6tUp
+      2QIDAQAB
       -----END PUBLIC KEY-----
 
   refresh:
@@ -261,6 +297,9 @@ mq:
   producer:
     group_member_add:
       topic: hermet.group_member.add
+    # 通知 topic ( 消息落库后投递 NotifyMessage，网关集群广播消费后下发 NOTIFY 帧 )。
+    message_notify:
+      topic: synp.message.notify
   consumer:
     group_member_add:
       topic: hermet.group_member.add
@@ -428,99 +467,16 @@ sharding:
     db_shard_count: 2
     tb_shard_count: 4
 
-# MongoDB 配置
-mongodb:
-  uri: mongodb://192.168.3.3:27017
-  db_name: hermet
-  app_name: hermet
+  # 消息正本表 ( 按 conversation_id 分片 )
+  message:
+    db_prefix: hermet
+    tb_prefix: message
+    db_shard_count: 2
+    tb_shard_count: 4
 
-  # 认证信息
-  username: jrmarcco
-  password: <passwd>
-  auth_source: admin
-
-  # 连接池配置
-  max_pool_size: 100
-  max_conn_idle_time: 10s
-  connect_timeout: 1s
-  server_selection_timeout: 1s
-  startup_timeout: 1s
-  shutdown_timeout: 1s
-
-  tls:
-    ca_cert: |
-      -----BEGIN CERTIFICATE-----
-      MIIDSTCCAjGgAwIBAgIUcUyxnveLP7h2ZomRyTosUyhKyDYwDQYJKoZIhvcNAQEL
-      BQAwNDETMBEGA1UEAwwKTW9uZ29EQi1DQTEQMA4GA1UECgwHTW9uZ29EQjELMAkG
-      A1UEBhMCQ04wHhcNMjUxMjI0MDk0ODM3WhcNMzUxMjIyMDk0ODM3WjA0MRMwEQYD
-      VQQDDApNb25nb0RCLUNBMRAwDgYDVQQKDAdNb25nb0RCMQswCQYDVQQGEwJDTjCC
-      ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMSr5Uu3/5MsnGtaYozsvJWw
-      PYphfo493X81DmD7M5h6cHP9ejlG0XTuULm5SZfmkpfIFHwlRHhMKegUNPjOTLdd
-      +veLQYzffpoDW2fHXy0dqiBCO7SJXonH9mEkzfJsf+ZH+FG9DizHlnMWpWaTSUy7
-      PQpRnSTa1j8xRYWZjqc0LpSfc8qFdohk3cAWY9rxvt/6QXBcc/MMG2NO3KozOd9s
-      Y4eUg0HqVyEmnjJGX/Lw87FbiwsD6Rc2c9poHagTqCBfvSy2tNwu/MV1BGhY7adY
-      d2dRxzdW1FOlDpuoS+AwA5xbC54mj/oJYh4B+vHuCs/oPjGuxhAG9sTlJnYPMlsC
-      AwEAAaNTMFEwHQYDVR0OBBYEFOvvpLaQR/InG5wi4ziCcUY/M7sSMB8GA1UdIwQY
-      MBaAFOvvpLaQR/InG5wi4ziCcUY/M7sSMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZI
-      hvcNAQELBQADggEBAGC4E5g0y34wh2gVBDI1FlP1JFgDk2tOuMlLVJyV3oK9o2St
-      TWV4D9jfmD2ral5Oz/Qm/YdUqS/NIClMfdMc4cW5CfE1GL0TRT17YnN/X2ZVkTud
-      qrwbk2FKitbmwzmIbWxdzrt5VBfghNY6xrpR4rokmhRZWYEDQLcLyuNa4ArQIsEi
-      IWJI04sahjtqv1bgabzpkI3kq/y8wmjd3MpBrGKDBOkiqRNz0EgWkmCm+rCSFBMf
-      Iz2qPGt5W1ysA90VcYNW+5VI+sPBOu2LoKY/R4o4OAJYNMikmnurf24aG2FRzODR
-      UPIspN2/olAJBD4ITqd81nfVgV3FvM8VcKhoHoE=
-      -----END CERTIFICATE-----
-
-    cert_key: |
-      -----BEGIN PRIVATE KEY-----
-      MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCX6ir9f9AQoAKP
-      50TpJ8sy3XU6XvTnYT2DuozWnp20S7EzKFK2vcOfIVgBs+xrdDil3GTIFwKHal/4
-      ysy65oLIn3+jhuKwYczsBqy6GqAZqD9iot5QM0dvlt6PXAFLtZIu0fkXVrE7oNB2
-      SWEuF63r4fQxp01pNveK4G8dUrphBIbNfEWvRVryIsy2SriJ6G/6adfUciREtj9i
-      19Iq093DVTTFU5wUfJwBylDee+0K6qVipJKQzCT1kqCYdlXXa8dc7W8lGC0ul/oW
-      VN0PFxDsNBqjbJzBDHP/00XAM2mJ6farip4dOMNgdswhv4dptq6nUbTX2+axoRSc
-      LgS2WunXAgMBAAECggEAS1mccjmDv8NGEg+RqB4TVUrwGwA/dEbQpraQpeFt8qA6
-      p9e/0yFj1tnIl6uhQBkZAffDy1VSbU1vhe09SBUO2Kj4O+mrJfaUmJuk7/hF4gQI
-      UIndQCV3MNvBz5TAlcddVzjR1ugqp5tX2twBxkV7gE0GfNxxcpcPiIRSyNYgWP8M
-      gtqQKFxOu0pjru0pw83oeKAivcbWXFJ08IUgrUmdBDyQR9g0dfGpg78dghaUc1cg
-      FE+Wf08YCKS9kJVuh5qfsWNIuWv0P4hdo1/qsvKzDYsB/UNSFH6tPWwRgwsnSepQ
-      u7sMSmfH1dogQzzb/0kmodtNf75NDqP4qbPhyukX+QKBgQDMwI+CLa59DHKb3Qaq
-      CdAOv1TbFvL5R5b2d7lWbSx8S1zKw62br6QnSwrNxqkU+FNO46v4EqgLmMY7F+Ap
-      zOPS2dIw/sNT44QB80L5/wy0HPJfUWiitF7vVRNAiYm2fL9iaM3nEugLPUnLsCdO
-      aOCsLXsi0OluMYqH3t6TKNNZvwKBgQC98A+lv/NWoSTqXaPMt8TF35/t3EXisBhJ
-      GIceHIqnK6tflIgbtlu9AJ0oZiGl/W72K05YCpbZGwyGGIaV+N+S67T8A872baBS
-      iEODTKtt3JvjcXGQPuSXtnZUzQiSNO2aZCt0O+ztyYPnwW4Ub9d+rI5Qs2UtPXNa
-      uss2ayKF6QKBgQCHo1yuOULpNhDKbg5XIG8DBf7ZsIc/WgyIs+FEfshEgswyypQ8
-      mYteOFks3ljuOl892Jb4nKtUG13ekb9/EWsvJ/sVV//fl83AWP1ajXpF6xMoz85I
-      UsK9O5eoXjSrflJuh803MZAkufIkDErNp66GgQ6cjtbEl+8UeTDrPdVdEwKBgQCx
-      VWUGl8SV6TYSKwM3q4voQvWKmtIU59yEwoXEs1kw4zDJuF+roALe36fbhB9+XrQu
-      2hf3U0urv/ldaaCefRIgljkP4m5k3c2FwPtnpzmXBRX2sIAa8N10WEL6wcNy3j/I
-      miWIDDsVd8PTqWEha5qDBpCJADVCm9ELsMLyN+yvoQKBgB7Fsgb3W0EeOM+3Oy7K
-      TtF2LCgtLNlzsK/KuS8FAO0iONvHKstcgkhixywy4juaJAcxzZJSnWUdnbJ5OO0y
-      Pt6jX/47txYUwSt886MOd8ZgCjvjVxsfOENVMJ8QlP1p3ghDUpxwvgrA8kNf2w8D
-      FiaFDnXPRrkDhFIHEKhJyTCr
-      -----END PRIVATE KEY-----
-
-    cert_pem: |
-      -----BEGIN CERTIFICATE-----
-      MIIDjDCCAnSgAwIBAgIUVwOcU/qM7ZlkGql0qvhjRlKowiQwDQYJKoZIhvcNAQEL
-      BQAwNDETMBEGA1UEAwwKTW9uZ29EQi1DQTEQMA4GA1UECgwHTW9uZ29EQjELMAkG
-      A1UEBhMCQ04wHhcNMjUxMjI0MDk0ODM3WhcNMzUxMjIyMDk0ODM3WjA9MRUwEwYD
-      VQQDDAxhZG1pbi1jbGllbnQxFzAVBgNVBAoMDk1vbmdvREItQ2xpZW50MQswCQYD
-      VQQGEwJDTjCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAJfqKv1/0BCg
-      Ao/nROknyzLddTpe9OdhPYO6jNaenbRLsTMoUra9w58hWAGz7Gt0OKXcZMgXAodq
-      X/jKzLrmgsiff6OG4rBhzOwGrLoaoBmoP2Ki3lAzR2+W3o9cAUu1ki7R+RdWsTug
-      0HZJYS4Xrevh9DGnTWk294rgbx1SumEEhs18Ra9FWvIizLZKuInob/pp19RyJES2
-      P2LX0irT3cNVNMVTnBR8nAHKUN577QrqpWKkkpDMJPWSoJh2Vddrx1ztbyUYLS6X
-      +hZU3Q8XEOw0GqNsnMEMc//TRcAzaYnp9quKnh04w2B2zCG/h2m2rqdRtNfb5rGh
-      FJwuBLZa6dcCAwEAAaOBjDCBiTAOBgNVHQ8BAf8EBAMCBaAwEwYDVR0lBAwwCgYI
-      KwYBBQUHAwIwIgYDVR0RBBswGYIMYWRtaW4tY2xpZW50gglsb2NhbGhvc3QwHQYD
-      VR0OBBYEFOhRmYQYJqlSFCeVvEftFBqiiaDRMB8GA1UdIwQYMBaAFOvvpLaQR/In
-      G5wi4ziCcUY/M7sSMA0GCSqGSIb3DQEBCwUAA4IBAQBYVuibtkPFb+h38GjQlzOH
-      wTUZ5rCo6vGgXqRQ7XAbG62rR0kemMDvx55Iex8+159e0daQGkZjfSrLUYFZIfJS
-      PmxLFti6cvB/GrPnewrStfDfMqL+wneGpU1K/OQO1ZI3lAVoyGkJRRgtsOjookVN
-      e0it4KnQI9KzX6CIjyJhjY593MkxiqvPD01BGZqa2PZPSKr3DtsIBScmc4Em5c74
-      KENCB0/2M4/2xD5lo4pPl24PErCA4HZs+yr7Tn+H2OCAsnuDJA8ayzcKj8Vumac7
-      IPtFXdJ36zk689PNAM1Jf7uERSAa7fkL0V3qxRamj3F0AuGvg99HQUZxFIGQpqdy
-      -----END CERTIFICATE-----
-
-
+  # 收件箱条目表 ( 按 user_id 分片；inbox_seq 与之同布局共用路由 )
+  inbox_entry:
+    db_prefix: hermet
+    tb_prefix: inbox_entry
+    db_shard_count: 2
+    tb_shard_count: 4

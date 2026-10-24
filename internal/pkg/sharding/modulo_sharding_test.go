@@ -7,6 +7,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// 测试用分片前缀与期望值 ( goconst: 多个用例复用 )。
+const (
+	testDBPrefix = "db"
+	testTBPrefix = "table"
+
+	wantFirstDB = "db_0"
+	wantFirstTB = "table_0"
+)
+
 func TestNewModuloSharding(t *testing.T) {
 	t.Parallel()
 
@@ -23,8 +32,8 @@ func TestNewModuloSharding(t *testing.T) {
 		{
 			name:         "valid parameters",
 			extractor:    extractor,
-			dbPrefix:     "db",
-			tbPrefix:     "table",
+			dbPrefix:     testDBPrefix,
+			tbPrefix:     testTBPrefix,
 			dbShardCount: 8,
 			tbShardCount: 4,
 			wantErr:      false,
@@ -32,8 +41,8 @@ func TestNewModuloSharding(t *testing.T) {
 		{
 			name:         "nil extractor",
 			extractor:    nil,
-			dbPrefix:     "db",
-			tbPrefix:     "table",
+			dbPrefix:     testDBPrefix,
+			tbPrefix:     testTBPrefix,
 			dbShardCount: 8,
 			tbShardCount: 4,
 			wantErr:      true,
@@ -41,8 +50,8 @@ func TestNewModuloSharding(t *testing.T) {
 		{
 			name:         "zero db shard count",
 			extractor:    extractor,
-			dbPrefix:     "db",
-			tbPrefix:     "table",
+			dbPrefix:     testDBPrefix,
+			tbPrefix:     testTBPrefix,
 			dbShardCount: 0,
 			tbShardCount: 4,
 			wantErr:      true,
@@ -50,8 +59,8 @@ func TestNewModuloSharding(t *testing.T) {
 		{
 			name:         "zero tb shard count",
 			extractor:    extractor,
-			dbPrefix:     "db",
-			tbPrefix:     "table",
+			dbPrefix:     testDBPrefix,
+			tbPrefix:     testTBPrefix,
 			dbShardCount: 8,
 			tbShardCount: 0,
 			wantErr:      true,
@@ -60,7 +69,7 @@ func TestNewModuloSharding(t *testing.T) {
 			name:         "empty db prefix",
 			extractor:    extractor,
 			dbPrefix:     "",
-			tbPrefix:     "table",
+			tbPrefix:     testTBPrefix,
 			dbShardCount: 8,
 			tbShardCount: 4,
 			wantErr:      true,
@@ -68,7 +77,7 @@ func TestNewModuloSharding(t *testing.T) {
 		{
 			name:         "empty tb prefix",
 			extractor:    extractor,
-			dbPrefix:     "db",
+			dbPrefix:     testDBPrefix,
 			tbPrefix:     "",
 			dbShardCount: 8,
 			tbShardCount: 4,
@@ -109,19 +118,19 @@ func TestModuloSharding_Shard(t *testing.T) {
 		{
 			name:     "shard val 0",
 			shardVal: 0,
-			wantDB:   "db_0",
-			wantTB:   "table_0",
+			wantDB:   wantFirstDB,
+			wantTB:   wantFirstTB,
 		},
 		{
 			name:     "shard val 1",
 			shardVal: 1,
 			wantDB:   "db_1",
-			wantTB:   "table_0",
+			wantTB:   wantFirstTB,
 		},
 		{
 			name:     "shard val 8",
 			shardVal: 8,
-			wantDB:   "db_0",
+			wantDB:   wantFirstDB,
 			wantTB:   "table_1",
 		},
 		{
@@ -133,8 +142,8 @@ func TestModuloSharding_Shard(t *testing.T) {
 		{
 			name:     "shard val 32 (overflow, same as 0)",
 			shardVal: 32,
-			wantDB:   "db_0",
-			wantTB:   "table_0",
+			wantDB:   wantFirstDB,
+			wantTB:   wantFirstTB,
 		},
 	}
 

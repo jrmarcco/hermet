@@ -66,7 +66,7 @@ func NewDefaultContactViewDao(
 func (d *DefaultContactViewDao) CreateInTx(ctx context.Context, tx *gorm.DB, tbName string, cv ContactView) error {
 	return tx.WithContext(ctx).Table(tbName).Model(&ContactView{}).
 		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "user_id"}, {Name: "contact_id"}},
+			Columns:   []clause.Column{{Name: colUserID}, {Name: "contact_id"}},
 			DoNothing: true,
 		}).
 		Create(&cv).Error
@@ -93,7 +93,7 @@ func (d *DefaultContactViewDao) RecreateInTx(ctx context.Context, tx *gorm.DB, t
 			"deleted_at": 0,
 			// 更新添加时间以及更新时间。
 			"added_at":   cv.AddedAt,
-			"updated_at": cv.UpdatedAt,
+			colUpdatedAt: cv.UpdatedAt,
 		}).Error
 }
 

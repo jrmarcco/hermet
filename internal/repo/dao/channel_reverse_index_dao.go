@@ -42,7 +42,7 @@ func NewDefaultChannelRidxDao(dbs *xsync.Map[string, *gorm.DB], shardHelper *sha
 func (d *DefaultChannelRidxDao) CreateInTx(ctx context.Context, tx *gorm.DB, tbName string, channelRidx ChannelReverseIndex) error {
 	return tx.WithContext(ctx).Table(tbName).Model(&ChannelReverseIndex{}).
 		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "user_id"}, {Name: "target_id"}, {Name: "channel_type"}},
+			Columns:   []clause.Column{{Name: colUserID}, {Name: "target_id"}, {Name: "channel_type"}},
 			DoNothing: true,
 		}).
 		Create(&channelRidx).Error

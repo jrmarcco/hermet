@@ -2,6 +2,8 @@ package service
 
 import (
 	"github.com/jrmarcco/hermet/internal/mq"
+	"github.com/jrmarcco/hermet/internal/pkg/auth"
+	"github.com/jrmarcco/hermet/internal/pkg/sharding/idgen"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/jit/xjwt"
 	authv1 "github.com/jrmarcco/synp-api/api/go/auth/v1"
@@ -30,7 +32,7 @@ var ServiceFxModule = fx.Module(
 		fx.Annotate(NewDefaultChannelService, fx.As(new(ChannelService))),
 
 		// Message service
-		fx.Annotate(NewDefaultMessageService, fx.As(new(MessageService))),
+		fx.Annotate(newMessageService, fx.As(new(MessageService))),
 	),
 )
 
@@ -39,7 +41,7 @@ type authServiceFxParams struct {
 
 	Repo repo.UserRepo
 
-	AtManager xjwt.Manager[authv1.JwtPayload] `name:"access-token-manager"`
+	Signer    *auth.RS256Signer
 	RtManager xjwt.Manager[authv1.JwtPayload] `name:"refresh-token-manager"`
 }
 
@@ -47,7 +49,7 @@ type authServiceFxParams struct {
 func newAuthService(p authServiceFxParams) AuthService {
 	return NewDefaultAuthService(
 		p.Repo,
-		p.AtManager,
+		p.Signer,
 		p.RtManager,
 	)
 }
@@ -68,6 +70,32 @@ func newGroupService(params groupServiceFxParams) (*DefaultGroupService, error) 
 		params.Producer,
 		params.GroupRepo,
 		params.GroupMemberRepo,
+		params.Logger,
+	)
+}
+
+type messageServiceFxParams struct {
+	fx.In
+
+	MessageRepo repo.MessageRepo
+	ContactRepo repo.ContactRepo
+
+	NotifyProducer mq.Producer `name:"message_notify_producer"`
+
+	Gen idgen.Generator
+
+	Logger *zap.Logger
+}
+
+func newMessageService(params messageServiceFxParams) MessageService {
+	return NewDefaultMessageService(
+		params.MessageRepo,
+		params.ContactRepo,
+
+		params.NotifyProducer,
+
+		params.Gen,
+
 		params.Logger,
 	)
 }

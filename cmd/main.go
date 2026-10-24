@@ -6,6 +6,7 @@ import (
 	"github.com/jrmarcco/hermet/internal/api"
 	"github.com/jrmarcco/hermet/internal/app"
 	"github.com/jrmarcco/hermet/internal/bootstrap"
+	"github.com/jrmarcco/hermet/internal/grpc"
 	"github.com/jrmarcco/hermet/internal/pkg/provider"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/hermet/internal/repo/dao"
@@ -42,9 +43,6 @@ func main() {
 		// 初始化 db。
 		provider.DBFxModule,
 
-		// 初始化 mongo db client。
-		provider.MongoFxModule,
-
 		// 初始化 kafka client。
 		provider.KafkaFxModule,
 		provider.KafkaProducerFxModule,
@@ -62,8 +60,9 @@ func main() {
 		// 初始化 sharding。
 		provider.ShardingFxModule,
 
-		// 初始化 grpc client。
-		provider.GrpcClientFxModule,
+		// 初始化 gRPC 服务注册器与服务实例 ( etcd 服务发现 )。
+		provider.GrpcRegistryFxModule,
+		provider.GrpcServiceInstanceFxModule,
 
 		// 初始化 xpool。
 		provider.XpoolFxModule,
@@ -79,6 +78,9 @@ func main() {
 
 		// 初始化 web。
 		api.APIFxModule,
+
+		// 初始化 gRPC server ( SyncService，网关经服务发现调用 )。
+		grpc.GrpcFxModule,
 
 		// 初始化 cdc。
 		bootstrap.CdcFxModule,

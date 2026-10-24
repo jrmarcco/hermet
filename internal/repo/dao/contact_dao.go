@@ -63,7 +63,7 @@ func NewDefaultContactDao(
 func (d *DefaultContactDao) CreateInTx(ctx context.Context, tx *gorm.DB, tbName string, contact Contact) error {
 	return tx.WithContext(ctx).Table(tbName).Model(&Contact{}).
 		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "user_id"}, {Name: "contact_id"}},
+			Columns:   []clause.Column{{Name: colUserID}, {Name: "contact_id"}},
 			DoNothing: true,
 		}).
 		Create(&contact).Error
@@ -75,7 +75,7 @@ func (d *DefaultContactDao) RecreateInTx(ctx context.Context, tx *gorm.DB, tbNam
 		UpdateColumns(map[string]any{
 			"deleted_at": 0,
 			"added_at":   contact.AddedAt,
-			"updated_at": contact.UpdatedAt,
+			colUpdatedAt: contact.UpdatedAt,
 		}).Error
 }
 

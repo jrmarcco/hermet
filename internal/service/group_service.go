@@ -110,6 +110,11 @@ func (s *DefaultGroupService) ProcessAddMembersMsg(ctx context.Context, msg *xmq
 		// TODO: 需要增加成员添加失败处理。
 		// 1. 指数退避重试 3 次 ( 1s -> 2s -> 4s )。
 		// 2. 如果 3 次重试都失败，转发消息到死信队列 ( DLQ )。
+		s.logger.Error(
+			"[chat-group-service] failed to add members, batch skipped",
+			zap.Uint64("group_id", event.GID),
+			zap.Error(err),
+		)
 	}
 
 	if event.IsLastBatch {

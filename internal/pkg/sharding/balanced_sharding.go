@@ -146,7 +146,7 @@ func (s *BalancedSharding) shuffleBroadcast(dsts []Dst) []Dst {
 	copy(res, dsts)
 
 	// 使用 rand.Shuffle 进行随机打乱。
-	rand.Shuffle(len(res), func(i, j int) {
+	rand.Shuffle(len(res), func(i, j int) { //nolint:gosec // G404: 打乱分片列表用于负载均衡，非加密场景
 		res[i], res[j] = res[j], res[i]
 	})
 

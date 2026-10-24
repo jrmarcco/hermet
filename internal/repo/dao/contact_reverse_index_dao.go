@@ -43,7 +43,7 @@ func NewDefaultContactRidxDao(
 func (d *DefaultContactRidxDao) CreateInTx(ctx context.Context, tx *gorm.DB, tbName string, cri ContactReverseIndex) error {
 	return tx.WithContext(ctx).Table(tbName).Model(&ContactReverseIndex{}).
 		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "user_id"}, {Name: "owner_id"}},
+			Columns:   []clause.Column{{Name: colUserID}, {Name: "owner_id"}},
 			DoNothing: true,
 		}).
 		Create(&cri).Error
