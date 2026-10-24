@@ -1,33 +1,39 @@
+# Debezium Connect 集群 ( 3 节点，PgSQL CDC → Kafka )。
+#
+# 凭据经 .env 注入 ( init.sh 会生成一份，见 .env.example )。
+# 客户端 mTLS 证书经 ./certs 挂载 ( init.sh 会从 gateway kafka 部署目录复制 )。
 x-debezium-common: &debezium-common
-  image: quay.io/debezium/connect:latest
+  image: ${DEBEZIUM_IMAGE:-quay.io/debezium/connect:3.7.0.Final}
   restart: unless-stopped
   networks:
     - jrmarcco_net
   volumes:
-      - ./certs:/kafka/certs:ro
-      - ./log4j2.properties:/kafka/config/log4j2.properties:ro
+    - ./certs:/kafka/certs:ro
+    - ./log4j2.properties:/kafka/config/log4j2.properties:ro
   environment: &debezium-common-env
-    GROUP_ID: ${DEBEZIUM_GROUP_ID}
-    # Kafka 集群配置
-    BOOTSTRAP_SERVERS: kafka-1:9093,kafka-2:9093,kafka-3:9093
+    GROUP_ID: ${DEBEZIUM_GROUP_ID:-debezium-connector-cluster}
+
+    # Kafka 集群 ( 容器间走 INTERNAL listener )。
+    BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka-1:9093,kafka-2:9093,kafka-3:9093}
     CONFIG_STORAGE_TOPIC: debezium_connect_configs
     OFFSET_STORAGE_TOPIC: debezium_connect_offsets
     STATUS_STORAGE_TOPIC: debezium_connect_statuses
 
-    # 副本因子配置 ( 与 Kafka 集群配置匹配 )
+    # 副本因子配置 ( 与 Kafka 集群配置匹配 )。
     CONFIG_STORAGE_REPLICATION_FACTOR: 3
     OFFSET_STORAGE_REPLICATION_FACTOR: 3
     STATUS_STORAGE_REPLICATION_FACTOR: 3
 
-    # Kafka Connect 配置
+    # Kafka Connect 配置。
     KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
     VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
     CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: false
     CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: false
 
+    # mTLS: Connect 自身 / producer / consumer 三组客户端 SSL 配置同源。
     CONNECT_SECURITY_PROTOCOL: SSL
     CONNECT_SSL_KEYSTORE_LOCATION: /kafka/certs/kafka.client.keystore.jks
-    CONNECT_SSL_KEYSTORE_PASSWORD: ${KAFKA_TLS_KEY_PASSWORD}
+    CONNECT_SSL_KEYSTORE_PASSWORD: ${KAFKA_TLS_KEY_PASSWORD:?KAFKA_TLS_KEY_PASSWORD is required ( see .env )}
     CONNECT_SSL_KEYSTORE_TYPE: JKS
     CONNECT_SSL_KEY_PASSWORD: ${KAFKA_TLS_KEY_PASSWORD}
     CONNECT_SSL_TRUSTSTORE_LOCATION: /kafka/certs/kafka.client.truststore.jks
@@ -52,15 +58,14 @@ x-debezium-common: &debezium-common
     CONNECT_CONSUMER_SSL_TRUSTSTORE_PASSWORD: ${KAFKA_TLS_KEY_PASSWORD}
     CONNECT_CONSUMER_SSL_TRUSTSTORE_TYPE: JKS
 
-    # 日志级别 ( Log4j2 )
+    # 日志级别 ( Log4j2 )。
     LOG_LEVEL: INFO
-    # 使用 Log4j2 配置文件
     KAFKA_LOG4J_OPTS: "-Dlog4j2.configurationFile=file:/kafka/config/log4j2.properties"
   healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8083/ || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+    test: ["CMD-SHELL", "curl -fs http://localhost:8083/ || exit 1"]
+    interval: 30s
+    timeout: 10s
+    retries: 5
 
 networks:
   jrmarcco_net:
@@ -72,30 +77,24 @@ services:
     hostname: debezium-connect-1
     container_name: debezium-connect-1
     ports:
-      # 主节点 ( 用于 REST API 管理 )
-      - "8083:8083"
-    environment:
-      <<: *debezium-common-env
+      # 主节点 ( REST API 管理入口，cli.sh 默认连接这里 )。
+      - "${DEBEZIUM_CONNECT_PORT:-8083}:8083"
 
   debezium-connect-2:
     <<: *debezium-common
     hostname: debezium-connect-2
     container_name: debezium-connect-2
-    # 不暴露端口，仅作为集群成员提供高可用
-    environment:
-      <<: *debezium-common-env
+    # 不暴露端口，仅作为集群成员提供高可用。
 
   debezium-connect-3:
     <<: *debezium-common
     hostname: debezium-connect-3
     container_name: debezium-connect-3
-    # 不暴露端口，仅作为集群成员提供高可用
-    environment:
-      <<: *debezium-common-env
+    # 不暴露端口，仅作为集群成员提供高可用。
 
-  # Connector 自动注册服务
+  # Connector 自动注册服务 ( 一次性，幂等: 已注册的 connector 跳过 )。
   debezium-connector-init:
-    image: alpine:latest
+    image: ${ALPINE_IMAGE:-alpine:3.24}
     container_name: debezium-connector-init
     networks:
       - jrmarcco_net

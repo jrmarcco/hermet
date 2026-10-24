@@ -1,19 +1,18 @@
+# PostgreSQL 分片集群 ( hermet_0 / hermet_1，WAL 逻辑复制配置供 Debezium CDC 使用 )。
+#
+# 凭据经 .env 注入 ( init.sh 会生成一份，见 .env.example )，不入版本库。
 x-postgresql-common: &postgresql-common
-  image: postgres:latest
+  image: ${POSTGRES_IMAGE:-postgres:18.6}
   restart: unless-stopped
   environment: &postgresql-common-env
     PGDATA: /var/lib/postgresql/data
-    # WAL 和复制配置 - Debezium CDC 必需
-    # - max_wal_senders=10
-    #   允许同时启动的 WAL sender 进程数量上限 ( 决定可用的物理/逻辑复制连接数 )
-    # - max_replication_slots=10
-    #   可创建的复制槽数量上限 ( 复制槽用于保证下游消费不丢 WAL )
-    # - wal_keep_size=1024MB
-    #   保留至少 1GB 的 WAL 文件 ( 复制槽用于保证下游消费不丢 WAL )
-    # - max_slot_wal_keep_size=2048MB
-    #   复制槽最多保留 2GB WAL
-    # - wal_sender_timeout=60s
-    #   WAL sender 无活动 60 秒就断开连接 ( 防止挂起连接长期占用资源 )
+    # WAL 和复制配置 - Debezium CDC 必需:
+    # - wal_level=logical             逻辑解码 ( pgoutput 插件的前提 )
+    # - max_wal_senders=10            WAL sender 进程上限 ( 物理/逻辑复制连接数 )
+    # - max_replication_slots=10      复制槽数量上限 ( 复制槽保证下游消费不丢 WAL )
+    # - wal_keep_size=1024MB          至少保留 1GB WAL
+    # - max_slot_wal_keep_size=2048MB 复制槽最多保留 2GB WAL
+    # - wal_sender_timeout=60s        WAL sender 无活动 60s 断开 ( 防挂起连接占资源 )
     POSTGRES_INITDB_ARGS: >-
       -c wal_level=logical
       -c max_wal_senders=10
@@ -21,6 +20,12 @@ x-postgresql-common: &postgresql-common
       -c wal_keep_size=1024MB
       -c max_slot_wal_keep_size=2048MB
       -c wal_sender_timeout=60s
+  healthcheck:
+    # 容器内 pg_isready 探活 ( 用各自的管理用户 )。
+    test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hermet_0} -d ${POSTGRES_DB:-hermet_0}"]
+    interval: 10s
+    timeout: 5s
+    retries: 10
   networks:
     - jrmarcco_net
 
@@ -34,30 +39,25 @@ services:
     hostname: pgsql-hermet-0
     container_name: pgsql-hermet-0
     ports:
-      - "15432:5432"
+      - "${POSTGRES_0_PORT:-15432}:5432"
     environment:
       <<: *postgresql-common-env
-      POSTGRES_DB: ${POSTGRES_DB:-hermet_0}
-      POSTGRES_USER: ${POSTGRES_USER:-hermet_0}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-<passwd>}
+      POSTGRES_DB: ${POSTGRES_0_DB:-hermet_0}
+      POSTGRES_USER: ${POSTGRES_0_USER:-hermet_0}
+      POSTGRES_PASSWORD: ${POSTGRES_0_PASSWORD:?POSTGRES_0_PASSWORD is required ( see .env )}
     volumes:
       - ./data-0:/var/lib/postgresql/data
-    networks:
-      - jrmarcco_net
 
   pgsql-hermet-1:
     <<: *postgresql-common
     hostname: pgsql-hermet-1
     container_name: pgsql-hermet-1
     ports:
-      - "25432:5432"
+      - "${POSTGRES_1_PORT:-25432}:5432"
     environment:
       <<: *postgresql-common-env
-      POSTGRES_DB: ${POSTGRES_DB:-hermet_1}
-      POSTGRES_USER: ${POSTGRES_USER:-hermet_1}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-<passwd>}
+      POSTGRES_DB: ${POSTGRES_1_DB:-hermet_1}
+      POSTGRES_USER: ${POSTGRES_1_USER:-hermet_1}
+      POSTGRES_PASSWORD: ${POSTGRES_1_PASSWORD:?POSTGRES_1_PASSWORD is required ( see .env )}
     volumes:
       - ./data-1:/var/lib/postgresql/data
-    networks:
-      - jrmarcco_net
-

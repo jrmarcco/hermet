@@ -12,6 +12,8 @@
 *.lock
 *.out
 *.sum
+# go.sum 是构建必需的依赖锁文件，必须入库 ( *.sum 是为 npm/yarn 类锁文件设置的 )。
+!go.sum
 
 **/tmp/
 **/data/
@@ -58,6 +60,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# 模板文件需要入库 ( 部署变量说明 )。
+!.env.example
 
 # vercel
 .vercel
@@ -65,3 +69,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# docker 本地部署产物 ( 证书/数据/环境 )
+scripts/docker/*/certs/
+scripts/docker/*/data-*/
+scripts/docker/es/es-data/

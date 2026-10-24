@@ -17,7 +17,7 @@
     "publication.name": "dbz_publication",
     "publication.autocreate.mode": "filtered",
     "slot.name": "debezium_slot",
-    "snapshot.mode": "when_needed",
+    "snapshot.mode": "initial",
     "time.precision.mode": "adaptive_time_microseconds",
     "decimal.handling.mode": "precise",
     "heartbeat.interval.ms": "10000",

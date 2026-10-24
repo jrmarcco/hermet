@@ -1,0 +1,64 @@
+# Elasticsearch 单节点部署 ( 消息搜索查询侧，Phase 5 索引目标 )。
+#
+# 架构定位: PG 是唯一事实源，ES 只是异步查询加速层 ( 可重建、最终一致 )，
+# 因此开发/内网环境单节点起步即可，规模上来后再扩多节点。
+#
+# 安全: basic auth 开启 ( ELASTIC_PASSWORD 经 .env 注入 )，
+# HTTP TLS 关闭 ( 流量走内网 jrmarcco_net / 宿主机端口，如需加密请自行配置证书 )。
+services:
+  elasticsearch:
+    image: ${ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch:9.5.5}
+    container_name: hermet-elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+
+      # basic auth 开、HTTP TLS 关 ( 内网部署 )。
+      xpack.security.enabled: "true"
+      xpack.security.http.ssl.enabled: "false"
+      # 单节点无传输层加密需求 ( 多节点部署时必须开启 transport TLS )。
+      xpack.security.transport.ssl.enabled: "false"
+
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:?ELASTIC_PASSWORD is required ( see .env )}
+
+      # 堆内存 ( 建议 = 容器内存限额的一半，且不超过 ~30GB 压缩指针上限 )。
+      ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms1g -Xmx1g}
+    ports:
+      - "${ELASTICSEARCH_PORT:-19200}:9200"
+    volumes:
+      - ./es-data:/usr/share/elasticsearch/data
+    ulimits:
+      # ES 要求锁定内存，避免 swap 拖垮查询延迟。
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs -u elastic:${ELASTIC_PASSWORD} http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    networks:
+      - jrmarcco_net
+
+  # Kibana 按需启用: docker compose --profile kibana up -d
+  kibana:
+    profiles: ["kibana"]
+    image: ${KIBANA_IMAGE:-docker.elastic.co/kibana/kibana:9.5.5}
+    container_name: hermet-kibana
+    restart: unless-stopped
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      ELASTICSEARCH_USERNAME: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTIC_PASSWORD}
+    ports:
+      - "${KIBANA_PORT:-15601}:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - jrmarcco_net
+
+networks:
+  jrmarcco_net:
+    external: true
