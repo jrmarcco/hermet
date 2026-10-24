@@ -33,6 +33,15 @@ hermet:
         lease_ttl: 30 # 单位：秒 ( 与 etcd api 保持一致 )
         timeout: 10s
 
+  # 消息扇出配置
+  message:
+    # 写扩散/读扩散阈值 ( 部署参数，网关与客户端均不感知 ):
+    # 群成员数 <= 阈值走写扩散 ( 收件箱内联正本，一次 SYNC 即可渲染 )，
+    # 超过阈值走读扩散 ( 收件箱只写轻量指针，客户端再发起 CONVERSATION_SYNC 拉取正文 )。
+    fanout_inline_threshold: 500
+    # 群扇出每批成员数 ( 每批一个分片事务，受 statement_timeout 约束 )。
+    fanout_batch_size: 500
+
   task_pool:
     init_goroutines: 64
     core_goroutines: 128
@@ -471,6 +480,13 @@ sharding:
   message:
     db_prefix: hermet
     tb_prefix: message
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 会话 seq 分配表 ( 按 conversation_id 分片，与 message 同布局 )
+  conversation_seq:
+    db_prefix: hermet
+    tb_prefix: conversation_seq
     db_shard_count: 2
     tb_shard_count: 4
 

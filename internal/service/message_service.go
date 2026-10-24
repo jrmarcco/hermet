@@ -30,12 +30,27 @@ type MessageService interface {
 
 var _ MessageService = (*DefaultMessageService)(nil)
 
+// MessageFanoutConfig 消息扇出配置 ( hermet.message )。
+type MessageFanoutConfig struct {
+	// InlineThreshold 写扩散/读扩散阈值:
+	// 群成员数 <= 阈值收件箱内联正本 ( 一次 SYNC 即可渲染 )，超过只写轻量指针。
+	InlineThreshold int
+
+	// BatchSize 群扇出每批成员数 ( 每批一个分片事务，受 statement_timeout 约束 )。
+	BatchSize int
+}
+
 type DefaultMessageService struct {
 	messageRepo repo.MessageRepo
 	contactRepo repo.ContactRepo
 
+	groupMemberRepo repo.GroupMemberRepo
+	userGroupRepo   repo.UserGroupRepo
+
 	// notifyProducer 投递 NotifyMessage 到通知 topic ( 推送侧消费后下发 NOTIFY 帧 )。
 	notifyProducer mq.Producer
+
+	fanoutCfg MessageFanoutConfig
 
 	idgen idgen.Generator
 
@@ -46,7 +61,12 @@ func NewDefaultMessageService(
 	messageRepo repo.MessageRepo,
 	contactRepo repo.ContactRepo,
 
+	groupMemberRepo repo.GroupMemberRepo,
+	userGroupRepo repo.UserGroupRepo,
+
 	notifyProducer mq.Producer,
+
+	fanoutCfg MessageFanoutConfig,
 
 	gen idgen.Generator,
 
@@ -56,7 +76,12 @@ func NewDefaultMessageService(
 		messageRepo: messageRepo,
 		contactRepo: contactRepo,
 
+		groupMemberRepo: groupMemberRepo,
+		userGroupRepo:   userGroupRepo,
+
 		notifyProducer: notifyProducer,
+
+		fanoutCfg: fanoutCfg,
 
 		idgen: gen,
 
@@ -106,13 +131,7 @@ func (s *DefaultMessageService) ProcessUpstreamMsg(ctx context.Context, upstream
 	case domain.ChannelTypeSingle:
 		return s.processSingleChat(ctx, stamped, businessID, senderID, body)
 	case domain.ChannelTypeGroup:
-		// 群聊走读扩散 ( conversation timeline + 指针扇出 )，暂未实现。
-		s.logger.Warn(
-			"[message-service] group message not supported yet, skip",
-			zap.String("message_id", stamped.GetMessageId()),
-			zap.Uint64("group_id", body.DestinationID),
-		)
-		return nil
+		return s.processGroupChat(ctx, stamped, businessID, senderID, body)
 	default:
 		s.logger.Error(
 			"[message-service] unknown destination type, skip",
@@ -189,6 +208,103 @@ func (s *DefaultMessageService) processSingleChat(
 	// 分区键 hash(business_id, receiver_id) 保证同一接收者的通知有序。
 	s.notify(ctx, stamped.GetMessageId(), businessID, senderID, result.SenderSeq)
 	s.notify(ctx, stamped.GetMessageId(), businessID, receiverID, result.ReceiverSeq)
+
+	return nil
+}
+
+// processGroupChat 处理群聊消息 ( 读扩散为主，小群走写扩散内联 ):
+//
+//  1. 校验发送者群成员身份 ( user_group，单行查询 )。
+//  2. 会话分片事务: 分配 conversation_seq + 写正本 ( 全群一份 )。
+//  3. 收件箱扇出: 小群内联正本 / 大群轻量指针，每成员一条。
+//  4. 通知扇出: 每成员一条 NotifyMessage ( 仅 latest_seq )。
+func (s *DefaultMessageService) processGroupChat(
+	ctx context.Context,
+	stamped *messagev1.UpstreamMessage,
+	businessID, senderID uint64,
+	body *domain.Message,
+) error {
+	groupID := body.DestinationID
+	if groupID == 0 {
+		s.logger.Error(
+			"[message-service] invalid group destination, skip",
+			zap.String("message_id", stamped.GetMessageId()),
+			zap.Uint64("sender_id", senderID),
+		)
+		return nil
+	}
+
+	active, err := s.userGroupRepo.IsActiveMember(ctx, senderID, groupID)
+	if err != nil {
+		// 存储层错误，重投 ( 幂等 )。
+		return fmt.Errorf("failed to check group membership: %w", err)
+	}
+	if !active {
+		s.logger.Warn(
+			"[message-service] sender is not an active group member, skip",
+			zap.String("message_id", stamped.GetMessageId()),
+			zap.Uint64("sender_id", senderID),
+			zap.Uint64("group_id", groupID),
+		)
+		return nil
+	}
+
+	memberIDs, err := s.groupMemberRepo.ListActiveMemberIDs(ctx, groupID)
+	if err != nil {
+		return fmt.Errorf("failed to list group members: %w", err)
+	}
+	if len(memberIDs) == 0 {
+		s.logger.Warn(
+			"[message-service] group has no active members, skip",
+			zap.String("message_id", stamped.GetMessageId()),
+			zap.Uint64("group_id", groupID),
+		)
+		return nil
+	}
+
+	conversationID := domain.GroupConversationID(groupID)
+
+	snowflakeID, err := s.nextSnowflakeID(conversationID)
+	if err != nil {
+		return fmt.Errorf("failed to generate message id: %w", err)
+	}
+
+	msg := domain.GroupChatMsg{
+		BusinessID: businessID,
+
+		MessageID:   stamped.GetMessageId(),
+		SnowflakeID: snowflakeID,
+
+		SenderID: senderID,
+		GroupID:  groupID,
+
+		ConversationID: conversationID,
+
+		Body:           body.Content,
+		ContentType:    string(body.ContentType),
+		ContentPreview: contentPreview(body),
+
+		SentAt: time.Now().UnixMilli(),
+
+		MemberIDs: memberIDs,
+
+		// 小群写扩散 ( 收件箱内联正本，一次 SYNC 即可渲染 )，
+		// 大群读扩散 ( 收件箱只写指针，客户端再发起 CONVERSATION_SYNC 拉取正文 )。
+		// 阈值是部署参数，网关与客户端均不感知。
+		Inline: len(memberIDs) <= s.fanoutCfg.InlineThreshold,
+	}
+
+	result, err := s.messageRepo.StoreGroupChat(ctx, msg, s.fanoutCfg.BatchSize)
+	if err != nil {
+		// 返回 error 触发消费重投 ( 幂等 )。
+		return fmt.Errorf("failed to store group chat message: %w", err)
+	}
+
+	// 通知扇出: 每成员一条，只携带 latest_seq。
+	// 分区键 hash(business_id, receiver_id) 保证同一接收者的通知有序。
+	for memberID, memberSeq := range result.MemberSeqs {
+		s.notify(ctx, msg.MessageID, businessID, memberID, memberSeq)
+	}
 
 	return nil
 }

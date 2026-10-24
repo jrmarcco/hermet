@@ -1,6 +1,10 @@
 package domain
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 type ContentType string
 
@@ -56,6 +60,54 @@ type SingleChatStoreResult struct {
 	ReceiverSeq int64
 }
 
+// GroupChatMsg 待落库的群聊消息 ( 服务层组装 )。
+type GroupChatMsg struct {
+	BusinessID uint64
+
+	// MessageID 网关 UPSTREAM 帧的 message_id ( 幂等去重键 )。
+	MessageID string
+	// SnowflakeID 消息正本表主键 ( 雪花 ID )。
+	SnowflakeID uint64
+
+	SenderID uint64
+	GroupID  uint64
+
+	ConversationID string
+
+	Body        []byte
+	ContentType string
+	// ContentPreview 会话列表展示用的内容摘要 ( 截断至 channel.last_message_content 列宽 )。
+	ContentPreview string
+
+	SentAt int64
+
+	// MemberIDs 当前群内有效成员 ( 含发送者，发送者多端自同步 )。
+	MemberIDs []uint64
+
+	// Inline 为 true 时收件箱写扩散内联正本 ( 小群 )，
+	// false 时写读扩散指针 ( 大群，客户端需再发起 CONVERSATION_SYNC 拉取正文 )。
+	Inline bool
+}
+
+// GroupChatStoreResult 群聊落库结果: 各成员收件箱的最新 seq ( 用于投递通知 )。
+type GroupChatStoreResult struct {
+	MemberSeqs map[uint64]int64
+}
+
+// TimelineMessage 会话 timeline 中的一条消息 ( ConversationSync 下发 )。
+type TimelineMessage struct {
+	ConversationSeq int64
+
+	MessageID      string
+	ConversationID string
+	SenderID       uint64
+
+	Body        []byte
+	ContentType string
+
+	SentAt int64
+}
+
 // InboxEntryKind 收件箱条目类型。
 type InboxEntryKind int16
 
@@ -100,4 +152,18 @@ func SingleConversationID(a, b uint64) string {
 // GroupConversationID 返回群聊会话 ID。
 func GroupConversationID(groupID uint64) string {
 	return fmt.Sprintf("%s:%d", conversationPrefixGroup, groupID)
+}
+
+// ParseGroupConversationID 解析群聊会话 ID，非群聊会话 ( 或格式非法 ) 时第二个返回值为 false。
+func ParseGroupConversationID(conversationID string) (uint64, bool) {
+	rest, ok := strings.CutPrefix(conversationID, conversationPrefixGroup+":")
+	if !ok {
+		return 0, false
+	}
+
+	groupID, err := strconv.ParseUint(rest, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return groupID, true
 }

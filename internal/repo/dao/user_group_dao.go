@@ -2,6 +2,7 @@ package dao
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jrmarcco/hermet/internal/pkg/sharding"
 	"github.com/jrmarcco/jit/xsync"
@@ -29,6 +30,9 @@ type UserGroup struct {
 
 type UserGroupDao interface {
 	CreateInTx(ctx context.Context, tx *gorm.DB, tbName string, ug UserGroup) error
+
+	// ExistsActiveMembership 判断用户是否为群内有效成员 ( left_at = 0 )。
+	ExistsActiveMembership(ctx context.Context, userID, groupID uint64) (bool, error)
 }
 
 var _ UserGroupDao = (*DefaultUserGroupDao)(nil)
@@ -55,4 +59,29 @@ func (d *DefaultUserGroupDao) CreateInTx(ctx context.Context, tx *gorm.DB, tbNam
 			DoNothing: true,
 		}).
 		Create(&ug).Error
+}
+
+func (d *DefaultUserGroupDao) ExistsActiveMembership(ctx context.Context, userID, groupID uint64) (bool, error) {
+	// 以 user_id 为分片键 ( 单行查询 )。
+	dst, err := d.shardHelper.DstFromSharder(sharding.NewSingleIDSharder(userID))
+	if err != nil {
+		return false, fmt.Errorf("failed to get shard destination from user id [ %d ]: %w", userID, err)
+	}
+
+	db, ok := d.dbs.Load(dst.DB)
+	if !ok {
+		return false, fmt.Errorf("failed to load database [ %s ]", dst.DB)
+	}
+
+	var count int64
+	err = db.WithContext(ctx).Table(dst.TB).Model(&UserGroup{}).
+		Where(colUserID+" = ?", userID).
+		Where(colGroupID+" = ?", groupID).
+		Where("left_at = ?", 0).
+		Limit(1).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }

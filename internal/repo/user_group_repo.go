@@ -16,6 +16,9 @@ import (
 
 type UserGroupRepo interface {
 	Create(ctx context.Context, ug domain.UserGroup) error
+
+	// IsActiveMember 判断用户是否为群内有效成员 ( 群消息发送与 ConversationSync 的身份校验 )。
+	IsActiveMember(ctx context.Context, userID, groupID uint64) (bool, error)
 }
 
 type TxUserGroupRepo struct {
@@ -50,6 +53,10 @@ func NewTxUserGroupRepo(
 		ugvShardHelper:  ugvShardHelper,
 		ugriShardHelper: ugriShardHelper,
 	}
+}
+
+func (r *TxUserGroupRepo) IsActiveMember(ctx context.Context, userID, groupID uint64) (bool, error) {
+	return r.userGroupDao.ExistsActiveMembership(ctx, userID, groupID)
 }
 
 func (r *TxUserGroupRepo) Create(ctx context.Context, ug domain.UserGroup) error {

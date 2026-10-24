@@ -145,13 +145,15 @@ func newChannelRepo(params channelRepoFxParams) ChannelRepo {
 type messageRepoFxParams struct {
 	fx.In
 
-	MessageDao dao.MessageDao
-	InboxDao   dao.InboxDao
-	ChannelDao dao.ChannelDao
+	MessageDao         dao.MessageDao
+	ConversationSeqDao dao.ConversationSeqDao
+	InboxDao           dao.InboxDao
+	ChannelDao         dao.ChannelDao
 
 	DBs *xsync.Map[string, *gorm.DB] `name:"db_sharding_clients"`
 
 	MsgShardHelper     *sharding.ShardHelper `name:"message_shard_helper"`
+	ConvSeqShardHelper *sharding.ShardHelper `name:"conversation_seq_shard_helper"`
 	InboxShardHelper   *sharding.ShardHelper `name:"inbox_entry_shard_helper"`
 	ChannelShardHelper *sharding.ShardHelper `name:"channel_shard_helper"`
 }
@@ -159,11 +161,13 @@ type messageRepoFxParams struct {
 func newMessageRepo(params messageRepoFxParams) MessageRepo {
 	return NewTxMessageRepo(
 		params.MessageDao,
+		params.ConversationSeqDao,
 		params.InboxDao,
 		params.ChannelDao,
 
 		params.DBs,
 		params.MsgShardHelper,
+		params.ConvSeqShardHelper,
 		params.InboxShardHelper,
 		params.ChannelShardHelper,
 	)

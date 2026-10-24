@@ -56,7 +56,7 @@ func NewDefaultMessageDao(
 func (d *DefaultMessageDao) SaveInTx(ctx context.Context, tx *gorm.DB, tbName string, message Message) error {
 	return tx.WithContext(ctx).Table(tbName).Model(&Message{}).
 		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "business_id"}, {Name: "message_id"}},
+			Columns:   []clause.Column{{Name: colBusinessID}, {Name: colMessageID}},
 			DoNothing: true,
 		}).
 		Create(&message).Error

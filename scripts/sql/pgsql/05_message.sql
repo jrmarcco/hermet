@@ -115,3 +115,26 @@ COMMENT ON COLUMN message.created_at IS '创建时间戳 ( Unix 毫秒值 )';
 
 -- 会话 timeline 查询 ( 读扩散 CONVERSATION_SYNC: ( conversation_id, conversation_seq ) 范围扫描 )。
 CREATE INDEX idx_message_conversation ON message(conversation_id, conversation_seq);
+
+
+-- 会话 seq 分配表 ( 以 conversation_id 为分片键，与 message 表同布局 )
+-- conversation_seq 保证会话内全序 ( 群聊读扩散 timeline )，行锁原子自增。
+-- 与消息正本写在同一分片事务内完成，保证 seq 与正本的原子性；
+-- seq 允许有空洞 ( 消费重投幂等跳过会浪费序号 )，只需保证单调。
+DROP TABLE IF EXISTS conversation_seq;
+CREATE TABLE conversation_seq (
+    business_id BIGINT NOT NULL,
+    conversation_id VARCHAR(64) NOT NULL,
+
+    seq BIGINT NOT NULL DEFAULT 0,
+
+    updated_at BIGINT NOT NULL,
+
+    PRIMARY KEY (business_id, conversation_id)
+);
+
+COMMENT ON TABLE conversation_seq IS '会话 seq 分配表 ( 群聊读扩散 timeline )';
+COMMENT ON COLUMN conversation_seq.business_id IS '业务 ID';
+COMMENT ON COLUMN conversation_seq.conversation_id IS '会话 ID ( 单聊 s:min:max / 群聊 g:group_id )';
+COMMENT ON COLUMN conversation_seq.seq IS '该会话 timeline 当前最大 conversation_seq';
+COMMENT ON COLUMN conversation_seq.updated_at IS '更新时间戳 ( Unix 毫秒值 )';

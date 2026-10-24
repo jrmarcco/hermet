@@ -18,6 +18,9 @@ import (
 type GroupMemberRepo interface {
 	BatchCreate(ctx context.Context, groupID, creatorID uint64, memberIDs []uint64) error
 	CreateView(ctx context.Context, gmv domain.GroupMemberView) error
+
+	// ListActiveMemberIDs 返回群内有效成员 ID 列表 ( 含发送者，用于群消息扇出 )。
+	ListActiveMemberIDs(ctx context.Context, groupID uint64) ([]uint64, error)
 }
 
 var _ GroupMemberRepo = (*TxGroupMemberRepo)(nil)
@@ -57,6 +60,10 @@ func NewTxGroupMemberRepo(
 
 func (r *TxGroupMemberRepo) BatchCreate(ctx context.Context, groupID, creatorID uint64, memberIDs []uint64) error {
 	return r.groupMemberDao.BatchCreate(ctx, groupID, creatorID, memberIDs)
+}
+
+func (r *TxGroupMemberRepo) ListActiveMemberIDs(ctx context.Context, groupID uint64) ([]uint64, error) {
+	return r.groupMemberDao.ListActiveMemberIDs(ctx, groupID)
 }
 
 func (r *TxGroupMemberRepo) CreateView(ctx context.Context, gmv domain.GroupMemberView) error {

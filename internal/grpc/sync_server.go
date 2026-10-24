@@ -30,10 +30,16 @@ type SyncServer struct {
 	messagev1.UnimplementedSyncServiceServer
 
 	messageRepo repo.MessageRepo
+
+	// userGroupRepo 用于 ConversationSync 的群成员身份校验 ( 契约要求 )。
+	userGroupRepo repo.UserGroupRepo
 }
 
-func NewSyncServer(messageRepo repo.MessageRepo) *SyncServer {
-	return &SyncServer{messageRepo: messageRepo}
+func NewSyncServer(messageRepo repo.MessageRepo, userGroupRepo repo.UserGroupRepo) *SyncServer {
+	return &SyncServer{
+		messageRepo:   messageRepo,
+		userGroupRepo: userGroupRepo,
+	}
 }
 
 // Sync 返回该用户收件箱中 ( cursor, latest_seq ] 的增量条目 ( 按 seq 升序 )。
@@ -70,9 +76,62 @@ func (s *SyncServer) Sync(ctx context.Context, req *messagev1.SyncRequest) (*mes
 }
 
 // ConversationSync 返回会话 timeline 的增量消息 ( 读扩散，大群场景 )。
-func (s *SyncServer) ConversationSync(_ context.Context, _ *messagev1.ConversationSyncRequest) (*messagev1.ConversationSyncResponse, error) {
-	// Phase 4 ( 群聊读扩散 ) 实现: conversation_seq 分配 + timeline 查询 + 群成员校验。
-	return nil, status.Error(codes.Unimplemented, "conversation sync is not implemented yet")
+//
+// 契约要求服务端校验请求用户是否为该会话 ( 群 ) 的成员。
+func (s *SyncServer) ConversationSync(ctx context.Context, req *messagev1.ConversationSyncRequest) (*messagev1.ConversationSyncResponse, error) {
+	businessID := req.GetBusinessId()
+	userID := req.GetUserId()
+	conversationID := req.GetConversationId()
+
+	if userID == 0 {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
+	groupID, ok := domain.ParseGroupConversationID(conversationID)
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "conversation_id is not a group conversation")
+	}
+
+	// 成员身份校验 ( 身份字段由网关盖章，客户端自报身份不可信 )。
+	active, err := s.userGroupRepo.IsActiveMember(ctx, userID, groupID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to check group membership: %v", err)
+	}
+	if !active {
+		return nil, status.Error(codes.PermissionDenied, "user is not an active member of the conversation")
+	}
+
+	limit := normalizeLimit(req.GetLimit())
+
+	messages, latestSeq, hasMore, err := s.messageRepo.ListConversationTimeline(ctx, businessID, conversationID, int64(req.GetCursor()), limit)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to list conversation timeline: %v", err)
+	}
+
+	resp := &messagev1.ConversationSyncResponse{
+		Messages: make([]*messagev1.TimelineMessage, 0, len(messages)),
+
+		LatestSeq: uint64(latestSeq),
+		HasMore:   hasMore,
+	}
+
+	for _, m := range messages {
+		resp.Messages = append(resp.Messages, &messagev1.TimelineMessage{
+			ConversationSeq: uint64(m.ConversationSeq),
+
+			Message: &messagev1.ChatMessage{
+				ConversationId: m.ConversationID,
+				MessageId:      m.MessageID,
+				SenderId:       m.SenderID,
+
+				Body: m.Body,
+
+				SentAt: unixMilliToTimestamp(m.SentAt),
+			},
+		})
+	}
+
+	return resp, nil
 }
 
 func toProtoInboxEntry(e domain.InboxEntry) *messagev1.InboxEntry {

@@ -66,6 +66,10 @@ type ChannelDao interface {
 	// UpdateLastMessageInTx 事务内更新该用户指定会话的最后消息快照
 	// ( 会话行由 CDC 链路异步创建，行不存在时静默跳过 )。
 	UpdateLastMessageInTx(ctx context.Context, tx *gorm.DB, tbName string, userID uint64, snapshot ChannelLastMessage) error
+
+	// UpdateLastMessageForUsersInTx 事务内批量更新一组用户在同一会话的最后消息快照 ( 群聊扇出用 )。
+	// incrementUnread 覆盖 snapshot.IncrementUnread: 调用方按发送者/接收者分组控制未读数。
+	UpdateLastMessageForUsersInTx(ctx context.Context, tx *gorm.DB, tbName string, userIDs []uint64, snapshot ChannelLastMessage, incrementUnread bool) error
 }
 
 var _ ChannelDao = (*DefaultChannelDao)(nil)
@@ -130,6 +134,38 @@ func (d *DefaultChannelDao) UpdateLastMessageInTx(ctx context.Context, tx *gorm.
 	// 会话由 CDC 链路异步创建，消息先到时行可能尚不存在，静默跳过。
 	return tx.WithContext(ctx).Table(tbName).Model(&Channel{}).
 		Where("user_id = ?", userID).
+		Where("target_id = ?", snapshot.TargetID).
+		Where("channel_type = ?", snapshot.ChannelType).
+		Updates(updates).Error
+}
+
+func (d *DefaultChannelDao) UpdateLastMessageForUsersInTx(
+	ctx context.Context,
+	tx *gorm.DB,
+	tbName string,
+	userIDs []uint64,
+	snapshot ChannelLastMessage,
+	incrementUnread bool,
+) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	updates := map[string]any{
+		"last_message_id":        snapshot.LastMessageID,
+		"last_message_type":      snapshot.LastMessageType,
+		"last_message_content":   snapshot.LastMessageContent,
+		"last_message_sender_id": snapshot.LastMessageSenderID,
+		"last_message_time":      snapshot.LastMessageTime,
+		colUpdatedAt:             snapshot.LastMessageTime,
+	}
+	if incrementUnread {
+		updates["unread_count"] = gorm.Expr("unread_count + 1")
+	}
+
+	// 会话由 CDC 链路异步创建，消息先到时行可能尚不存在，静默跳过。
+	return tx.WithContext(ctx).Table(tbName).Model(&Channel{}).
+		Where("user_id = ANY(?)", toInt64Slice(userIDs)).
 		Where("target_id = ?", snapshot.TargetID).
 		Where("channel_type = ?", snapshot.ChannelType).
 		Updates(updates).Error

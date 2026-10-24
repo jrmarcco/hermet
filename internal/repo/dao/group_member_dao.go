@@ -31,6 +31,9 @@ type GroupMember struct {
 type GroupMemberDao interface {
 	// BatchCreate 批量创建聊天群成员。
 	BatchCreate(ctx context.Context, groupID, creatorID uint64, memberIDs []uint64) error
+
+	// ListActiveMemberIDs 返回群内有效成员 ID 列表 ( left_at = 0，按 user_id 升序 )。
+	ListActiveMemberIDs(ctx context.Context, groupID uint64) ([]uint64, error)
 }
 
 var _ GroupMemberDao = (*DefaultGroupMemberDao)(nil)
@@ -98,4 +101,25 @@ func (d *DefaultGroupMemberDao) BatchCreate(ctx context.Context, groupID, creato
 			DoNothing: true,
 		}).
 		CreateInBatches(&members, groupMemberBatchSize).Error
+}
+
+func (d *DefaultGroupMemberDao) ListActiveMemberIDs(ctx context.Context, groupID uint64) ([]uint64, error) {
+	dst, err := d.shardHelper.DstFromSharder(sharding.NewSingleIDSharder(groupID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get shard destination from group id [ %d ]", groupID)
+	}
+
+	db, ok := d.dbs.Load(dst.DB)
+	if !ok {
+		return nil, fmt.Errorf("failed to load database [ %s ]", dst.DB)
+	}
+
+	var memberIDs []uint64
+	err = db.WithContext(ctx).Table(dst.TB).Model(&GroupMember{}).
+		Select("user_id").
+		Where(colGroupID+" = ?", groupID).
+		Where("left_at = ?", 0).
+		Order("user_id ASC").
+		Find(&memberIDs).Error
+	return memberIDs, err
 }

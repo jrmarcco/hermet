@@ -174,6 +174,11 @@ var ShardingFxModule = fx.Module(
 			newMessageShardHelper,
 			fx.ResultTags(`name:"message_shard_helper"`),
 		),
+		// 会话 seq 分配 ( 按 conversation_id 分片，与 message 同布局 )。
+		fx.Annotate(
+			newConversationSeqShardHelper,
+			fx.ResultTags(`name:"conversation_seq_shard_helper"`),
+		),
 		// 收件箱 ( seq 分配与条目同布局，共用一个 helper，按 user_id 分片 )。
 		fx.Annotate(
 			newInboxEntryShardHelper,

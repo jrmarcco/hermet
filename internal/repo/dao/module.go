@@ -106,6 +106,12 @@ var DaoFxModule = fx.Module(
 			fx.As(new(MessageDao)),
 			fx.ParamTags(`name:"db_sharding_clients"`, `name:"message_shard_helper"`),
 		),
+		// 会话 seq 分配 ( 按 conversation_id 分片，与 message 同布局 )。
+		fx.Annotate(
+			NewDefaultConversationSeqDao,
+			fx.As(new(ConversationSeqDao)),
+			fx.ParamTags(`name:"db_sharding_clients"`, `name:"conversation_seq_shard_helper"`),
+		),
 		// 收件箱 ( seq 分配 + 条目，按 user_id 分片 )。
 		fx.Annotate(
 			NewDefaultInboxDao,

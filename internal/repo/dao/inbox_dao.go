@@ -52,14 +52,27 @@ type InboxEntry struct {
 	CreatedAt int64 `gorm:"column:created_at"`
 }
 
+// InboxSeqAllocation 批量 seq 分配结果。
+type InboxSeqAllocation struct {
+	UserID uint64 `gorm:"column:user_id"`
+	Seq    int64  `gorm:"column:seq"`
+}
+
 type InboxDao interface {
 	// NextSeqInTx 事务内原子分配 n 个连续 seq，返回区间 [start, start+n-1]。
 	// 同一分区内同一发送者的消息由 Kafka 分区序保证串行消费，
 	// 跨发送者并发分配由行锁保证原子性。
 	NextSeqInTx(ctx context.Context, tx *gorm.DB, tbName string, businessID, userID uint64, n int64) (start int64, err error)
 
+	// NextSeqsBatchInTx 事务内为一批用户各原子分配 1 个 seq ( unnest 批量 upsert )，
+	// 用于群聊扇出。结果与入参顺序无关。
+	NextSeqsBatchInTx(ctx context.Context, tx *gorm.DB, tbName string, businessID uint64, userIDs []uint64) ([]InboxSeqAllocation, error)
+
 	// CreateEntryInTx 事务内写入收件箱条目 ( 按 ( business_id, user_id, message_id ) 幂等 )。
 	CreateEntryInTx(ctx context.Context, tx *gorm.DB, tbName string, entry InboxEntry) error
+
+	// CreateEntriesInTx 事务内批量写入收件箱条目 ( 幂等语义同上 )，用于群聊扇出。
+	CreateEntriesInTx(ctx context.Context, tx *gorm.DB, tbName string, entries []InboxEntry) error
 
 	// ListEntries 返回 ( cursor, +inf ] 内按 seq 升序的至多 limit 条条目。
 	ListEntries(ctx context.Context, businessID, userID uint64, cursor int64, limit int) ([]InboxEntry, error)
@@ -115,6 +128,49 @@ func (d *DefaultInboxDao) NextSeqInTx(
 	return maxSeq - n + 1, nil
 }
 
+func (d *DefaultInboxDao) NextSeqsBatchInTx(
+	ctx context.Context,
+	tx *gorm.DB,
+	tbName string,
+	businessID uint64,
+	userIDs []uint64,
+) ([]InboxSeqAllocation, error) {
+	if len(userIDs) == 0 {
+		return nil, nil
+	}
+
+	now := time.Now().UnixMilli()
+
+	// unnest 批量 upsert，每用户 +1，RETURNING 各自分配后的 seq。
+	// 表名由分片框架生成 ( 前缀_数字 格式 )，非用户输入。
+	allocations := make([]InboxSeqAllocation, 0, len(userIDs))
+	err := tx.WithContext(ctx).Raw(
+		fmt.Sprintf(
+			`INSERT INTO %s (business_id, user_id, seq, updated_at)
+			 SELECT ?, u, 1, ? FROM unnest(?::bigint[]) AS u
+			 ON CONFLICT (business_id, user_id)
+			 DO UPDATE SET seq = %s.seq + 1, updated_at = ?
+			 RETURNING user_id, seq`,
+			tbName, tbName,
+		),
+		businessID, now, toInt64Slice(userIDs), now,
+	).Scan(&allocations).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to allocate inbox seqs in batch: %w", err)
+	}
+
+	return allocations, nil
+}
+
+// toInt64Slice uint64 切片转 int64 ( pgx 原生支持 int64 数组绑定 )。
+func toInt64Slice(ids []uint64) []int64 {
+	res := make([]int64, len(ids))
+	for i, id := range ids {
+		res[i] = int64(id)
+	}
+	return res
+}
+
 func (d *DefaultInboxDao) CreateEntryInTx(
 	ctx context.Context,
 	tx *gorm.DB,
@@ -124,11 +180,31 @@ func (d *DefaultInboxDao) CreateEntryInTx(
 	return tx.WithContext(ctx).Table(tbName).Model(&InboxEntry{}).
 		Clauses(clause.OnConflict{
 			Columns: []clause.Column{
-				{Name: "business_id"}, {Name: colUserID}, {Name: "message_id"},
+				{Name: colBusinessID}, {Name: colUserID}, {Name: colMessageID},
 			},
 			DoNothing: true,
 		}).
 		Create(&entry).Error
+}
+
+func (d *DefaultInboxDao) CreateEntriesInTx(
+	ctx context.Context,
+	tx *gorm.DB,
+	tbName string,
+	entries []InboxEntry,
+) error {
+	if len(entries) == 0 {
+		return nil
+	}
+
+	return tx.WithContext(ctx).Table(tbName).Model(&InboxEntry{}).
+		Clauses(clause.OnConflict{
+			Columns: []clause.Column{
+				{Name: colBusinessID}, {Name: colUserID}, {Name: colMessageID},
+			},
+			DoNothing: true,
+		}).
+		CreateInBatches(&entries, len(entries)).Error
 }
 
 func (d *DefaultInboxDao) ListEntries(
