@@ -36,6 +36,13 @@ var APIFxModule = fx.Module(
 			fx.ResultTags(`group:"api_registry"`),
 		),
 
+		// 消息搜索 API。
+		fx.Annotate(
+			NewMessageHandler,
+			fx.As(new(xgin.RouteRegistry)),
+			fx.ResultTags(`group:"api_registry"`),
+		),
+
 		// JWKS 公钥发布端点 ( /.well-known/jwks.json，网关拉取公钥用 )。
 		fx.Annotate(
 			NewJwksHandler,

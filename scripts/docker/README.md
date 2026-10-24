@@ -55,6 +55,14 @@ cd ../es && ./init.sh && docker compose up -d
 - **Debezium 客户端证书**: connect 以 mTLS 客户端身份连 Kafka, `init.sh` 自动从
   `gateway/scripts/docker/kafka/certs` 复制 ( 可经 `KAFKA_CERTS_DIR` 指定来源 ),
   keystore 密码需与 kafka 部署的 `KAFKA_TLS_KEY_PASSWORD` 一致。
+- **Debezium connector 配置约定**: 每个 connector 的 `slot.name` / `publication.name` /
+  `schema.history.internal.kafka.topic` 按实例命名 ( hermet_0 / hermet_1 各自独立,
+  schema history topic 共用会导致两库 DDL 历史混写 )。
+  **存量环境升级注意**: slot/publication 改名后, 旧 connector 的 slot 不会自动删除
+  ( 会一直保留 WAL )——先 `./cli.sh delete pgsql-hermet-N` 再在 PG 侧执行
+  `SELECT pg_drop_replication_slot('debezium_slot');` 释放旧 slot。
+  消息表 ( message / inbox_* / conversation_seq ) 不在 CDC 监听列表 ( 设计如此,
+  ES 喂养走应用自发索引事件, 见 internal/search )。
 - **es 数据目录属主**: ES 镜像以 uid 1000 运行, `init.sh` 会将 `es-data` 属主
   修正为 `1000:1000`, 否则启动即失败 ( `AccessDeniedException` )。
 - 数据经 bind mount 持久化在各自目录 ( `data-N` / `es-data` ), 销毁集群时手动清理。

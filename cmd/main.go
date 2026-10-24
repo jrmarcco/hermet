@@ -10,6 +10,7 @@ import (
 	"github.com/jrmarcco/hermet/internal/pkg/provider"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/hermet/internal/repo/dao"
+	"github.com/jrmarcco/hermet/internal/search"
 	"github.com/jrmarcco/hermet/internal/service"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -48,6 +49,9 @@ func main() {
 		provider.KafkaProducerFxModule,
 		provider.KafkaConsumerFxModule,
 
+		// 初始化 elasticsearch client ( 消息搜索查询侧 )。
+		provider.EsClientFxModule,
+
 		// 初始化 jwt manager。
 		provider.JwtManagerFxModule,
 
@@ -81,6 +85,9 @@ func main() {
 
 		// 初始化 gRPC server ( SyncService，网关经服务发现调用 )。
 		grpc.GrpcFxModule,
+
+		// 初始化搜索 ( ES indexer + 搜索服务 )。
+		search.SearchFxModule,
 
 		// 初始化 cdc。
 		bootstrap.CdcFxModule,

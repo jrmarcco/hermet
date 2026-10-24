@@ -309,6 +309,10 @@ mq:
     # 通知 topic ( 消息落库后投递 NotifyMessage，网关集群广播消费后下发 NOTIFY 帧 )。
     message_notify:
       topic: synp.message.notify
+    # 消息索引事件 topic ( ES indexer 消费，异步加速查询层 )。
+    # 分区键 conversation_id: 同会话事件有序，利于 bulk 局部性。
+    message_index:
+      topic: hermet.message.index
   consumer:
     group_member_add:
       topic: hermet.group_member.add
@@ -318,6 +322,12 @@ mq:
     message_upstream:
       topic: synp.message.upstream
       group_id: hermet-message-upstream-group
+      partitions: 6
+      handle_timeout: 16s
+    # ES 索引 consumer ( 消费索引事件批量写 ES )。
+    message_index:
+      topic: hermet.message.index
+      group_id: hermet-message-index-group
       partitions: 6
       handle_timeout: 16s
 
@@ -357,6 +367,25 @@ mq:
       handle_timeout: 10s
       db_shard_count: 2
       tb_shard_count: 4
+
+# Elasticsearch 配置 ( 消息搜索查询侧，部署见 scripts/docker/es )
+# 架构定位: PG 是唯一事实源，ES 只是异步查询加速层 ( 可重建、最终一致 )。
+es:
+  addresses:
+    - http://192.168.3.3:19200
+  username: elastic
+  password: <passwd>
+
+  # 消息索引名 ( 开发环境单索引；生产建议按时间滚动 + ILM/别名 )。
+  message_index: hermet-message
+
+  # bulk indexer 攒批参数 ( esutil.BulkIndexer )。
+  bulk_num_workers: 2
+  bulk_flush_bytes: 1048576   # 1MB
+  bulk_flush_interval: 1s
+
+  # 连接/查询超时。
+  request_timeout: 10s
 
 # 数据库配置
 db:

@@ -108,6 +108,25 @@ type TimelineMessage struct {
 	SentAt int64
 }
 
+// MessageIndexEvent 消息索引事件 ( 消息落库后投递，ES indexer 消费 )。
+//
+// ES 只是异步查询加速层 ( 可重建、最终一致 ):
+//   - 事件丢失可接受 ( reindex 工具可从 PG 全量重建 );
+//   - 事件重复可接受 ( ES 以 message_id 作为文档 _id，重复写入幂等 );
+//   - 索引链路绝不进入 SYNC 同步主链路。
+type MessageIndexEvent struct {
+	MessageID string `json:"messageId"`
+
+	BusinessID     uint64 `json:"businessId"`
+	ConversationID string `json:"conversationId"`
+	SenderID       uint64 `json:"senderId"`
+
+	Body        []byte `json:"body"`
+	ContentType string `json:"contentType"`
+
+	SentAt int64 `json:"sentAt"`
+}
+
 // InboxEntryKind 收件箱条目类型。
 type InboxEntryKind int16
 
@@ -166,4 +185,25 @@ func ParseGroupConversationID(conversationID string) (uint64, bool) {
 		return 0, false
 	}
 	return groupID, true
+}
+
+// ParseSingleConversationID 解析单聊会话 ID，非单聊会话 ( 或格式非法 ) 时返回 false。
+// 返回的双方 UID 与生成时一致 ( a < b 升序 )。
+func ParseSingleConversationID(conversationID string) (a, b uint64, ok bool) {
+	rest, cut := strings.CutPrefix(conversationID, conversationPrefixSingle+":")
+	if !cut {
+		return 0, 0, false
+	}
+
+	left, right, found := strings.Cut(rest, ":")
+	if !found {
+		return 0, 0, false
+	}
+
+	a, aErr := strconv.ParseUint(left, 10, 64)
+	b, bErr := strconv.ParseUint(right, 10, 64)
+	if aErr != nil || bErr != nil {
+		return 0, 0, false
+	}
+	return a, b, true
 }

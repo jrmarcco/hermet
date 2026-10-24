@@ -49,6 +49,8 @@ type DefaultMessageService struct {
 
 	// notifyProducer 投递 NotifyMessage 到通知 topic ( 推送侧消费后下发 NOTIFY 帧 )。
 	notifyProducer mq.Producer
+	// indexProducer 投递索引事件到 ES 索引 topic ( 异步查询加速层，可丢可重 )。
+	indexProducer mq.Producer
 
 	fanoutCfg MessageFanoutConfig
 
@@ -65,6 +67,7 @@ func NewDefaultMessageService(
 	userGroupRepo repo.UserGroupRepo,
 
 	notifyProducer mq.Producer,
+	indexProducer mq.Producer,
 
 	fanoutCfg MessageFanoutConfig,
 
@@ -80,6 +83,7 @@ func NewDefaultMessageService(
 		userGroupRepo:   userGroupRepo,
 
 		notifyProducer: notifyProducer,
+		indexProducer:  indexProducer,
 
 		fanoutCfg: fanoutCfg,
 
@@ -209,6 +213,9 @@ func (s *DefaultMessageService) processSingleChat(
 	s.notify(ctx, stamped.GetMessageId(), businessID, senderID, result.SenderSeq)
 	s.notify(ctx, stamped.GetMessageId(), businessID, receiverID, result.ReceiverSeq)
 
+	// 索引事件 ( ES 查询加速层，可丢可重，失败不影响主链路 )。
+	s.emitIndexEvent(ctx, msg.BusinessID, msg.MessageID, msg.ConversationID, msg.SenderID, msg.Body, msg.ContentType, msg.SentAt)
+
 	return nil
 }
 
@@ -306,6 +313,9 @@ func (s *DefaultMessageService) processGroupChat(
 		s.notify(ctx, msg.MessageID, businessID, memberID, memberSeq)
 	}
 
+	// 索引事件 ( ES 查询加速层，可丢可重，失败不影响主链路 )。
+	s.emitIndexEvent(ctx, msg.BusinessID, msg.MessageID, msg.ConversationID, msg.SenderID, msg.Body, msg.ContentType, msg.SentAt)
+
 	return nil
 }
 
@@ -368,6 +378,54 @@ func (s *DefaultMessageService) nextSnowflakeID(conversationID string) (uint64, 
 		return 0, err
 	}
 	return s.idgen.NextID(shardVal)
+}
+
+// emitIndexEvent 投递消息索引事件 ( 消息落库成功后调用 )。
+//
+// ES 只是异步查询加速层: 事件丢失可接受 ( reindex 工具可全量重建 )，
+// 事件重复可接受 ( ES 以 message_id 为文档 _id 幂等 )——
+// 因此投递失败仅记日志，绝不影响消息主链路，也不进入落库事务。
+func (s *DefaultMessageService) emitIndexEvent(
+	ctx context.Context,
+	businessID uint64,
+	messageID, conversationID string,
+	senderID uint64,
+	body []byte,
+	contentType string,
+	sentAt int64,
+) {
+	event := domain.MessageIndexEvent{
+		MessageID: messageID,
+
+		BusinessID:     businessID,
+		ConversationID: conversationID,
+		SenderID:       senderID,
+
+		Body:        body,
+		ContentType: contentType,
+
+		SentAt: sentAt,
+	}
+
+	val, err := json.Marshal(event)
+	if err != nil {
+		s.logger.Error(
+			"[message-service] failed to marshal index event",
+			zap.String("message_id", messageID),
+			zap.Error(err),
+		)
+		return
+	}
+
+	// 分区键 conversation_id: 同会话事件有序 ( 利于 bulk 局部性 )。
+	key := []byte(conversationID)
+	if err := s.indexProducer.Produce(ctx, key, val); err != nil {
+		s.logger.Warn(
+			"[message-service] failed to produce index event ( reindex 可补 )",
+			zap.String("message_id", messageID),
+			zap.Error(err),
+		)
+	}
 }
 
 // contentPreview 生成会话列表展示用的内容摘要 ( 按 rune 截断至列宽 )。

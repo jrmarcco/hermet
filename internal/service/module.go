@@ -87,6 +87,7 @@ type messageServiceFxParams struct {
 	UserGroupRepo   repo.UserGroupRepo
 
 	NotifyProducer mq.Producer `name:"message_notify_producer"`
+	IndexProducer  mq.Producer `name:"message_index_producer"`
 
 	Gen idgen.Generator
 
@@ -107,6 +108,7 @@ func newMessageService(params messageServiceFxParams) (MessageService, error) {
 		params.UserGroupRepo,
 
 		params.NotifyProducer,
+		params.IndexProducer,
 
 		*fanoutCfg,
 

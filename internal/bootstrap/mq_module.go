@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/elastic/go-elasticsearch/v9"
 	"github.com/jrmarcco/hermet/internal/mq"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproducer"
+	"github.com/jrmarcco/hermet/internal/search"
 	"github.com/jrmarcco/hermet/internal/service"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
@@ -29,10 +31,16 @@ var MqFxModule = fx.Module(
 			fx.As(new(mq.Producer)),
 			fx.ResultTags(`name:"message_notify_producer"`),
 		),
+		fx.Annotate(
+			newMessageIndexProducer,
+			fx.As(new(mq.Producer)),
+			fx.ResultTags(`name:"message_index_producer"`),
+		),
 	),
 	fx.Invoke(
 		startGroupMemberConsumer,
 		startUpstreamMsgConsumer,
+		startMessageIndexConsumer,
 	),
 )
 
@@ -72,6 +80,79 @@ func newMessageNotifyProducer(producer xproducer.Producer) (*mq.DefaultProducer,
 	}
 
 	return np, nil
+}
+
+// newMessageIndexProducer 创建索引事件生产者。
+// 消息落库后投递 MessageIndexEvent，ES indexer 消费后批量写索引。
+func newMessageIndexProducer(producer xproducer.Producer) (*mq.DefaultProducer, error) {
+	cfg := mqConfig{}
+	if err := viper.UnmarshalKey("mq.producer.message_index", &cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal message index producer config: %w", err)
+	}
+
+	ip, err := mq.NewDefaultProducer(cfg.Topic, producer)
+	if err != nil {
+		return nil, err
+	}
+
+	return ip, nil
+}
+
+type micFxParams struct {
+	fx.In
+
+	Factory xconsumer.ConsumerFactory
+	Indexer *search.Indexer
+	Client  *elasticsearch.Client
+
+	Logger    *zap.Logger
+	Lifecycle fx.Lifecycle
+}
+
+// startMessageIndexConsumer 注册 ES 索引事件消费者生命周期。
+func startMessageIndexConsumer(params micFxParams) error {
+	cfg := mqConfig{}
+	if err := viper.UnmarshalKey("mq.consumer.message_index", &cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal message index consumer config: %w", err)
+	}
+
+	dc, err := mq.NewDefaultConsumer(
+		params.Factory,
+
+		cfg.Topic,
+		cfg.GroupID,
+		cfg.Partitions,
+
+		params.Indexer.ProcessIndexEvent,
+		cfg.HandleTimeout,
+	)
+	if err != nil {
+		return err
+	}
+
+	params.Lifecycle.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			// 索引前置: 确保索引存在 ( 幂等 )。
+			if err := params.Indexer.Start(ctx, params.Client); err != nil {
+				params.Logger.Error("failed to ensure message index", zap.Error(err))
+				return err
+			}
+
+			if err := dc.Start(ctx); err != nil {
+				params.Logger.Error("failed to start message index consumer", zap.Error(err))
+				return err
+			}
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			if err := dc.Stop(ctx); err != nil {
+				params.Logger.Error("failed to stop message index consumer", zap.Error(err))
+				return err
+			}
+			return params.Indexer.Close(ctx)
+		},
+	})
+	return nil
 }
 
 type gmcFxParams struct {
