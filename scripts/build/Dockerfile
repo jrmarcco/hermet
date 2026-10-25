@@ -1,0 +1,56 @@
+# syntax=docker/dockerfile:1
+
+# ==================== 构建阶段 ====================
+ARG GO_VERSION=1.27
+
+FROM golang:${GO_VERSION}-alpine AS builder
+
+# 代理可选注入 ( 国内网络: --build-arg GOPROXY=https://goproxy.cn,direct )，
+# 不再写死进镜像层。
+ARG GOPROXY=""
+
+WORKDIR /app
+
+ENV CGO_ENABLED=0
+
+COPY go.mod go.sum ./
+RUN if [ -n "$GOPROXY" ]; then go env -w GOPROXY="$GOPROXY"; fi \
+    && go mod download
+
+COPY . .
+# hermet 主程序；reindex 是独立工具命令，按需单独构建。
+RUN go build -trimpath -ldflags="-s -w" -o /out/hermet ./cmd \
+    && go build -trimpath -ldflags="-s -w" -o /out/reindex ./cmd/reindex
+
+# ==================== 运行阶段 ====================
+# alpine + 非 root: 体积小、带 busybox ( HEALTHCHECK 的 wget、进容器排查 )，
+# ca-certificates 供 etcd/JWKS 等公网 HTTPS 使用。
+FROM alpine:3.21
+
+ARG VERSION=dev
+ARG COMMIT=none
+ARG DATE=unknown
+
+RUN apk add --no-cache ca-certificates tzdata \
+    && adduser -D -u 10001 hermet
+
+WORKDIR /app
+
+COPY --from=builder /out/hermet ./hermet
+COPY --from=builder /out/reindex ./reindex
+
+USER hermet
+
+# 10081: 业务 HTTP; 10091: gRPC ( SyncService ); 10090: 管理面 ( /metrics /debug/pprof )。
+EXPOSE 10081 10091 10090
+
+STOPSIGNAL SIGTERM
+
+# 管理端口未配置时不健康——按业务端口探活 ( sign-in 在免鉴权白名单，恒 405 即存活 )。
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD wget -q -O /dev/null http://127.0.0.1:10081/api/v1/auth/sign-in || exit 1
+
+# 配置文件不打包进镜像，运行时必须挂载:
+#   docker run -v $PWD/etc/config.yaml:/app/etc/config.yaml:ro hermet
+ENTRYPOINT ["./hermet"]
+CMD ["--config", "etc/config.yaml"]

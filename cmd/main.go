@@ -52,6 +52,9 @@ func main() {
 		// 初始化 elasticsearch client ( 消息搜索查询侧 )。
 		provider.EsClientFxModule,
 
+		// 初始化网关 NotifyService 客户端 ( 即时通知通道 )。
+		provider.NotifyClientFxModule,
+
 		// 初始化 jwt manager。
 		provider.JwtManagerFxModule,
 
@@ -88,6 +91,9 @@ func main() {
 
 		// 初始化搜索 ( ES indexer + 搜索服务 )。
 		search.SearchFxModule,
+
+		// 初始化运维管理端口 ( /metrics + /debug/pprof )。
+		provider.AdminFxModule,
 
 		// 初始化 cdc。
 		bootstrap.CdcFxModule,

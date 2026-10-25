@@ -35,3 +35,35 @@ lint:
 .PHONY: lint-strict
 lint-strict:
 	@golangci-lint run -c ./scripts/lint/.golangci.strict.yaml ./...
+
+# run tests
+.PHONY: test
+test:
+	@go test ./...
+
+# build binary with version metadata injected
+.PHONY: build
+build:
+	@VERSION=$$(git describe --tags --always --dirty 2>/dev/null || echo dev); \
+	COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo none); \
+	DATE=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	go build -trimpath \
+		-ldflags "-s -w \
+			-X 'github.com/jrmarcco/hermet/internal/pkg/buildinfo.Version=$${VERSION}' \
+			-X 'github.com/jrmarcco/hermet/internal/pkg/buildinfo.Commit=$${COMMIT}' \
+			-X 'github.com/jrmarcco/hermet/internal/pkg/buildinfo.Date=$${DATE}'" \
+		-o bin/hermet ./cmd
+
+# build container image
+# 国内网络: make image GOPROXY=https://goproxy.cn,direct
+.PHONY: image
+image:
+	@VERSION=$$(git describe --tags --always --dirty 2>/dev/null || echo dev); \
+	COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo none); \
+	DATE=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	docker build -f ./scripts/build/Dockerfile \
+		--build-arg VERSION="$${VERSION}" \
+		--build-arg COMMIT="$${COMMIT}" \
+		--build-arg DATE="$${DATE}" \
+		$(if $(GOPROXY),--build-arg GOPROXY=$(GOPROXY)) \
+		-t hermet:"$${VERSION}" .

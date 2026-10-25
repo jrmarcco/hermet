@@ -9,6 +9,8 @@ import (
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/jit/xjwt"
 	authv1 "github.com/jrmarcco/synp-api/api/go/auth/v1"
+	messagev1 "github.com/jrmarcco/synp-api/api/go/message/v1"
+	"github.com/jrmarcco/xgrpc/client"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -87,6 +89,7 @@ type messageServiceFxParams struct {
 	UserGroupRepo   repo.UserGroupRepo
 
 	NotifyProducer mq.Producer `name:"message_notify_producer"`
+	NotifyClients  *client.Manager[messagev1.NotifyServiceClient]
 	IndexProducer  mq.Producer `name:"message_index_producer"`
 
 	Gen idgen.Generator
@@ -108,6 +111,7 @@ func newMessageService(params messageServiceFxParams) (MessageService, error) {
 		params.UserGroupRepo,
 
 		params.NotifyProducer,
+		params.NotifyClients,
 		params.IndexProducer,
 
 		*fanoutCfg,

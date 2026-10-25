@@ -9,6 +9,11 @@ hermet:
     write_timeout: 90s      # 写响应超时，历史记录数据量可能较大
     idle_timeout: 120s      # Keep-Alive 空闲超时，IM 客户端会频繁请求
 
+  # 运维管理端口 ( /metrics + /debug/pprof )，与业务端口隔离；留空则不启用。
+  admin:
+    addr: ":10090"
+    shutdown_timeout: 5s
+
   session:
     expiration: 12h
 
@@ -32,6 +37,14 @@ hermet:
         key_prefix: synp
         lease_ttl: 30 # 单位：秒 ( 与 etcd api 保持一致 )
         timeout: 10s
+
+    # 网关 NotifyService 客户端 ( Kafka 通知链路之外的即时通道，尽力而为 )。
+    client:
+      notify:
+        key_prefix: synp
+        resolver_timeout: 1s
+        keepalive_time: 1m
+        keepalive_timeout: 10s
 
   # 消息扇出配置
   message:

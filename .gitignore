@@ -74,3 +74,6 @@ next-env.d.ts
 scripts/docker/*/certs/
 scripts/docker/*/data-*/
 scripts/docker/es/es-data/
+
+# 构建产物
+bin/

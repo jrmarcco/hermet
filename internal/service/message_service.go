@@ -16,6 +16,7 @@ import (
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/repo"
 	messagev1 "github.com/jrmarcco/synp-api/api/go/message/v1"
+	"github.com/jrmarcco/xgrpc/client"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -40,6 +41,12 @@ type MessageFanoutConfig struct {
 	BatchSize int
 }
 
+// notifyGatewayServiceName 网关在服务发现中的注册名 ( gateway/etc grpc.name )。
+const notifyGatewayServiceName = "synp-gateway"
+
+// instantNotifyTimeout 即时通知调用超时 ( 尽力而为的补充通道，宁短勿等 )。
+const instantNotifyTimeout = 300 * time.Millisecond
+
 type DefaultMessageService struct {
 	messageRepo repo.MessageRepo
 	contactRepo repo.ContactRepo
@@ -49,6 +56,8 @@ type DefaultMessageService struct {
 
 	// notifyProducer 投递 NotifyMessage 到通知 topic ( 推送侧消费后下发 NOTIFY 帧 )。
 	notifyProducer mq.Producer
+	// notifyClients 网关 NotifyService 客户端 ( 即时通道，尽力而为 )。
+	notifyClients *client.Manager[messagev1.NotifyServiceClient]
 	// indexProducer 投递索引事件到 ES 索引 topic ( 异步查询加速层，可丢可重 )。
 	indexProducer mq.Producer
 
@@ -67,6 +76,7 @@ func NewDefaultMessageService(
 	userGroupRepo repo.UserGroupRepo,
 
 	notifyProducer mq.Producer,
+	notifyClients *client.Manager[messagev1.NotifyServiceClient],
 	indexProducer mq.Producer,
 
 	fanoutCfg MessageFanoutConfig,
@@ -83,6 +93,7 @@ func NewDefaultMessageService(
 		userGroupRepo:   userGroupRepo,
 
 		notifyProducer: notifyProducer,
+		notifyClients:  notifyClients,
 		indexProducer:  indexProducer,
 
 		fanoutCfg: fanoutCfg,
@@ -347,6 +358,10 @@ func (s *DefaultMessageService) notify(ctx context.Context, messageID string, bu
 		LatestSeq: uint64(latestSeq),
 	}
 
+	// 即时通道 ( 网关 NotifyService ): 命中本节点在线连接时毫秒级下发，
+	// 未命中/失败均无碍——下方 Kafka 广播链路兜底。通知可重复，客户端按 seq 幂等。
+	s.instantNotify(ctx, notifyMsg)
+
 	val, err := protojson.Marshal(notifyMsg)
 	if err != nil {
 		// proto 序列化失败属于代码缺陷，记录后丢弃该条通知 ( 通知可丢 )。
@@ -369,6 +384,25 @@ func (s *DefaultMessageService) notify(ctx context.Context, messageID string, bu
 			zap.Error(err),
 		)
 	}
+}
+
+// instantNotify 经网关 NotifyService 即时通知 ( 尽力而为，短超时 )。
+// 网关节点只通知本节点在线的连接，USER_OFFLINE / 超时 / 错误一律静默。
+func (s *DefaultMessageService) instantNotify(ctx context.Context, notifyMsg *messagev1.NotifyMessage) {
+	if s.notifyClients == nil {
+		return
+	}
+
+	grpcClient, err := s.notifyClients.Get(notifyGatewayServiceName)
+	if err != nil {
+		return
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, instantNotifyTimeout)
+	defer cancel()
+
+	// 任何结果都不重试: 通知只影响实时性。
+	_, _ = grpcClient.Notify(callCtx, &messagev1.NotifyRequest{Message: notifyMsg})
 }
 
 // nextSnowflakeID 生成消息正本表主键 ( 分片值取自 conversation_id 的哈希 )。
