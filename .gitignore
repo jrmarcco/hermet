@@ -77,3 +77,6 @@ scripts/docker/es/es-data/
 
 # 构建产物
 bin/
+
+# 本地联调配置 ( 内联证书与密码, 由 scripts/dev-up.sh 生成 )
+etc/config-joint.yaml

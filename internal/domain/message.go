@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -30,6 +31,27 @@ type Message struct {
 	ContentType ContentType // 消息类型
 
 	SendAt int64 // 消息发送时间 ( 统一使用服务器时间 )
+}
+
+// UnmarshalJSON 兼容前端字符串形式的 content。
+//
+// Content 为 []byte 时标准库期望 base64，而业务契约语义是明文字符串
+// ( 见 docs/frontend-api.md §5 )——这里显式按字符串接收。
+func (m *Message) UnmarshalJSON(data []byte) error {
+	type alias Message
+
+	aux := struct {
+		*alias
+		Content *string `json:"content"`
+	}{alias: (*alias)(m)}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if aux.Content != nil {
+		m.Content = []byte(*aux.Content)
+	}
+	return nil
 }
 
 // SingleChatMsg 待落库的单聊消息 ( 服务层组装 )。
@@ -125,6 +147,40 @@ type MessageIndexEvent struct {
 	ContentType string `json:"contentType"`
 
 	SentAt int64 `json:"sentAt"`
+}
+
+// MarshalJSON 与 UnmarshalJSON 对称: Body 按明文字符串序列化。
+//
+// ES 全文检索要求 body 是可分词文本，标准库对 []byte 的 base64 编码
+// 会让搜索失效——这里统一按字符串承载 ( 与 Message.Content 语义一致 )。
+func (m MessageIndexEvent) MarshalJSON() ([]byte, error) {
+	type alias MessageIndexEvent
+
+	return json.Marshal(struct {
+		alias
+		Body string `json:"body"`
+	}{
+		alias: alias(m),
+		Body:  string(m.Body),
+	})
+}
+
+// UnmarshalJSON 兼容字符串形式的 body ( 与 Message.UnmarshalJSON 同理 )。
+func (m *MessageIndexEvent) UnmarshalJSON(data []byte) error {
+	type alias MessageIndexEvent
+
+	aux := struct {
+		*alias
+		Body *string `json:"body"`
+	}{alias: (*alias)(m)}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if aux.Body != nil {
+		m.Body = []byte(*aux.Body)
+	}
+	return nil
 }
 
 // InboxEntryKind 收件箱条目类型。

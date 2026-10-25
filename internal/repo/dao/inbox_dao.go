@@ -3,6 +3,8 @@ package dao
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jrmarcco/hermet/internal/pkg/sharding"
@@ -98,6 +100,12 @@ func NewDefaultInboxDao(
 	}
 }
 
+// seqTableFromEntry 把 inbox_entry 分片表名映射为同布局的 inbox_seq 分片表名。
+// 两表按 user_id 同布局路由 ( 共用一个 shard helper )，表名前缀不同。
+func seqTableFromEntry(entryTable string) string {
+	return strings.Replace(entryTable, "inbox_entry_", "inbox_seq_", 1)
+}
+
 func (d *DefaultInboxDao) NextSeqInTx(
 	ctx context.Context,
 	tx *gorm.DB,
@@ -108,7 +116,10 @@ func (d *DefaultInboxDao) NextSeqInTx(
 	now := time.Now().UnixMilli()
 
 	// upsert + 行锁自增，RETURNING 返回自增后的最大 seq。
+	// seq 分配器在 inbox_seq 表 ( 冲突键 business_id+user_id )，
+	// 入参 tbName 是同布局的 inbox_entry 表名，映射后使用。
 	// 表名由分片框架生成 ( 前缀_数字 格式 )，非用户输入。
+	seqTable := seqTableFromEntry(tbName)
 	var maxSeq int64
 	err := tx.WithContext(ctx).Raw(
 		fmt.Sprintf(
@@ -117,7 +128,7 @@ func (d *DefaultInboxDao) NextSeqInTx(
 			 ON CONFLICT (business_id, user_id)
 			 DO UPDATE SET seq = %s.seq + ?, updated_at = ?
 			 RETURNING seq`,
-			tbName, tbName,
+			seqTable, seqTable,
 		),
 		businessID, userID, n, now, n, now,
 	).Scan(&maxSeq).Error
@@ -142,33 +153,31 @@ func (d *DefaultInboxDao) NextSeqsBatchInTx(
 	now := time.Now().UnixMilli()
 
 	// unnest 批量 upsert，每用户 +1，RETURNING 各自分配后的 seq。
-	// 表名由分片框架生成 ( 前缀_数字 格式 )，非用户输入。
+	// seq 分配器在 inbox_seq 表 ( 同布局映射，见 seqTableFromEntry )。
+	// 表名/ID 列表均来自服务内部 ( 分片框架生成/uint64 成员 ID )，非用户输入;
+	// pgx 无法将 []int64 绑定为 _int8 数组参数，故内联为字面量。
+	seqTable := seqTableFromEntry(tbName)
+	idList := make([]string, 0, len(userIDs))
+	for _, uid := range userIDs {
+		idList = append(idList, strconv.FormatUint(uid, 10))
+	}
 	allocations := make([]InboxSeqAllocation, 0, len(userIDs))
 	err := tx.WithContext(ctx).Raw(
 		fmt.Sprintf(
 			`INSERT INTO %s (business_id, user_id, seq, updated_at)
-			 SELECT ?, u, 1, ? FROM unnest(?::bigint[]) AS u
+			 SELECT ?, u, 1, ? FROM unnest(ARRAY[%s]::bigint[]) AS u
 			 ON CONFLICT (business_id, user_id)
 			 DO UPDATE SET seq = %s.seq + 1, updated_at = ?
 			 RETURNING user_id, seq`,
-			tbName, tbName,
+			seqTable, strings.Join(idList, ","), seqTable,
 		),
-		businessID, now, toInt64Slice(userIDs), now,
+		businessID, now, now,
 	).Scan(&allocations).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to allocate inbox seqs in batch: %w", err)
 	}
 
 	return allocations, nil
-}
-
-// toInt64Slice uint64 切片转 int64 ( pgx 原生支持 int64 数组绑定 )。
-func toInt64Slice(ids []uint64) []int64 {
-	res := make([]int64, len(ids))
-	for i, id := range ids {
-		res[i] = int64(id)
-	}
-	return res
 }
 
 func (d *DefaultInboxDao) CreateEntryInTx(
@@ -235,8 +244,9 @@ func (d *DefaultInboxDao) LatestSeq(ctx context.Context, businessID, userID uint
 		return 0, err
 	}
 
+	// 分配器游标在 inbox_seq 表 ( 同布局映射 )。
 	var seq int64
-	err = db.WithContext(ctx).Table(dst.TB).Model(&InboxSeq{}).
+	err = db.WithContext(ctx).Table(seqTableFromEntry(dst.TB)).Model(&InboxSeq{}).
 		Select("COALESCE(seq, 0)").
 		Where("business_id = ?", businessID).
 		Where("user_id = ?", userID).

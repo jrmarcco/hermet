@@ -3,6 +3,8 @@ package dao
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/jrmarcco/hermet/internal/pkg/sharding"
 	"github.com/jrmarcco/jit/xsync"
@@ -164,8 +166,13 @@ func (d *DefaultChannelDao) UpdateLastMessageForUsersInTx(
 	}
 
 	// 会话由 CDC 链路异步创建，消息先到时行可能尚不存在，静默跳过。
+	// ID 列表来自服务内部 ( uint64 用户 ID )，内联字面量 ( pgx 数组参数编码限制 )。
+	idList := make([]string, 0, len(userIDs))
+	for _, uid := range userIDs {
+		idList = append(idList, strconv.FormatUint(uid, 10))
+	}
 	return tx.WithContext(ctx).Table(tbName).Model(&Channel{}).
-		Where("user_id = ANY(?)", toInt64Slice(userIDs)).
+		Where("user_id = ANY(ARRAY["+strings.Join(idList, ",")+"])").
 		Where("target_id = ?", snapshot.TargetID).
 		Where("channel_type = ?", snapshot.ChannelType).
 		Updates(updates).Error

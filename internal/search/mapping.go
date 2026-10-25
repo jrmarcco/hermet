@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 
 	"github.com/elastic/go-elasticsearch/v9"
 )
@@ -49,7 +50,6 @@ type esMappings struct {
 // esIndexBody 建索引请求体 ( settings + mappings )。
 type esIndexBody struct {
 	Settings struct {
-		// 开发环境单节点: 单分片无副本；多节点部署时调大。
 		NumberOfShards   int `json:"number_of_shards"`
 		NumberOfReplicas int `json:"number_of_replicas"`
 	} `json:"settings"`
@@ -65,6 +65,14 @@ type esIndexBody struct {
 // 文档 _id = message_id: 索引链路 at-least-once，重复写入天然幂等。
 func messageIndexMapping() esIndexBody {
 	return esIndexBody{
+		Settings: struct {
+			NumberOfShards   int `json:"number_of_shards"`
+			NumberOfReplicas int `json:"number_of_replicas"`
+		}{
+			// 开发环境单节点: 单分片无副本；多节点部署时调大。
+			NumberOfShards:   1,
+			NumberOfReplicas: 0,
+		},
 		Mappings: esMappings{
 			Dynamic: "strict",
 			Properties: map[string]esFieldMapping{
@@ -104,15 +112,21 @@ func EnsureMessageIndex(ctx context.Context, client *elasticsearch.Client, index
 		return nil
 	}
 
+	// 响应体只读一次: 供类型判定与错误信息共用。
+	rawBody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return fmt.Errorf("failed to create index [ %s ]: http %d ( unreadable body )", index, resp.StatusCode)
+	}
+
 	// resource_already_exists_exception: 索引已存在，幂等成功。
 	var errResp struct {
 		Error struct {
 			Type string `json:"type"`
 		} `json:"error"`
 	}
-	if decodeErr := json.NewDecoder(resp.Body).Decode(&errResp); decodeErr == nil && errResp.Error.Type == "resource_already_exists_exception" {
+	if decodeErr := json.Unmarshal(rawBody, &errResp); decodeErr == nil && errResp.Error.Type == "resource_already_exists_exception" {
 		return nil
 	}
 
-	return fmt.Errorf("failed to create index [ %s ]: %s", index, resp.String())
+	return fmt.Errorf("failed to create index [ %s ]: http %d: %s", index, resp.StatusCode, string(rawBody))
 }

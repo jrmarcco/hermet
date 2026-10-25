@@ -121,7 +121,7 @@ COMMENT ON COLUMN group_member_view.updated_at IS '更新时间戳 ( Unix 毫秒
 CREATE INDEX idx_cmv_group_active ON group_member_view(
     group_id,
     member_role,
-    user_nickname
+    member_nickname
 ) WHERE left_at = 0;
 
 

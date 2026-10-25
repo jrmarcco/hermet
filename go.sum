@@ -130,8 +130,6 @@ github.com/quic-go/go-ossfuzz-seeds v0.1.0 h1:APacT+iIaNF6fd8AGEiN3bT/Jtkd2jz4v4
 github.com/quic-go/go-ossfuzz-seeds v0.1.0/go.mod h1:3IOHRbJIc+L6YKMwfDtJAM9Vj9k0YY4muhuyUYk5tbk=
 github.com/quic-go/qpack v0.6.0 h1:g7W+BMYynC1LbYLSqRt8PBg5Tgwxn214ZZR34VIOjz8=
 github.com/quic-go/qpack v0.6.0/go.mod h1:lUpLKChi8njB4ty2bFLX2x4gzDqXwUpaO1DP9qMDZII=
-github.com/quic-go/quic-go v0.60.0 h1:xcQioE8OM66UQLeUMHltK1CCcOu3JbVB4JAQdDQSB+0=
-github.com/quic-go/quic-go v0.60.0/go.mod h1:wpKpjmPpftl30sL6pFh7REVpjbcCVy4zt2vDyK1TuJk=
 github.com/quic-go/quic-go v0.64.1 h1:BCNTP+6x6++OPKrGST2FR3f1tycx8O3QOA3QQv09g70=
 github.com/quic-go/quic-go v0.64.1/go.mod h1:RAro2j2yN9a9EiPACLHT9IB2NXCvGQmmo/alT0yYI0w=
 github.com/redis/go-redis/v9 v9.21.0 h1:FPBE4hhbAke+TLmcY3WkpbDffJEomdqPn3HYiqAtL9E=
@@ -179,8 +177,6 @@ github.com/zeebo/xxh3 v1.1.0 h1:s7DLGDK45Dyfg7++yxI0khrfwq9661w9EN78eP/UZVs=
 github.com/zeebo/xxh3 v1.1.0/go.mod h1:IisAie1LELR4xhVinxWS5+zf1lA4p0MW4T+w+W07F5s=
 go.etcd.io/etcd/api/v3 v3.7.0 h1:WZlGK7pRtYGDB8ti8wkrQ5D2oWGMbtNL9VA5e+vF2Fg=
 go.etcd.io/etcd/api/v3 v3.7.0/go.mod h1:EcTihnwAQ0BQNh5dfAdaFVFdchuo7EP0HlX7TV3jz/A=
-go.etcd.io/etcd/client/pkg/v3 v3.7.0 h1:sW9njJzS3vXKcAJjjLQ4nk+avNUJ12Bcijcx8ehUskE=
-go.etcd.io/etcd/client/pkg/v3 v3.7.0/go.mod h1:cnzZGIUzSfjEwLC6UBVsSXlEK1eepS/JUD7wE6PLRT0=
 go.etcd.io/etcd/client/pkg/v3 v3.7.3 h1:5zMwNu3ycrzCeA5NwOfQbxFRhqq974chq1DrYMua4QI=
 go.etcd.io/etcd/client/pkg/v3 v3.7.3/go.mod h1:/OhzqYrF0U7d1NOk55VMyUQGbYD1WoIe4bJwxb47wOk=
 go.etcd.io/etcd/client/v3 v3.7.0 h1:5MHO37VbPB87VRPKUXEcicjeQWiTSjpPv3Ume8xPx20=

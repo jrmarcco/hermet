@@ -23,7 +23,7 @@ func NewMessageHandler(svc *search.Service) *MessageHandler {
 func (h *MessageHandler) Register(engine *gin.Engine) {
 	messageV1 := engine.Group("api/v1/message")
 
-	messageV1.Handle(http.MethodGet, "/search", xgin.B(h.Search))
+	messageV1.Handle(http.MethodGet, "/search", xgin.Q(h.Search))
 }
 
 type searchReq struct {
