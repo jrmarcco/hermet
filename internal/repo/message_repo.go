@@ -195,9 +195,12 @@ func (r *TxMessageRepo) fanoutInbox(ctx context.Context, msg domain.SingleChatMs
 		}
 
 		// 会话快照 ( 会话行由 CDC 链路异步创建，行不存在时静默跳过 )。
-		target := msg.ReceiverID
+		// TargetID 是该用户视角下的对端:
+		//   接收者的行是 ( user=receiver, target=sender )，
+		//   发送者的行是 ( user=sender, target=receiver )。
+		target := msg.SenderID
 		if !incrementUnread {
-			target = msg.SenderID
+			target = msg.ReceiverID
 		}
 		snapshot := dao.ChannelLastMessage{
 			TargetID:    target,
