@@ -80,7 +80,8 @@ docker compose up -d
 扩容需数据迁移，容量规划见 §6。初始化 schema:
 
 ```bash
-python3 backend/scripts/sql/pgsql_sharding_gen.py --out ./sharding
+# ./scripts/sql
+python3 ./sql/pgsql_sharding_gen.py --out ./sharding
 # 两库分别执行 ( 或经 exec_sql.sh ):
 docker exec -i pgsql-hermet-0 psql -U hermet_0 -d hermet_0 < sharding/db_0/init.sql
 docker exec -i pgsql-hermet-1 psql -U hermet_1 -d hermet_1 < sharding/db_1/init.sql

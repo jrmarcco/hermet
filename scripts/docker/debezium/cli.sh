@@ -25,6 +25,23 @@ fi
 DEFAULT_HOST="127.0.0.1"
 DEFAULT_PORT="8083"
 
+# Kafka TLS 密码: 渲染 connector JSON 中 __KAFKA_TLS_KEY_PASSWORD__ 占位符
+# ( schema history 客户端不继承 worker TLS 配置, 密码需写进 connector 配置 )。
+# 优先取环境变量, 其次脚本同目录 .env 的 KAFKA_TLS_KEY_PASSWORD。
+CLI_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -z "${KAFKA_TLS_KEY_PASSWORD:-}" ] && [ -f "${CLI_SCRIPT_DIR}/.env" ]; then
+    KAFKA_TLS_KEY_PASSWORD="$(grep -E '^KAFKA_TLS_KEY_PASSWORD=' "${CLI_SCRIPT_DIR}/.env" | tail -1 | cut -d= -f2-)"
+fi
+
+# render_json <in_file> <out_file>: 原地渲染占位符到 out_file。
+render_json() {
+    local in_file="$1" out_file="$2"
+    if [ -z "${KAFKA_TLS_KEY_PASSWORD:-}" ]; then
+        print_warning "KAFKA_TLS_KEY_PASSWORD 未设置 ( 环境变量或 .env ), __KAFKA_TLS_KEY_PASSWORD__ 将按原样提交, schema history TLS 会握手失败。"
+    fi
+    sed "s|__KAFKA_TLS_KEY_PASSWORD__|${KAFKA_TLS_KEY_PASSWORD:-__KAFKA_TLS_KEY_PASSWORD__}|g" "$in_file" > "$out_file"
+}
+
 # 打印帮助信息。
 print_help() {
     printf "${BLUE}Debezium Connector 管理脚本${NC}\n\n"
@@ -161,9 +178,15 @@ register_connector() {
     print_info "正在注册连接器: $connector_name。"
     print_info "配置文件: $json_file"
 
+    # 渲染 __KAFKA_TLS_KEY_PASSWORD__ 占位符后提交。
+    local rendered_json
+    rendered_json="$(mktemp)"
+    render_json "$json_file" "$rendered_json"
+
     response=$(curl -s -w "\n%{http_code}" -X POST "${base_url}/connectors" \
         -H "Content-Type: application/json" \
-        -d @"$json_file")
+        -d @"$rendered_json")
+    rm -f "$rendered_json"
 
     http_code=$(echo "$response" | tail -n1)
     body=$(echo "$response" | head -n -1)
@@ -194,17 +217,21 @@ update_connector() {
         exit 1
     fi
 
-    # 从 JSON 文件中提取连接器名称和配置。
+    # 从 JSON 文件中提取连接器名称和配置 ( 渲染 __KAFKA_TLS_KEY_PASSWORD__ 占位符后提取 )。
     local connector_name
     local config
+    local rendered_json
+    rendered_json="$(mktemp)"
+    render_json "$json_file" "$rendered_json"
     if check_jq; then
-        connector_name=$(jq -r '.name' "$json_file")
-        config=$(jq '.config' "$json_file")
+        connector_name=$(jq -r '.name' "$rendered_json")
+        config=$(jq '.config' "$rendered_json")
     else
         # 使用 grep 和 cut 提取名称，兼容 Linux 和 macOS
-        connector_name=$(grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' "$json_file" | cut -d'"' -f4)
-        config=$(cat "$json_file")
+        connector_name=$(grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' "$rendered_json" | cut -d'"' -f4)
+        config=$(cat "$rendered_json")
     fi
+    rm -f "$rendered_json"
 
     print_info "正在更新连接器: $connector_name。"
 

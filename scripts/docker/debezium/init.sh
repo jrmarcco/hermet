@@ -7,10 +7,22 @@ cd "$SCRIPT_DIR"
 # 共享外部网络 ( 与 pgsql / kafka / es 等其它中间件复用 )。
 NETWORK_NAME="jrmarcco_net"
 
-# Kafka 客户端证书来源 ( gateway 仓库的 kafka 部署目录 )。
-# 可经 KAFKA_CERTS_DIR 显式指定; 默认探测兄弟仓库路径 ../gateway/scripts/docker/kafka/certs。
-DEFAULT_KAFKA_CERTS_DIR="${SCRIPT_DIR}/../../../gateway/scripts/docker/kafka/certs"
-KAFKA_CERTS_DIR="${KAFKA_CERTS_DIR:-${DEFAULT_KAFKA_CERTS_DIR}}"
+# Kafka 客户端证书目录 ( 必须手动指定, 不做探测 )。
+#
+# 目录内需包含以下文件 ( 由 gateway 仓库 scripts/docker/kafka 的 certs_gen.sh 生成 ):
+#   - kafka.client.keystore.jks     客户端密钥库 ( connect 的 worker/producer/consumer/
+#                                   schema history 连 kafka 的 mTLS 身份 )
+#   - kafka.client.truststore.jks   客户端信任库 ( 校验 kafka broker 服务端证书 )
+# 缺任一文件本脚本会直接报错退出。
+#
+# 示例:
+#   KAFKA_CERTS_DIR=~/Projects/github.com/synp/gateway/scripts/docker/kafka/certs ./init.sh
+if [ -z "${KAFKA_CERTS_DIR:-}" ]; then
+    echo "✗ 必须设置 KAFKA_CERTS_DIR ( 指向含 kafka.client.keystore.jks / kafka.client.truststore.jks 的证书目录 )"
+    echo "  通常是 gateway 仓库 kafka 部署的 certs 目录:"
+    echo "  KAFKA_CERTS_DIR=/path/to/gateway/scripts/docker/kafka/certs ./init.sh"
+    exit 1
+fi
 
 echo "🚀 Debezium Connect 集群初始化脚本"
 echo ""
@@ -42,9 +54,8 @@ if [ ! -f "${NEED_KEYSTORE}" ] || [ ! -f "${NEED_TRUSTSTORE}" ]; then
     echo "🔐 准备 Kafka 客户端证书 ( 来源: ${KAFKA_CERTS_DIR} )..."
 
     if [ ! -d "${KAFKA_CERTS_DIR}" ]; then
-        echo "✗ 未找到 Kafka 证书目录: ${KAFKA_CERTS_DIR}"
-        echo "  请先在 gateway 仓库执行: cd gateway/scripts/docker/kafka && ./init.sh"
-        echo "  或经环境变量指定: KAFKA_CERTS_DIR=/path/to/kafka/certs ./init.sh"
+        echo "✗ KAFKA_CERTS_DIR 指向的目录不存在: ${KAFKA_CERTS_DIR}"
+        echo "  请检查路径 ( 目录内需有 kafka.client.keystore.jks / kafka.client.truststore.jks )"
         exit 1
     fi
 

@@ -10,32 +10,39 @@
     "database.dbname": "hermet_0",
     "topic.prefix": "pgsql_hermet_0",
     "schema.include.list": "public",
-
     "table.include.list": "public\\.biz_user_[0-9]+$,public\\.contact_application_[0-9]+$,public\\.contact_[0-9]+$,public\\.chat_group_[0-9]+$,public\\.group_member_[0-9]+$,public\\.user_group_[0-9]+$,public\\.outbox_event_[0-9]+$",
-
     "include.headers": true,
     "tombstones.on.delete": true,
     "plugin.name": "pgoutput",
-
     "publication.name": "dbz_publication_hermet_0",
     "publication.autocreate.mode": "filtered",
     "slot.name": "dbz_slot_hermet_0",
-
     "snapshot.mode": "initial",
     "snapshot.fetch.size": "1000",
-
     "time.precision.mode": "adaptive_time_microseconds",
     "decimal.handling.mode": "precise",
-
     "heartbeat.interval.ms": "10000",
     "heartbeat.topics.prefix": "__debezium_heartbeat",
-
     "max.batch.size": "1024",
     "max.queue.size": "4096",
-
     "schema.history.internal.kafka.bootstrap.servers": "kafka-1:9093,kafka-2:9093,kafka-3:9093",
+    "schema.history.internal.producer.security.protocol": "SSL",
+    "schema.history.internal.producer.ssl.keystore.location": "/kafka/certs/kafka.client.keystore.jks",
+    "schema.history.internal.producer.ssl.keystore.password": "__KAFKA_TLS_KEY_PASSWORD__",
+    "schema.history.internal.producer.ssl.keystore.type": "JKS",
+    "schema.history.internal.producer.ssl.key.password": "__KAFKA_TLS_KEY_PASSWORD__",
+    "schema.history.internal.producer.ssl.truststore.location": "/kafka/certs/kafka.client.truststore.jks",
+    "schema.history.internal.producer.ssl.truststore.password": "__KAFKA_TLS_KEY_PASSWORD__",
+    "schema.history.internal.producer.ssl.truststore.type": "JKS",
+    "schema.history.internal.consumer.security.protocol": "SSL",
+    "schema.history.internal.consumer.ssl.keystore.location": "/kafka/certs/kafka.client.keystore.jks",
+    "schema.history.internal.consumer.ssl.keystore.password": "__KAFKA_TLS_KEY_PASSWORD__",
+    "schema.history.internal.consumer.ssl.keystore.type": "JKS",
+    "schema.history.internal.consumer.ssl.key.password": "__KAFKA_TLS_KEY_PASSWORD__",
+    "schema.history.internal.consumer.ssl.truststore.location": "/kafka/certs/kafka.client.truststore.jks",
+    "schema.history.internal.consumer.ssl.truststore.password": "__KAFKA_TLS_KEY_PASSWORD__",
+    "schema.history.internal.consumer.ssl.truststore.type": "JKS",
     "schema.history.internal.kafka.topic": "schema-changes-pgsql_hermet_0",
-
     "transforms": "unwrap",
     "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
     "transforms.unwrap.drop.tombstones": "false",

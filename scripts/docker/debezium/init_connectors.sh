@@ -83,10 +83,23 @@ for config_file in "${CONNECTORS_DIR}"/*.json; do
 
     # 注册 connector。
     echo "  ➜ Registering: ${filename} (${connector_name})..."
+
+    # 渲染 __KAFKA_TLS_KEY_PASSWORD__ 占位符 ( schema history 客户端不继承
+    # worker TLS 配置, connector 配置需显式携带 keystore/truststore 密码;
+    # 该变量经 compose 从 .env 注入 )。
+    if [ -z "${KAFKA_TLS_KEY_PASSWORD:-}" ]; then
+        echo "    ✗ FAILED: ${connector_name} - KAFKA_TLS_KEY_PASSWORD 未设置, 无法渲染 TLS 占位符"
+        failed_count=$((failed_count + 1))
+        continue
+    fi
+    rendered_file="/tmp/rendered_${filename}"
+    sed "s|__KAFKA_TLS_KEY_PASSWORD__|${KAFKA_TLS_KEY_PASSWORD}|g" "$config_file" > "$rendered_file"
+
     response=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Content-Type: application/json" \
-        --data @"$config_file" \
+        --data @"$rendered_file" \
         "http://${CONNECT_HOST}:${CONNECT_PORT}/connectors")
+    rm -f "$rendered_file"
 
     http_code=$(echo "$response" | tail -n1)
     response_body=$(echo "$response" | sed '$d')

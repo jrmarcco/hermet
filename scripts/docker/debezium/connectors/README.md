@@ -130,9 +130,12 @@
 - 心跳的作用: 监听的表**长期无变更**时，slot 的确认位点不推进会导致
   (1) PG 侧 WAL 持续保留; (2) Kafka offset 过期被删。
   心跳每 10s 产生一条事件 ( topic `__debezium_heartbeat.pgsql_hermet_0` )
-  持续推进位点。
-- backend 的 `internal/cdc/heartbeat_processor.go` 消费心跳并监控 CDC 链路延迟
-  ( `HeartbeatService` 健康报告 )，**不要去掉**。
+  持续推进位点——位点推进发生在 connector 侧 ( 产生心跳 + 提交 offset )，
+  **不依赖任何消费者**。
+- backend 的 `internal/cdc/heartbeat_processor.go` ( CDC 延迟监控 ) 目前
+  **尚未在 cdc_module 装配**，心跳 topic 暂无消费方; 接线时需按
+  `__debezium_heartbeat.<topic.prefix>` 的 topic 模式配置 ( 注意是下划线，
+  本配置自定义了前缀，Debezium 默认为 `__debezium-heartbeat` 连字符 )。
 
 ### 限流 ( 防影响业务链路 )
 
@@ -156,10 +159,43 @@
 - 记录监听表的 DDL 变更历史，connector 重启时靠它还原表结构。
 - **topic 名必须每个 connector 唯一**——两个库共用会把双方 DDL 混写，
   重启时可能按另一库的 schema 解析 binlog 导致数据错乱
-  ( 历史遗留配置曾共用 `schema-changes.dbserver1`，已按实例拆分 )。
+  ( 历史遗留配置曾共用 `schema-changes.dbserver1`，已按实例拆分)。
 - `bootstrap.servers` 指向 Kafka **INTERNAL** listener ( 容器网内 mTLS )，
   与 compose 的 `BOOTSTRAP_SERVERS` 保持一致；此处无法引用环境变量，
   修改 Kafka 拓扑时需同步改这里。
+
+#### Schema History 的 TLS ( 易踩坑 )
+
+schema history 客户端**不继承** Connect worker 的任何 TLS 配置
+( worker 的 `CONNECT_PRODUCER_SSL_*` 对它无效 )，未显式配置时按
+PLAINTEXT 连接——对 mTLS-only 的 9093 端口直接握手失败，connector 起不来。
+因此 JSON 里必须显式携带 `schema.history.internal.producer.*` 与
+`schema.history.internal.consumer.*` 两组 SSL 配置 ( Debezium 3.x 前缀，
+透传给底层 Kafka 客户端；kafka 强制双向认证，consumer 侧也要 keystore ):
+
+```json
+"schema.history.internal.producer.security.protocol": "SSL",
+"schema.history.internal.producer.ssl.keystore.location": "/kafka/certs/kafka.client.keystore.jks",
+"schema.history.internal.producer.ssl.keystore.password": "__KAFKA_TLS_KEY_PASSWORD__",
+"schema.history.internal.producer.ssl.key.password": "__KAFKA_TLS_KEY_PASSWORD__",
+"schema.history.internal.producer.ssl.truststore.location": "/kafka/certs/kafka.client.truststore.jks",
+"schema.history.internal.producer.ssl.truststore.password": "__KAFKA_TLS_KEY_PASSWORD__",
+"schema.history.internal.consumer.security.protocol": "SSL",
+"schema.history.internal.consumer.ssl.keystore.location": "/kafka/certs/kafka.client.keystore.jks",
+"schema.history.internal.consumer.ssl.keystore.password": "__KAFKA_TLS_KEY_PASSWORD__",
+"schema.history.internal.consumer.ssl.key.password": "__KAFKA_TLS_KEY_PASSWORD__",
+"schema.history.internal.consumer.ssl.truststore.location": "/kafka/certs/kafka.client.truststore.jks",
+"schema.history.internal.consumer.ssl.truststore.password": "__KAFKA_TLS_KEY_PASSWORD__"
+```
+
+密码 `__KAFKA_TLS_KEY_PASSWORD__` 是**占位符**，JSON 无法引用环境变量，
+由提交链路渲染 ( 来源 `.env` 的 `KAFKA_TLS_KEY_PASSWORD`，与 gateway kafka
+部署同源 ):
+
+- 自动注册: `init_connectors.sh` ( sidecar，compose 已注入该变量 )
+- 手动操作: `cli.sh register` / `cli.sh update` ( 自动读环境变量或本目录 `.env` )
+
+**不要**把真实密码写进 JSON。
 
 ### SMT: ExtractNewRecordState ( unwrap )
 
