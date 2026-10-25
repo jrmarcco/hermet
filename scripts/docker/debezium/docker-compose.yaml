@@ -105,10 +105,15 @@ services:
       CONNECT_HOST: debezium-connect-1
       CONNECT_PORT: 8083
       CONNECTORS_DIR: /connectors
-      # 渲染 connector JSON 中 __KAFKA_TLS_KEY_PASSWORD__ 占位符 ( schema history TLS 密码 )。
+      # 渲染 connector JSON 中占位符的变量 ( 见 connectors/README.md ):
+      # __KAFKA_TLS_KEY_PASSWORD__ ( schema history TLS ) 与
+      # __PGSQL_HERMET_x_PASSWORD__ ( 分片库密码, 来源 pgsql 部署的 .env )。
       KAFKA_TLS_KEY_PASSWORD: ${KAFKA_TLS_KEY_PASSWORD:?KAFKA_TLS_KEY_PASSWORD is required ( see .env )}
-    # bash: init_connectors.sh 的 shebang 是 bash ( alpine 基础镜像默认没有 )。
-    command: sh -c "apk add --no-cache curl jq bash && /init_connectors.sh"
+      PGSQL_HERMET_0_PASSWORD: ${PGSQL_HERMET_0_PASSWORD:?PGSQL_HERMET_0_PASSWORD is required ( see .env )}
+      PGSQL_HERMET_1_PASSWORD: ${PGSQL_HERMET_1_PASSWORD:?PGSQL_HERMET_1_PASSWORD is required ( see .env )}
+    # bash: init_connectors.sh 的 shebang 是 bash ( alpine 基础镜像默认没有 );
+    # 经 bash 显式调用, 不依赖文件可执行位 ( scp/rsync 推送常丢失 )。
+    command: sh -c "apk add --no-cache curl jq bash && bash /init_connectors.sh"
     depends_on:
       debezium-connect-1:
         condition: service_healthy

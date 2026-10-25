@@ -1,0 +1,565 @@
+# hermet backend 容器运行配置 ( 基于 etc/config.yaml, 面向 192.168.3.3 中间件集群 )。
+# 与原版的差异:
+# - etcd 认证用户改为 synp ( 服务器已启用的注册/发现用户, 见 gateway 仓库
+#   scripts/docker/etcd/docker-compose.yaml 尾部实例 ), hermet 用户未创建
+# - etcd tls.server_name 置空: 服务器证书 SAN 为 node-1/2/3/localhost/192.168.3.3,
+#   置空后按 endpoint 主机名 ( 192.168.3.3 ) 校验
+# - etcd/kafka 内联证书已替换为服务器当前签发版本
+# - grpc.server.addr 广播本机宿主机局域网 IP ( 192.168.3.127 )
+hermet:
+  # 日志配置
+  # mode:  dev ( 单行紧凑格式 ) | prod ( JSON，面向采集 )
+  # level: debug | info | warn | error
+  # color: auto | always | never ( 仅 dev 生效 )
+  # file:  可选落盘段 ( 终端 + 文件双写，lumberjack 按大小轮转 )
+  #   file:
+  #     path: /var/log/hermet/hermet.log
+  #     max_size_mb: 100    # 单文件上限，超过切割
+  #     max_backups: 7      # 保留旧文件份数 ( 0 保留全部 )
+  #     max_age_days: 30    # 旧文件保留天数 ( 0 不限 )
+  #     compress: true      # 旧文件 gzip 压缩
+  log:
+    mode: dev
+    level: info
+
+  web:
+    addr: :10081
+    read_header_timeout: 5s # 读取请求头超时，防止 Slowloris 攻击
+    read_timeout: 15s       # 读取整个请求超时，IM 请求通常较小
+    write_timeout: 90s      # 写响应超时，历史记录数据量可能较大
+    idle_timeout: 120s      # Keep-Alive 空闲超时，IM 客户端会频繁请求
+
+  # 运维管理端口 ( /metrics + /debug/pprof )，与业务端口隔离；留空则不启用。
+  admin:
+    addr: ":10090"
+    shutdown_timeout: 5s
+
+  session:
+    expiration: 12h
+
+  cors:
+    max_age: 86400s
+    hostnames:
+      - localhost
+
+  ignores:
+    - /api/v1/auth/sign-in
+    - /api/v1/auth/refresh-token
+    - /.well-known/jwks.json
+
+  # gRPC 服务端 ( SyncService，网关经服务发现调用 synp:///synp-backend )。
+  grpc:
+    server:
+      name: synp-backend
+      # 广播本机宿主机局域网 IP ( Windows 主机, 容器 10091 已发布到宿主机 )。
+      addr: 192.168.3.127:10091
+      group: synp
+      registry:
+        key_prefix: synp
+        lease_ttl: 30 # 单位：秒 ( 与 etcd api 保持一致 )
+        timeout: 10s
+
+    # 网关 NotifyService 客户端 ( Kafka 通知链路之外的即时通道，尽力而为 )。
+    client:
+      notify:
+        key_prefix: synp
+        resolver_timeout: 1s
+        keepalive_time: 1m
+        keepalive_timeout: 10s
+
+  # 消息扇出配置
+  message:
+    # 写扩散/读扩散阈值 ( 部署参数，网关与客户端均不感知 ):
+    # 群成员数 <= 阈值走写扩散 ( 收件箱内联正本，一次 SYNC 即可渲染 )，
+    # 超过阈值走读扩散 ( 收件箱只写轻量指针，客户端再发起 CONVERSATION_SYNC 拉取正文 )。
+    fanout_inline_threshold: 500
+    # 群扇出每批成员数 ( 每批一个分片事务，受 statement_timeout 约束 )。
+    fanout_batch_size: 500
+
+  task_pool:
+    init_goroutines: 64
+    core_goroutines: 128
+    max_goroutines: 256
+    queue_size: 1024
+    queue_backlog_rate: 0.30
+    max_idle_time: 20s
+    submit_timeout: 80ms
+    task_exec_timeout: 800ms
+    err_queue_size: 1024
+    err_worker_cnt: 2
+    err_handle_timeout: 500ms
+
+jwt:
+  # 网关连接鉴权 token ( RS256 + JWKS，契约见 synp-api proto/auth/v1/auth.proto )。
+  # 同一 token 兼作后端 HTTP API 的 access token。
+  # 密钥生成: sh ./scripts/gen_jwt_rsa_keys.sh
+  gateway:
+    # 公钥指纹 ( DER 公钥 SHA-256 前 16 位 hex )，轮换时新旧公钥需在 JWKS 中并存一段重叠期。
+    kid: 4a2469b1ea848841
+    expiration: 2h    # 契约建议 exp - iat <= 2h
+    issuer: synp-auth # 契约约定，网关侧校验
+    audience: synp-gateway # 契约约定 ( 网关服务标识 )，网关侧校验
+    private: |
+      -----BEGIN PRIVATE KEY-----
+      MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC2eXB/vqVOwynj
+      XS6Uitpifi0zHaYaFJUwZ2OKIma/Zffs4/fIVoNoKgkDQrVCcmrfmS/jexlk26i6
+      c3SzJlj7Ik+T7qm02A0koAzUkT8ZylJvGrH7QexH5OkUazkW+RRKd5QETNgAnxdN
+      X8ZzWK583BVdUrn1sLTk1Xp7fOOGM9waZ9Z5pra7pLo2/JUoUsys+nsosjGzqE0Q
+      rQx4lMVGewK0Qqme/pAfYKATQELwhD+voSv6beVgN5Vyp3Yey8zbnkyan1OMLcth
+      ZuZAL9OTlNiFEeo8t8VgtcuFyFSIwHvc4XbPXHsyvWJkVCsYVI5lFOJRMPsh3fvO
+      w4rq1SnZAgMBAAECggEAE9nDMMpzHk3h7S+SZStz1XonfaOQkc7CahkdPYY/ijvU
+      DEvChWNP+VF1WIr1wAxFbxyxlnwqR4wT33C29dRKostZP90bTiagy2az7p38cNhP
+      PnH3gb9qrmmLJ6MAe2zOVcmLaypW5z5nYQ31v0+a789bbaMVwtId47ULlYqBD/S+
+      P4pj2dbXvxFn7NHiCEE2J7MsQ5MEH/zX0ILs2BialC/oT15xK3XWsOJjn+mEfMkG
+      HUE/1TQE7F6rp5Dd+NyibIOeJM1ylHPmj3fG2zJdEObKXMsfWiv5K7t34chGTXzB
+      ylJFyXjyvCRHlISz/7QrIZTxERwgCf6D2mL2THdFAQKBgQDh0WRzMYPoo77OEsAU
+      EOdWDZ6kpCn7IVbJZOiP9leL0pv8TU5bSHVSo4brIiXKtteoKwj1mZRSIsL28FfG
+      7fGK3HqUnlojzurz7bX1WSs8E+L0i3MtQVdUJUPmYlrsXqGZ8Ep1p3UGptQWHnto
+      bEBfu1bMycP6OSPg7I+LT9+0mQKBgQDO3P/kCV0B6RsMG9dJjl8UIeMsXOFq1ZLa
+      wEML2WxvoEVXr58PoTRnc4Rfhp2bK4a/1OfjIRohtKVcvJHgt23BDHo/zpxtV3J0
+      Oix8YnoNdlQJqBfratIhRw5NcIzgX0wGmbtbSr5aIjM9oUYrPLTxypzmiut7KyvU
+      FAfqcM0nQQKBgHNLisL51ASSnhfvINzd6I9aMtaS7tBGrF31RHxEZVyBcpz2B3y5
+      2RURYxBohe0jP6agGlnzSPRKxUp5Wge6cynX+kopM5K20eUrSEz1cwqgiK8dB/hi
+      NSlEQY++RfgLNO0473t0vV5hDUYh2BZvtspqBx5WIdZ/GB9+CKgzZt95AoGAGOkc
+      F4XZIWXE0Ax6PG1cnbwG80ysCIV3jcghSsf/+uE9+HU5nlQ3T03l3usDB7CSJX+p
+      /Pv7fZuXXjeHCZyNJvYtsola5P/m1IA84y2orP5W2GLZnovaig9YdZLcJBjVuuXA
+      Xhn+GjSMHxvQq1xAHe3cPxbzjH2CZaOT4HN9AQECgYBsP/dTtlyzjPFP6ZeaAck7
+      fPhpIoCfrLXDarrTXtUtba/3qFuuLJCo3/etZP+yZdrfTx2K2Gpn6v3xy9qPmr1N
+      BXziAOBDn119Ppa0ln+tM2bYZ47ZS7yeHMnHrB/7DCAhsbNQAlr2GqqJZGIACEOc
+      joHlPTT8yPPsqX+EQR29mQ==
+      -----END PRIVATE KEY-----
+    public: |
+      -----BEGIN PUBLIC KEY-----
+      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtnlwf76lTsMp410ulIra
+      Yn4tMx2mGhSVMGdjiiJmv2X37OP3yFaDaCoJA0K1QnJq35kv43sZZNuounN0syZY
+      +yJPk+6ptNgNJKAM1JE/GcpSbxqx+0HsR+TpFGs5FvkUSneUBEzYAJ8XTV/Gc1iu
+      fNwVXVK59bC05NV6e3zjhjPcGmfWeaa2u6S6NvyVKFLMrPp7KLIxs6hNEK0MeJTF
+      RnsCtEKpnv6QH2CgE0BC8IQ/r6Er+m3lYDeVcqd2HsvM255Mmp9TjC3LYWbmQC/T
+      k5TYhRHqPLfFYLXLhchUiMB73OF2z1x7Mr1iZFQrGFSOZRTiUTD7Id37zsOK6tUp
+      2QIDAQAB
+      -----END PUBLIC KEY-----
+
+  refresh:
+    expiration: 168h  # Refresh Token 过期时间
+    issuer: hermet-refresh
+    private: |
+      -----BEGIN PRIVATE KEY-----
+      MC4CAQAwBQYDK2VwBCIEIKPTxPL86hZ9ogcHUcl8RFnEK5+31567wtfNNi2fwOMv
+      -----END PRIVATE KEY-----
+    public: |
+      -----BEGIN PUBLIC KEY-----
+      MCowBQYDK2VwAyEAuulBhGrO5+ic3KquuV0hfO1KrOIjYC3OVtjzle+MqQI=
+      -----END PUBLIC KEY-----
+
+etcd:
+  endpoints:
+    - 192.168.3.3:12379
+    - 192.168.3.3:22379
+    - 192.168.3.3:32379
+  # etcd 认证用户 ( 与 gateway 共用的注册/发现用户 )。
+  username: synp
+  password: <passwd>
+  dial_timeout: 10s
+  tls:
+    enabled: true
+    # 置空则按 endpoint 主机名 ( 192.168.3.3 ) 校验, 命中服务器证书 IP SAN。
+    server_name: ""
+    insecure_skip_verify: false
+    cert_pem: |
+        -----BEGIN CERTIFICATE-----
+        MIICKzCCAd2gAwIBAgIUEjmgHvYV4TzV5Et1vDK/zdOTdDUwBQYDK2VwMF8xCzAJ
+        BgNVBAYTAkNOMRAwDgYDVQQIDAdCZWlqaW5nMRAwDgYDVQQHDAdCZWlqaW5nMQ0w
+        CwYDVQQKDARTeW5wMQswCQYDVQQLDAJDQTEQMA4GA1UEAwwHZXRjZC1jYTAeFw0y
+        NjEwMjUwODQwMjRaFw0yNzEwMjUwODQwMjRaMHYxCzAJBgNVBAYTAkNOMRAwDgYD
+        VQQIDAdCZWlqaW5nMRAwDgYDVQQHDAdCZWlqaW5nMQ0wCwYDVQQKDARTeW5wMRkw
+        FwYDVQQLDBBzeW5wLWV0Y2QtY2xpZW50MRkwFwYDVQQDDBBzeW5wLWV0Y2QtY2xp
+        ZW50MCowBQYDK2VwAyEAsbnLZqgZ/Z140+F5wqP5PCyw+gcxIagBCUw6uuARE4ej
+        gZMwgZAwCQYDVR0TBAIwADALBgNVHQ8EBAMCBeAwEwYDVR0lBAwwCgYIKwYBBQUH
+        AwIwIQYDVR0RBBowGIIQc3lucC1ldGNkLWNsaWVudIcEfwAAATAdBgNVHQ4EFgQU
+        +GN/UsA6kpaIKGJ6YGeUwHSzPs0wHwYDVR0jBBgwFoAUPAoQHmlu+sNbwUVFTxv0
+        oFTSUWswBQYDK2VwA0EArTTGcPDPf1XovGQ2hoMlqu5dwKq859ghJFzh3DqtCDuY
+        faKGYVfAmw16CZoSOZ6Glpo+gLkol3EAwI+KibNYBw==
+        -----END CERTIFICATE-----
+
+    cert_key: |
+        -----BEGIN PRIVATE KEY-----
+        MC4CAQAwBQYDK2VwBCIEIBGK8JPhnwRWwcFgyqpLgQPG1qvpAuGGn6tqmSz6UcJO
+        -----END PRIVATE KEY-----
+
+    ca_cert: |
+        -----BEGIN CERTIFICATE-----
+        MIIB0zCCAYWgAwIBAgIUQCPlOhPPOkG7fJbaDpgxO3Vg3CQwBQYDK2VwMF8xCzAJ
+        BgNVBAYTAkNOMRAwDgYDVQQIDAdCZWlqaW5nMRAwDgYDVQQHDAdCZWlqaW5nMQ0w
+        CwYDVQQKDARTeW5wMQswCQYDVQQLDAJDQTEQMA4GA1UEAwwHZXRjZC1jYTAeFw0y
+        NjEwMjUwODQwMjNaFw0yNzEwMjUwODQwMjNaMF8xCzAJBgNVBAYTAkNOMRAwDgYD
+        VQQIDAdCZWlqaW5nMRAwDgYDVQQHDAdCZWlqaW5nMQ0wCwYDVQQKDARTeW5wMQsw
+        CQYDVQQLDAJDQTEQMA4GA1UEAwwHZXRjZC1jYTAqMAUGAytlcAMhAF1BSIn2YVOl
+        WNl3DO7XsPUbK9+GshcASXBpcIgdSreio1MwUTAdBgNVHQ4EFgQUPAoQHmlu+sNb
+        wUVFTxv0oFTSUWswHwYDVR0jBBgwFoAUPAoQHmlu+sNbwUVFTxv0oFTSUWswDwYD
+        VR0TAQH/BAUwAwEB/zAFBgMrZXADQQBGsZoKiDNzqsf/ei9zRLS+KZ/AxzERgGaM
+        X1G2HPXn/rdvboHvJ0nBhXr3AZh/ecLPIa153C0GHSYJksxfH+EA
+        -----END CERTIFICATE-----
+
+# Redis 配置
+redis:
+  addr: 192.168.3.3:6379
+  password: <passwd>
+
+go_cache:
+  default_expiration: 1s
+  cleanup_interval: 1s
+
+# Kafka 配置
+kafka:
+  # Kafka Broker
+  brokers:
+    - 192.168.3.3:19092
+    - 192.168.3.3:29092
+    - 192.168.3.3:39092
+
+  # Producer 配置
+  producer:
+    required_acks: -1            # all
+    compression: snappy          # 使用 snappy 压缩
+    max_message_bytes: 1024000   # 最大消息大小 1024000 字节 = 1MB
+    retry_max: 3                 # 最大重试次数 3
+    batch_size: 100              # 批量大小 100
+    batch_timeout: 10ms          # 批量超时 10ms
+    write_timeout: 10s           # 写入超时 10s
+    idempotent_enabled: true     # 启用幂等性
+
+  # Consumer 配置
+  consumer:
+    read_timeout: 10s            # 读取超时 10s
+    commit_interval: 1s          # 每秒提交一次
+    start_offset: -1             # 从最新消息开始 ( kafka.LastOffset )
+    min_bytes: 1                 # 最小 1 字节
+    max_bytes: 10e6              # 最大 10MB
+    max_wait: 500ms              # 最大等待 500ms
+
+  # TLS 配置
+  tls:
+    # 必填: CA 证书文件路径
+    ca_cert: |
+        -----BEGIN CERTIFICATE-----
+        MIIDqTCCApGgAwIBAgIUd2T8M16jTAGov7FRwCFe5XJfqG8wDQYJKoZIhvcNAQEL
+        BQAwZDERMA8GA1UEAwwIa2Fma2EtY2ExDjAMBgNVBAsMBUthZmthMQ4wDAYDVQQK
+        DAVLYWZrYTEQMA4GA1UEBwwHQmVpamluZzEQMA4GA1UECAwHQmVpamluZzELMAkG
+        A1UEBhMCQ04wHhcNMjYxMDI1MDgzNjQxWhcNMzYxMDIyMDgzNjQxWjBkMREwDwYD
+        VQQDDAhrYWZrYS1jYTEOMAwGA1UECwwFS2Fma2ExDjAMBgNVBAoMBUthZmthMRAw
+        DgYDVQQHDAdCZWlqaW5nMRAwDgYDVQQIDAdCZWlqaW5nMQswCQYDVQQGEwJDTjCC
+        ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALSyP5YqEXd04w4MPaQvWCBU
+        mAsPCEXthtva0z74+s4ntyhNu8u8lpX5rE3qvwaQny2aSxohg6xv/J/vemYgaxEV
+        QaNUIrUBRkXl4lAaOkBZI+6+kURec69Rd3ilyo9RoxfCTgtHapIp4XfJeFnHpUnF
+        IJ8Q0h2mxnYgK/vu0QuQljvoUtJxS6xmVy2guMwSbPHW6sCgSEDfjfV3nMgyaidC
+        UHjsVNF8YJxaYvvmHYGBcRZk9WF+C7T/JDGKqOkHpV7pf9OnBlLTT3Vxnldz4ljd
+        2/xf2v94U3eUe69OH1H451f9aqUVshLl6xrQNBhTJNkap0rHOeQm3/n+C1aGOEUC
+        AwEAAaNTMFEwHQYDVR0OBBYEFJrAgMjQbs0z7huNCVmLBIklx9XNMB8GA1UdIwQY
+        MBaAFJrAgMjQbs0z7huNCVmLBIklx9XNMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZI
+        hvcNAQELBQADggEBAC5jvVio4xmzm1rxR8934ie2xd89qQhHoCFFZQtmkgYxljQZ
+        8d0HQyJoMRXem1t3PKX+4bl5yAlgClYmnN5FmFHVKpUTMszs9IDve7aRp/cIlBs/
+        hveKAO+BD1cnTH41Gg8W3B8Nv0O/2WDFasznspfBG4DahYM6dp8GV9OAx/9+cpHl
+        1CvaqSKtuNPAkF43bK6MpyNt3d0ix5ZxocmjFtbE8niOSWuBX2eWJbNCVhiR0/d4
+        raUxUL8oRSyG9tCtSwDR0jKGNlqEsope7fj9vNLoIxAmGZyqoQAVuw/3STNJcEg+
+        pF6302itsFD7hxzvm5zb2MPagmOdY3wC9Q2BNDg=
+        -----END CERTIFICATE-----
+
+    cert_key: |
+        -----BEGIN PRIVATE KEY-----
+        MIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDQHo6oGgqYQ8d7
+        jK2jzlTYq5Tc4bUVyy4EWWjYtYxGw+wanrjrsOolG5UPSG1V72VwJPpVwwbPEqSU
+        vSHh5C2rWLLqtAJ0p8mFXY3Q/hq35bUdZoE55Scx5tGC5Ew9zjYZ/PNUYIezaBIr
+        hPjL6nDnU7GFVWDY77pFBSW9wJCR03sSk6W9e5C5waJeXMitJFj1Ln0grAUGpKso
+        Q+OZyYWK1Zth15KvNWWxvQdOT7CIQq+nUxjFhgDsSuuUOL3RJemmhjaJnZHPKcci
+        9cFmF7neLEzpjxVO9oUSbTrI3BtKBiA7g2E9CNWzNDyXGBPdGJpWsGK1A56OLhXA
+        5zkvUTaLAgMBAAECggEABJNLnSrK3qAW14Kpw9wYmfPjuOxCo+bpPgYT6ubl0ALG
+        wu5tNqNhhp3zg1ZyqA93pm8+u45c9vUyBMO6NumzIujz7SnzNVguIkKCvlP1RDRa
+        xC99uFSykpQ5smU8e9tc4C1+IheJm8blXULUbnh8nV2F7nlFJdkNQQarrlGuc4wg
+        CuNE+gdmdUhRqBXHGiZ5iJfs84ldiDIM4tAbA4Vx5LLIt5bVqaWBba6A1nkVUvOw
+        uRwOhEI2ukrVYqeiUVLXm4Y+81a9wjzUQmWRmftT2dnuPg7MsYDZoqE60k6ECATm
+        hfsGMiMz1YJUXQpy3J5fjlYn5sCSz9Jx5X8+pbPuOQKBgQDZNd/gh7oUK0Zepxha
+        bPb7HltxVjMTTxnNhEvng0VMbOHg+7aXcUkC9tTFJhA2N8MUklPTENPs71RQBUjp
+        ZrpORjTv+ANnbwfiEed2AZwdIEMtiRPMZEZk6lHcz6FvfJ4s09QvF69TNv5VC6ME
+        +VKW8HjVbMadzzLap7cq+fdRFQKBgQD1SRG4zbL2DYQMEUrz72rMGeDAkZYlezSQ
+        aUeRztIJ9aESAPyddBE6HGQfHvnQ/1yHkp5v/AffP6vhU/i3+cVIRNcpilWtAJ0U
+        Shpi7RqGkMM0MhJNHi8m3FOq7RF7kxxn3OciRCYD+M9sm7manmO+Y6i6uoO9tX2a
+        0B4HLQwRHwKBgQClS4NYadFoYdpGU6CLx9pYFaz+3ds2eX6oUGI3B0WoOD/Yp5U3
+        QEWQlOgsM6AoslypfgV+XJL5/tNJpgvrWnqy8Gh+qV1lzC/SkU90FRuJarDUqTlA
+        1JphV5P+lp9CqTHx6S3SvJJ2oCYB8D4ZneaE6PD7cbDgDPqlPPZ+JQVZVQKBgQCe
+        0lBCTBa70WaV9cCFkJmjTIJFzj7dSBhyBWlNFRDVWBGSOcdYIGZjLSz7JbB2TlLY
+        iexC8HscZ/rgLOIYJgdC0yhKgoMVQRd0osLRGVualDOBIYbOHmRDklgujdBLJqc2
+        7UdP3baLzdhpJ7AXWMWW6qq/NbPF67VHv8ght15f2wKBgQCcYx4UQUVWF7KpqDlZ
+        YVuUPgmfZM0X7ZFVMQpcJojd5hn57ky/NJevEzKvhxoAL20GCrOMBLEtiGzFSLMj
+        EO5qa9fiBXbdZeUh+zOk6V+G0GM24muFzrtdSqDTFBY5Lnsjw45pKxdSTV4ww9lf
+        zk9YkiYEEtSROpMQn+uJ2WClSg==
+        -----END PRIVATE KEY-----
+
+    cert_pem: |
+        -----BEGIN CERTIFICATE-----
+        MIIDnDCCAoSgAwIBAgIUP7KM1K0aXbBRmpNDkwhcBxxOTpEwDQYJKoZIhvcNAQEL
+        BQAwZDERMA8GA1UEAwwIa2Fma2EtY2ExDjAMBgNVBAsMBUthZmthMQ4wDAYDVQQK
+        DAVLYWZrYTEQMA4GA1UEBwwHQmVpamluZzEQMA4GA1UECAwHQmVpamluZzELMAkG
+        A1UEBhMCQ04wHhcNMjYxMDI1MDgzNjQyWhcNMzYxMDIyMDgzNjQyWjBoMQswCQYD
+        VQQGEwJDTjEQMA4GA1UECBMHQmVpamluZzEQMA4GA1UEBxMHQmVpamluZzEOMAwG
+        A1UEChMFS2Fma2ExDjAMBgNVBAsTBUthZmthMRUwEwYDVQQDEwxrYWZrYS1jbGll
+        bnQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDQHo6oGgqYQ8d7jK2j
+        zlTYq5Tc4bUVyy4EWWjYtYxGw+wanrjrsOolG5UPSG1V72VwJPpVwwbPEqSUvSHh
+        5C2rWLLqtAJ0p8mFXY3Q/hq35bUdZoE55Scx5tGC5Ew9zjYZ/PNUYIezaBIrhPjL
+        6nDnU7GFVWDY77pFBSW9wJCR03sSk6W9e5C5waJeXMitJFj1Ln0grAUGpKsoQ+OZ
+        yYWK1Zth15KvNWWxvQdOT7CIQq+nUxjFhgDsSuuUOL3RJemmhjaJnZHPKcci9cFm
+        F7neLEzpjxVO9oUSbTrI3BtKBiA7g2E9CNWzNDyXGBPdGJpWsGK1A56OLhXA5zkv
+        UTaLAgMBAAGjQjBAMB0GA1UdDgQWBBS6i/igcwKDUN1Gz+iLQJS+whvjhzAfBgNV
+        HSMEGDAWgBSawIDI0G7NM+4bjQlZiwSJJcfVzTANBgkqhkiG9w0BAQsFAAOCAQEA
+        DRIPiLKjrMnpKpPf0BV3K5vLhHRuyw5ZmwrUl6sFHH1XzR3F0OSU4M8bzpEAvyU8
+        0SF1FE0n2imAJ/u1rcV2tX5PUutEE3oQ8XjwiVHOuO5iiR55CSl+cMQNhJgCE+3f
+        oUDQutJwvvXi5jA7XGIPCcWx1ozd1JZUZiwpXNxzOv26OL2VSlx42SoFtYmcmYrb
+        +W+bnVJG0gnd4g5uDevu9GuLXuD5/UxsAEPkbQe+rbmytmMtftnlXx7AaRDkZFVH
+        PZ0yQzzx5p2Lf4l/M1QK4T7xA76vRflfxUsYoyxXjQ5ANdKc6qh28CQ/IIqTqjKi
+        kyB3eDgQdFqdMjUL57A1BQ==
+        -----END CERTIFICATE-----
+
+  # SASL 配置
+  # 支持两种认证机制：
+  # 1. SCRAM-SHA-256
+  # 2. OAUTHBEARER
+  # sasl:
+    # 可选：认证机制类型 ( "" / oauth / scram 默认为 "" )
+    # mechanism: oauth
+
+    # SCRAM 认证配置 ( 当 mechanism 为 scram 或未设置时使用 )
+    # username: synp
+    # password: synp-secret
+    # 建议使用环境变量存储密码
+    # password: ${KAFKA_PASSWORD}
+
+    # OAuth 认证配置 ( 当 mechanism 为 oauth 时使用 )
+    # oauth:
+    #   endpoint: http://192.168.3.3:18080/realms/kafka/protocol/openid-connect/token
+    #   client_id: kafka-client
+    #   client_secret: b7rQYTc0y3eqDkGXFYD2UIPjYJeFCaAC
+      # 建议使用环境变量存储敏感信息
+      # client_secret: ${KAFKA_OAUTH_CLIENT_SECRET}
+
+mq:
+  producer:
+    group_member_add:
+      topic: hermet.group_member.add
+    # 通知 topic ( 消息落库后投递 NotifyMessage，网关集群广播消费后下发 NOTIFY 帧 )。
+    message_notify:
+      topic: synp.message.notify
+    # 消息索引事件 topic ( ES indexer 消费，异步加速查询层 )。
+    # 分区键 conversation_id: 同会话事件有序，利于 bulk 局部性。
+    message_index:
+      topic: hermet.message.index
+  consumer:
+    group_member_add:
+      topic: hermet.group_member.add
+      group_id: hermet-group-member-add-group
+      partitions: 6
+      handle_timeout: 16s  # 成员添加有指数退避重试机制 ( 1s -> 2s -> 4s ) 需要一个稍长的超时时间
+    message_upstream:
+      topic: synp.message.upstream
+      group_id: hermet-message-upstream-group
+      partitions: 6
+      handle_timeout: 16s
+    # ES 索引 consumer ( 消费索引事件批量写 ES )。
+    message_index:
+      topic: hermet.message.index
+      group_id: hermet-message-index-group
+      partitions: 6
+      handle_timeout: 16s
+
+  cdc:
+    user:
+      group_id: hermet-user-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    contact_review:
+      group_id: hermet-contact-review-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    contact:
+      group_id: hermet-contact-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    group:
+      group_id: hermet-group-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    group_member:
+      group_id: hermet-group-member-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    user_group:
+      group_id: hermet-user-group-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+    outbox_event:
+      group_id: hermet-group-member-outbox-processor
+      handle_timeout: 10s
+      db_shard_count: 2
+      tb_shard_count: 4
+
+# Elasticsearch 配置 ( 消息搜索查询侧，部署见 scripts/docker/es )
+# 架构定位: PG 是唯一事实源，ES 只是异步查询加速层 ( 可重建、最终一致 )。
+es:
+  addresses:
+    - http://192.168.3.3:19200
+  username: elastic
+  password: 5c5f17900d6328633e0ff950
+
+  # 消息索引名 ( 开发环境单索引；生产建议按时间滚动 + ILM/别名 )。
+  message_index: hermet-message
+
+  # bulk indexer 攒批参数 ( esutil.BulkIndexer )。
+  bulk_num_workers: 2
+  bulk_flush_bytes: 1048576   # 1MB
+  bulk_flush_interval: 1s
+
+  # 连接/查询超时。
+  request_timeout: 10s
+
+# 数据库配置
+db:
+  log_level: info
+  slow_threshold: 200ms # 慢查询阈值
+  ignore_record_not_found_error: true
+  # sslmode=disable 用于开发环境，线上一般推荐使用 sslmode=require / sslmode=verify-ca ( 更高安全性 ) / sslmode=verify-full ( 最高安全性 )
+  sharding:
+    - name: hermet_0
+      dsn: "postgres://hermet_0:774b22ff30bb29537451b4d0@192.168.3.3:15432/hermet_0?sslmode=disable&connect_timeout=1&statement_timeout=3000&idle_in_transaction_session_timeout=3000"
+    - name: hermet_1
+      dsn: "postgres://hermet_1:9cdfb6e5ce41478ab630c16d@192.168.3.3:25432/hermet_1?sslmode=disable&connect_timeout=1&statement_timeout=3000&idle_in_transaction_session_timeout=3000"
+
+sharding:
+  # 用户表
+  biz_user:
+    db_prefix: hermet
+    tb_prefix: biz_user
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 联系人申请表
+  contact_application:
+    db_prefix: hermet
+    tb_prefix: contact_application
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 联系人表
+  contact:
+    db_prefix: hermet
+    tb_prefix: contact
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 联系人视图表
+  contact_view:
+    db_prefix: hermet
+    tb_prefix: contact_view
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 联系人反向索引表
+  contact_reverse_index:
+    db_prefix: hermet
+    tb_prefix: contact_reverse_index
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 聊天群申请表
+  group_application:
+    db_prefix: hermet
+    tb_prefix: group_application
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 聊天群表
+  chat_group:
+    db_prefix: hermet
+    tb_prefix: chat_group
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 聊天群成员表
+  group_member:
+    db_prefix: hermet
+    tb_prefix: group_member
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 聊天群成员视图表
+  group_member_view:
+    db_prefix: hermet
+    tb_prefix: group_member_view
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 用户群组表
+  user_group:
+    db_prefix: hermet
+    tb_prefix: user_group
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 用户群组视图表
+  user_group_view:
+    db_prefix: hermet
+    tb_prefix: user_group_view
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 用户群组反向索引表
+  user_group_reverse_index:
+    db_prefix: hermet
+    tb_prefix: user_group_reverse_index
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 聊天频道表 ( 会话 )
+  channel:
+    db_prefix: hermet
+    tb_prefix: channel
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 会话反向索引表
+  channel_reverse_index:
+    db_prefix: hermet
+    tb_prefix: channel_reverse_index
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # outbox 事件表
+  outbox_event:
+    db_prefix: hermet
+    tb_prefix: outbox_event
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 消息正本表 ( 按 conversation_id 分片 )
+  message:
+    db_prefix: hermet
+    tb_prefix: message
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 会话 seq 分配表 ( 按 conversation_id 分片，与 message 同布局 )
+  conversation_seq:
+    db_prefix: hermet
+    tb_prefix: conversation_seq
+    db_shard_count: 2
+    tb_shard_count: 4
+
+  # 收件箱条目表 ( 按 user_id 分片；inbox_seq 与之同布局共用路由 )
+  inbox_entry:
+    db_prefix: hermet
+    tb_prefix: inbox_entry
+    db_shard_count: 2
+    tb_shard_count: 4

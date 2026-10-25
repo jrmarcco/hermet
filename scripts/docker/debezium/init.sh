@@ -42,6 +42,7 @@ if [ ! -f "./.env" ]; then
     cp ./.env.example ./.env
     echo "✅ .env 已生成 ( 默认 KAFKA_TLS_KEY_PASSWORD=kafka-secret，与 gateway kafka 部署保持一致 )"
     echo "   ⚠ 若 kafka 侧密码已修改，请同步修改这里"
+    echo "   ⚠ PGSQL_HERMET_0/1_PASSWORD 需填入分片库实际密码 ( 与 pgsql 部署的 .env 同源 )"
 else
     echo "ℹ️  .env 已存在，跳过生成"
 fi
@@ -76,13 +77,27 @@ else
 fi
 echo ""
 
-# 4. connector 配置检查 ( 提醒同步数据库密码 )
+# 4. connector 配置检查 ( 占位符与渲染变量 )
 for connector_file in ./connectors/*.json; do
     [ -f "${connector_file}" ] || continue
     if grep -q '"database.password": "<passwd>"' "${connector_file}"; then
-        echo "⚠ ${connector_file} 中的 database.password 仍为占位符，请改为 pgsql 实际密码 ( 见 pgsql/.env )"
+        echo "⚠ ${connector_file} 的 database.password 还是字面量 <passwd> ( 旧写法 )"
+        echo "  请改为占位符 __PGSQL_HERMET_x_PASSWORD__, 由 .env 渲染 ( 见 connectors/README.md )"
     fi
 done
+
+missing_vars=""
+for var in KAFKA_TLS_KEY_PASSWORD PGSQL_HERMET_0_PASSWORD PGSQL_HERMET_1_PASSWORD; do
+    # || true: 变量不在 .env 时 grep 无匹配, 避免 pipefail+set -e 终止脚本。
+    val="$(grep -E "^${var}=" ./.env 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+    if [ -z "${val}" ]; then
+        missing_vars="${missing_vars} ${var}"
+    fi
+done
+if [ -n "${missing_vars}" ]; then
+    echo "⚠ .env 缺少或为空:${missing_vars}"
+    echo "  这些变量用于渲染 connector JSON 占位符 ( TLS / 分片库密码 ), 缺失时 connector 注册会失败"
+fi
 echo ""
 
 echo "🎉 初始化完成！"

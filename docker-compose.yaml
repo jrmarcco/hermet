@@ -1,0 +1,81 @@
+# hermet backend 容器编排 ( 镜像定义见 scripts/build/Dockerfile )。
+#
+# ================================= 镜像构建 =================================
+# 本地构建 ( 二选一 ):
+#   make image                                 # tag = git describe, 经 ldflags 注入版本
+#   HERMET_VERSION=v1.2.3 docker compose build # tag = hermet:v1.2.3, buildinfo 同源
+#   ( 国内网络: GOPROXY=https://goproxy.cn,direct 加命令前缀 )
+#
+# ============================ 镜像推送 ( registry ) ============================
+# 镜像名 = ${HERMET_IMAGE:-hermet}:${HERMET_VERSION:-dev}, 推仓库只需
+# HERMET_IMAGE 覆盖前缀 ( 如 reg.example.com:5000/synp/hermet ), 无需修改本文件:
+#   docker login reg.example.com:5000
+#   HERMET_IMAGE=reg.example.com:5000/synp/hermet HERMET_VERSION=v1.2.3 docker compose build
+#   HERMET_IMAGE=reg.example.com:5000/synp/hermet HERMET_VERSION=v1.2.3 docker compose push
+# 部署机拉取运行 ( 不在部署机构建 ):
+#   HERMET_IMAGE=reg.example.com:5000/synp/hermet HERMET_VERSION=v1.2.3 \
+#     HERMET_CONFIG=./etc/config.prod.yaml docker compose up -d --pull always
+# ( 以上变量可写入本目录 .env 持久化 )
+#
+# ================================= 常用命令 =================================
+#   docker compose up -d             # 镜像不存在时自动构建并启动
+#   docker compose up -d --build     # 代码变更后强制重建
+#
+# 前置依赖 ( 均为外部服务, 本文件不负责拉起 ):
+#   - pgsql 分片库 hermet_0/hermet_1 ( 含分表 ): scripts/sql + scripts/docker ( 服务器 )
+#   - kafka / etcd / redis: 服务器 192.168.3.3 ( gateway 仓库 scripts/docker )
+#   - elasticsearch: 服务器 192.168.3.3:19200 ( 消息查询侧 )
+#   - etc/config.yaml ( 配置不打包进镜像, 运行时只读挂载 )
+
+services:
+  hermet:
+    build:
+      context: .
+      dockerfile: scripts/build/Dockerfile
+      args:
+        VERSION: ${HERMET_VERSION:-dev}
+        # 国内网络: GOPROXY=https://goproxy.cn,direct docker compose build
+        GOPROXY: "${GOPROXY:-}"
+    # 默认与 make image 的 tag 命名保持一致; 推送/拉取仓库时用 HERMET_IMAGE 覆盖前缀。
+    image: ${HERMET_IMAGE:-hermet}:${HERMET_VERSION:-dev}
+
+    container_name: hermet
+    hostname: hermet
+    restart: unless-stopped
+
+    # 与 kafka / etcd / es 等中间件复用外部网络 ( 需已存在 );
+    # 容器也可直接经宿主机 IP ( etc/config.yaml 中的 192.168.3.3 ) 访问各依赖。
+    networks:
+      - jrmarcco_net
+
+    ports:
+      # 业务 HTTP ( REST API + JWKS 端点 /.well-known/jwks.json,
+      # gateway 的 jwt.jwks_endpoint 指向这里 )。
+      - "${HERMET_WEB_PORT:-10081}:10081"
+      # gRPC 数据面 ( SyncService, 网关经 etcd 服务发现 synp:///synp-backend 调用 )。
+      # 宿主机必须发布该端口, 保证 etc/config.yaml 的 grpc.server.addr
+      # 广播地址从网关真实可达。
+      - "${HERMET_GRPC_PORT:-10091}:10091"
+      # 管理面 /metrics /healthz /readyz /version /debug/pprof。
+      # 默认只绑宿主机回环 ( pprof 暴露公网有信息泄露/DoS 风险 );
+      # 跨机 Prometheus 抓取时置 HERMET_ADMIN_BIND=0.0.0.0。
+      - "${HERMET_ADMIN_BIND:-127.0.0.1}:${HERMET_ADMIN_PORT:-10090}:10090"
+
+    volumes:
+      # 配置不打包进镜像, 运行时挂载; 按环境可换 etc/config-joint.yaml 等。
+      - ${HERMET_CONFIG:-./etc/config.yaml}:/app/etc/config.yaml:ro
+
+    # SIGTERM 后需排空 HTTP/gRPC 在途请求并注销 etcd 注册,
+    # 宽限期避免 docker stop 默认 10s 硬杀截断。
+    # ( 健康探测沿用镜像内置 HEALTHCHECK: wget /healthz )
+    stop_grace_period: 30s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+networks:
+  jrmarcco_net:
+    external: true

@@ -130,7 +130,11 @@ func (r *TxGroupMemberRepo) CreateView(ctx context.Context, gmv domain.GroupMemb
 		outboxEventEntity := dao.OutboxEvent{
 			ID: gmv.ID,
 
-			AggregateID:   gmv.GroupID,
+			// 聚合粒度是"一条成员关系"而非"群": 同群多成员的 create 事件
+			// 若都以 GroupID 作 aggregate_id, 会撞 (aggregate_id, type, event_type)
+			// 唯一键被 DO NOTHING 静默吞掉, 后续成员的 user_group/channel 读侧
+			// 将永远不建 ( 消费侧只用 payload, 不读 aggregate_id )。
+			AggregateID:   gmv.ID,
 			AggregateType: string(domain.OutboxAggregateTypeGm),
 
 			EventType: string(domain.OutboxEventTypeGmCreate),

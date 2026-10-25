@@ -55,7 +55,17 @@ func (s *DefaultGroupService) Create(ctx context.Context, event domain.GroupCrea
 
 	// 2. 批量添加成员 ( 异步 )。
 	// 使用 Kafka 消息队列实现异步。
-	if err := s.sendMemberAddMsg(ctx, group.ID, event.CreatorID, event.MemberIDs); err != nil {
+	// 群主必须并入成员批次——群主自身也是成员,
+	// 否则其 user_group/channel 读侧行不会被建立, 群不会出现在自己的频道列表。
+	memberIDs := make([]uint64, 0, len(event.MemberIDs)+1)
+	memberIDs = append(memberIDs, event.CreatorID)
+	for _, id := range event.MemberIDs {
+		if id != event.CreatorID {
+			memberIDs = append(memberIDs, id)
+		}
+	}
+
+	if err := s.sendMemberAddMsg(ctx, group.ID, event.CreatorID, memberIDs); err != nil {
 		return domain.ChatGroup{}, fmt.Errorf("failed to send member add message: %w", err)
 	}
 	return group, nil

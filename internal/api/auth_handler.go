@@ -56,6 +56,10 @@ func (h *AuthHandler) SignIn(ctx *gin.Context, req signInReq) (xgin.R, error) {
 		if errors.Is(err, errs.ErrRecordNotFound) {
 			return xgin.R{}, fmt.Errorf("%w: user not found", errs.ErrUnauthorized)
 		}
+		// 密码不匹配属客户端凭据错误, 应答 401 而非 500。
+		if errors.Is(err, errs.ErrInvalidUser) {
+			return xgin.R{}, fmt.Errorf("%w: invalid credential", errs.ErrUnauthorized)
+		}
 		return xgin.R{}, err
 	}
 

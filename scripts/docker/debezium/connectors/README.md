@@ -31,13 +31,15 @@
 "database.hostname": "pgsql-hermet-0",
 "database.port": "5432",
 "database.user": "hermet_0",
-"database.password": "<passwd>",     // ← 占位符! 部署前必须改为实际密码
+"database.password": "__PGSQL_HERMET_0_PASSWORD__",
 "database.dbname": "hermet_0",
 ```
 
 - `hostname` 是 `jrmarcco_net` 内部服务名 ( compose 容器名 )，不是宿主机地址。
-- **密码同步三处** ( 见 `../README.md` ): 这里 / `../pgsql/.env` / `etc/config.yaml` 的
-  `db.sharding` DSN。`init.sh` 启动时会检测 `<passwd>` 占位符并提醒。
+- **密码不落 JSON**：`__PGSQL_HERMET_x_PASSWORD__` 是占位符 ( 两个分片各自独立，
+  与 pgsql 部署的 `.env` 同源 )，由提交链路渲染 ( 见下文 "占位符渲染机制" )。
+  密码实际存在于两处：本目录 `.env` ( 供 connector 连库 ) 与 backend `etc/config.yaml`
+  的 `db.sharding` DSN。
 
 ```json
 "topic.prefix": "pgsql_hermet_0",
@@ -188,12 +190,20 @@ PLAINTEXT 连接——对 mTLS-only 的 9093 端口直接握手失败，connecto
 "schema.history.internal.consumer.ssl.truststore.password": "__KAFKA_TLS_KEY_PASSWORD__"
 ```
 
-密码 `__KAFKA_TLS_KEY_PASSWORD__` 是**占位符**，JSON 无法引用环境变量，
-由提交链路渲染 ( 来源 `.env` 的 `KAFKA_TLS_KEY_PASSWORD`，与 gateway kafka
-部署同源 ):
+JSON 无法引用环境变量，所有密码一律走**占位符渲染机制**——JSON 中写占位符，
+提交链路在发送前用 `.env` 的变量替换:
 
-- 自动注册: `init_connectors.sh` ( sidecar，compose 已注入该变量 )
-- 手动操作: `cli.sh register` / `cli.sh update` ( 自动读环境变量或本目录 `.env` )
+| 占位符 | 来源变量 | 用途 |
+|---|---|---|
+| `__KAFKA_TLS_KEY_PASSWORD__` | `KAFKA_TLS_KEY_PASSWORD` | schema history 的 keystore/truststore ( 与 gateway kafka 部署同源 ) |
+| `__PGSQL_HERMET_0_PASSWORD__` | `PGSQL_HERMET_0_PASSWORD` | hermet_0 分片库密码 |
+| `PGSQL_HERMET_1_PASSWORD` 同理 | | |
+
+渲染入口 ( 文件中出现哪个占位符，对应变量就必须非空 ):
+
+- 自动注册: `init_connectors.sh` ( sidecar，变量经 compose 从 `.env` 注入，缺失时该 connector 注册失败 )
+- 手动操作: `cli.sh register` / `cli.sh update` ( 自动读环境变量或本目录 `.env`，缺失时告警且占位符原样提交 )
+- 部署检查: `init.sh` 会在结尾检测 `.env` 缺失/为空的渲染变量并提醒
 
 **不要**把真实密码写进 JSON。
 

@@ -6,7 +6,7 @@
     "database.hostname": "pgsql-hermet-0",
     "database.port": "5432",
     "database.user": "hermet_0",
-    "database.password": "<passwd>",
+    "database.password": "__PGSQL_HERMET_0_PASSWORD__",
     "database.dbname": "hermet_0",
     "topic.prefix": "pgsql_hermet_0",
     "schema.include.list": "public",

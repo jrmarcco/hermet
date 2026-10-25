@@ -7,6 +7,30 @@ CONNECTORS_DIR="${CONNECTORS_DIR:-/kafka/connectors}"
 MAX_RETRIES=30
 RETRY_INTERVAL=10
 
+# connector JSON 中的占位符及其来源环境变量 ( 经 compose 从 .env 注入 ):
+#   __KAFKA_TLS_KEY_PASSWORD__  schema history TLS 密码 ( 与 gateway kafka 部署同源 )
+#   __PGSQL_HERMET_x_PASSWORD__ 分片库密码 ( 与 pgsql 部署的 .env 同源 )
+# 文件中出现哪个占位符, 对应变量就必须非空。
+PLACEHOLDER_VARS="KAFKA_TLS_KEY_PASSWORD PGSQL_HERMET_0_PASSWORD PGSQL_HERMET_1_PASSWORD"
+
+# render_placeholders <in_file> <out_file>: 渲染全部占位符; 缺变量时返回 1。
+render_placeholders() {
+    local in_file="$1" out_file="$2" var placeholder sed_script=""
+
+    for var in ${PLACEHOLDER_VARS}; do
+        placeholder="__${var}__"
+        if grep -q "${placeholder}" "${in_file}"; then
+            if [ -z "${!var:-}" ]; then
+                echo "    ✗ 环境变量 ${var} 未设置, 无法渲染 ${placeholder}"
+                return 1
+            fi
+            sed_script="${sed_script} -e s|${placeholder}|${!var}|g"
+        fi
+    done
+
+    sed ${sed_script} "${in_file}" > "${out_file}"
+}
+
 echo "========================================"
 echo "Debezium Connector Auto-Registration"
 echo "========================================"
@@ -84,16 +108,12 @@ for config_file in "${CONNECTORS_DIR}"/*.json; do
     # 注册 connector。
     echo "  ➜ Registering: ${filename} (${connector_name})..."
 
-    # 渲染 __KAFKA_TLS_KEY_PASSWORD__ 占位符 ( schema history 客户端不继承
-    # worker TLS 配置, connector 配置需显式携带 keystore/truststore 密码;
-    # 该变量经 compose 从 .env 注入 )。
-    if [ -z "${KAFKA_TLS_KEY_PASSWORD:-}" ]; then
-        echo "    ✗ FAILED: ${connector_name} - KAFKA_TLS_KEY_PASSWORD 未设置, 无法渲染 TLS 占位符"
+    # 渲染占位符 ( 密码不落 JSON, 见 connectors/README.md )。
+    rendered_file="/tmp/rendered_${filename}"
+    if ! render_placeholders "$config_file" "$rendered_file"; then
         failed_count=$((failed_count + 1))
         continue
     fi
-    rendered_file="/tmp/rendered_${filename}"
-    sed "s|__KAFKA_TLS_KEY_PASSWORD__|${KAFKA_TLS_KEY_PASSWORD}|g" "$config_file" > "$rendered_file"
 
     response=$(curl -s -w "\n%{http_code}" -X POST \
         -H "Content-Type: application/json" \

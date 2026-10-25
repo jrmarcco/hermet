@@ -25,21 +25,44 @@ fi
 DEFAULT_HOST="127.0.0.1"
 DEFAULT_PORT="8083"
 
-# Kafka TLS 密码: 渲染 connector JSON 中 __KAFKA_TLS_KEY_PASSWORD__ 占位符
-# ( schema history 客户端不继承 worker TLS 配置, 密码需写进 connector 配置 )。
-# 优先取环境变量, 其次脚本同目录 .env 的 KAFKA_TLS_KEY_PASSWORD。
+# connector JSON 占位符渲染 ( 密码不落 JSON, 见 connectors/README.md ):
+#   __KAFKA_TLS_KEY_PASSWORD__  schema history TLS 密码 ( 与 gateway kafka 部署同源 )
+#   __PGSQL_HERMET_x_PASSWORD__ 分片库密码 ( 与 pgsql 部署的 .env 同源 )
+# 优先取环境变量, 其次脚本同目录 .env。
 CLI_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -z "${KAFKA_TLS_KEY_PASSWORD:-}" ] && [ -f "${CLI_SCRIPT_DIR}/.env" ]; then
-    KAFKA_TLS_KEY_PASSWORD="$(grep -E '^KAFKA_TLS_KEY_PASSWORD=' "${CLI_SCRIPT_DIR}/.env" | tail -1 | cut -d= -f2-)"
+if [ -f "${CLI_SCRIPT_DIR}/.env" ]; then
+    for _var in KAFKA_TLS_KEY_PASSWORD PGSQL_HERMET_0_PASSWORD PGSQL_HERMET_1_PASSWORD; do
+        if [ -z "${!_var:-}" ]; then
+            # || true: 变量不在 .env 时 grep 无匹配, 避免 pipefail+set -e 终止脚本。
+            _val="$(grep -E "^${_var}=" "${CLI_SCRIPT_DIR}/.env" | tail -1 | cut -d= -f2- || true)"
+            if [ -n "${_val}" ]; then
+                export "${_var}=${_val}"
+            fi
+        fi
+    done
 fi
+unset _var _val
 
-# render_json <in_file> <out_file>: 原地渲染占位符到 out_file。
+PLACEHOLDER_VARS="KAFKA_TLS_KEY_PASSWORD PGSQL_HERMET_0_PASSWORD PGSQL_HERMET_1_PASSWORD"
+
+# render_json <in_file> <out_file>: 渲染全部占位符; 缺变量时占位符原样保留并告警。
 render_json() {
-    local in_file="$1" out_file="$2"
-    if [ -z "${KAFKA_TLS_KEY_PASSWORD:-}" ]; then
-        print_warning "KAFKA_TLS_KEY_PASSWORD 未设置 ( 环境变量或 .env ), __KAFKA_TLS_KEY_PASSWORD__ 将按原样提交, schema history TLS 会握手失败。"
+    local in_file="$1" out_file="$2" var placeholder missing=""
+    local -a sed_args=()
+
+    for var in ${PLACEHOLDER_VARS}; do
+        placeholder="__${var}__"
+        if grep -q "${placeholder}" "${in_file}" && [ -z "${!var:-}" ]; then
+            missing="${missing} ${var}"
+        fi
+        sed_args+=( -e "s|${placeholder}|${!var:-${placeholder}}|g" )
+    done
+
+    if [ -n "${missing}" ]; then
+        print_warning "未设置:${missing} ( 环境变量或 .env ), 对应占位符将按原样提交, connector 会认证失败。"
     fi
-    sed "s|__KAFKA_TLS_KEY_PASSWORD__|${KAFKA_TLS_KEY_PASSWORD:-__KAFKA_TLS_KEY_PASSWORD__}|g" "$in_file" > "$out_file"
+
+    sed "${sed_args[@]}" "${in_file}" > "${out_file}"
 }
 
 # 打印帮助信息。
