@@ -9,10 +9,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jrmarcco/hermet/internal/errs"
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin/xsession"
 	"github.com/jrmarcco/hermet/internal/service"
-	"go.uber.org/zap"
 )
 
 var _ xgin.RouteRegistry = (*AuthHandler)(nil)
@@ -21,15 +21,13 @@ var _ xgin.RouteRegistry = (*AuthHandler)(nil)
 type AuthHandler struct {
 	xsession.Handler
 
-	svc    service.AuthService
-	logger *zap.Logger
+	svc service.AuthService
 }
 
-func NewAuthHandler(handler xsession.Handler, svc service.AuthService, logger *zap.Logger) *AuthHandler {
+func NewAuthHandler(handler xsession.Handler, svc service.AuthService) *AuthHandler {
 	return &AuthHandler{
 		Handler: handler,
 		svc:     svc,
-		logger:  logger,
 	}
 }
 
@@ -101,7 +99,7 @@ func (h *AuthHandler) RefreshToken(ctx *gin.Context, req refreshTokenRequest) (x
 	err = h.RefreshSession(ctx, au.SID)
 	if err != nil {
 		// 刷新失败不中断流程，记录日志即可。
-		h.logger.Error("[user-handler] failed to refresh session", zap.Error(err))
+		logging.For("user-handler").Error("failed to refresh session", "error", err)
 	}
 
 	// 重新生成 access token 和 refresh token。
@@ -136,7 +134,7 @@ func (h *AuthHandler) SignOut(ctx *gin.Context) (xgin.R, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		if err := h.ClearSession(ctx, au.SID); err != nil {
-			h.logger.Error("[user-handler] failed to clear session", zap.Error(err))
+			logging.For("user-handler").Error("failed to clear session", "error", err)
 		}
 	}()
 	return xgin.R{

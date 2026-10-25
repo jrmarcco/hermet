@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v9"
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 )
 
 // EsClientFxModule 提供 Elasticsearch 客户端与配置。
@@ -49,7 +49,7 @@ func newEsConfig() (*EsConfig, error) {
 	return cfg, nil
 }
 
-func newEsClient(cfg *EsConfig, logger *zap.Logger, lifecycle fx.Lifecycle) (*elasticsearch.Client, error) {
+func newEsClient(cfg *EsConfig, lifecycle fx.Lifecycle) (*elasticsearch.Client, error) {
 	client, err := elasticsearch.New(
 		elasticsearch.WithAddresses(cfg.Addresses...),
 		elasticsearch.WithBasicAuth(cfg.Username, cfg.Password),
@@ -66,14 +66,14 @@ func newEsClient(cfg *EsConfig, logger *zap.Logger, lifecycle fx.Lifecycle) (*el
 
 			resp, pingErr := client.Info(client.Info.WithContext(pingCtx))
 			if pingErr != nil {
-				logger.Warn("[es-client] elasticsearch not reachable at startup, search/index will retry", zap.Error(pingErr))
+				logging.For("es-client").Warn("elasticsearch not reachable at startup, search/index will retry", "error", pingErr)
 				return nil
 			}
 			defer func() {
 				_ = resp.Body.Close()
 			}()
 
-			logger.Info("[es-client] elasticsearch connected", zap.Strings("addresses", cfg.Addresses))
+			logging.For("es-client").Info("elasticsearch connected", "addresses", cfg.Addresses)
 			return nil
 		},
 	})

@@ -13,7 +13,6 @@ import (
 	"github.com/jrmarcco/xgrpc/client"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 )
 
 var ServiceFxModule = fx.Module(
@@ -66,8 +65,6 @@ type groupServiceFxParams struct {
 
 	GroupRepo       repo.GroupRepo
 	GroupMemberRepo repo.GroupMemberRepo
-
-	Logger *zap.Logger
 }
 
 func newGroupService(params groupServiceFxParams) (*DefaultGroupService, error) {
@@ -75,7 +72,6 @@ func newGroupService(params groupServiceFxParams) (*DefaultGroupService, error) 
 		params.Producer,
 		params.GroupRepo,
 		params.GroupMemberRepo,
-		params.Logger,
 	)
 }
 
@@ -93,8 +89,6 @@ type messageServiceFxParams struct {
 	IndexProducer  mq.Producer `name:"message_index_producer"`
 
 	Gen idgen.Generator
-
-	Logger *zap.Logger
 }
 
 func newMessageService(params messageServiceFxParams) (MessageService, error) {
@@ -117,8 +111,6 @@ func newMessageService(params messageServiceFxParams) (MessageService, error) {
 		*fanoutCfg,
 
 		params.Gen,
-
-		params.Logger,
 	), nil
 }
 

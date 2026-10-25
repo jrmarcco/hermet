@@ -7,13 +7,13 @@ import (
 
 	"github.com/elastic/go-elasticsearch/v9"
 	"github.com/jrmarcco/hermet/internal/mq"
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xproducer"
 	"github.com/jrmarcco/hermet/internal/search"
 	"github.com/jrmarcco/hermet/internal/service"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 )
 
 // mq_module.go 负责配置消息队列相关的依赖注入。
@@ -101,11 +101,9 @@ func newMessageIndexProducer(producer xproducer.Producer) (*mq.DefaultProducer, 
 type micFxParams struct {
 	fx.In
 
-	Factory xconsumer.ConsumerFactory
-	Indexer *search.Indexer
-	Client  *elasticsearch.Client
-
-	Logger    *zap.Logger
+	Factory   xconsumer.ConsumerFactory
+	Indexer   *search.Indexer
+	Client    *elasticsearch.Client
 	Lifecycle fx.Lifecycle
 }
 
@@ -134,19 +132,19 @@ func startMessageIndexConsumer(params micFxParams) error {
 		OnStart: func(ctx context.Context) error {
 			// 索引前置: 确保索引存在 ( 幂等 )。
 			if err := params.Indexer.Start(ctx, params.Client); err != nil {
-				params.Logger.Error("failed to ensure message index", zap.Error(err))
+				logging.For("mq").Error("failed to ensure message index", "error", err)
 				return err
 			}
 
 			if err := dc.Start(ctx); err != nil {
-				params.Logger.Error("failed to start message index consumer", zap.Error(err))
+				logging.For("mq").Error("failed to start message index consumer", "error", err)
 				return err
 			}
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
 			if err := dc.Stop(ctx); err != nil {
-				params.Logger.Error("failed to stop message index consumer", zap.Error(err))
+				logging.For("mq").Error("failed to stop message index consumer", "error", err)
 				return err
 			}
 			return params.Indexer.Close(ctx)
@@ -160,9 +158,7 @@ type gmcFxParams struct {
 
 	Factory      xconsumer.ConsumerFactory
 	GroupService service.GroupService
-
-	Logger    *zap.Logger
-	Lifecycle fx.Lifecycle
+	Lifecycle    fx.Lifecycle
 }
 
 // startGroupMemberConsumer 注册聊天群成员消费者生命周期。
@@ -187,7 +183,7 @@ func startGroupMemberConsumer(params gmcFxParams) error {
 	params.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if err := consumer.Start(ctx); err != nil {
-				params.Logger.Error("failed to start group member consumer", zap.Error(err))
+				logging.For("mq").Error("failed to start group member consumer", "error", err)
 				return err
 			}
 			return nil
@@ -204,9 +200,7 @@ type umcFxParams struct {
 
 	Factory        xconsumer.ConsumerFactory
 	MessageService service.MessageService
-
-	Logger    *zap.Logger
-	Lifecycle fx.Lifecycle
+	Lifecycle      fx.Lifecycle
 }
 
 // startUpstreamMsgConsumer 注册上游消息消费者生命周期。
@@ -233,14 +227,14 @@ func startUpstreamMsgConsumer(params umcFxParams) error {
 	params.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if err := dc.Start(ctx); err != nil {
-				params.Logger.Error("failed to start upstream message consumer", zap.Error(err))
+				logging.For("mq").Error("failed to start upstream message consumer", "error", err)
 				return err
 			}
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
 			if err := dc.Stop(ctx); err != nil {
-				params.Logger.Error("failed to stop upstream message consumer", zap.Error(err))
+				logging.For("mq").Error("failed to stop upstream message consumer", "error", err)
 				return err
 			}
 			return nil

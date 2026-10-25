@@ -8,7 +8,6 @@ import (
 	"github.com/elastic/go-elasticsearch/v9"
 	"github.com/jrmarcco/hermet/internal/domain"
 	"github.com/jrmarcco/hermet/internal/repo"
-	"go.uber.org/zap"
 )
 
 // 搜索分页默认值与上限。
@@ -39,15 +38,12 @@ type Service struct {
 	userGroupRepo repo.UserGroupRepo
 
 	index string
-
-	logger *zap.Logger
 }
 
 func NewService(
 	client *elasticsearch.Client,
 	userGroupRepo repo.UserGroupRepo,
 	index string,
-	logger *zap.Logger,
 ) *Service {
 	return &Service{
 		client: client,
@@ -55,8 +51,6 @@ func NewService(
 		userGroupRepo: userGroupRepo,
 
 		index: index,
-
-		logger: logger,
 	}
 }
 

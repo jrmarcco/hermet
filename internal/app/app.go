@@ -9,14 +9,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
+
 	"github.com/jrmarcco/xgrpc/register"
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
 type App struct {
-	svr    *http.Server
-	logger *zap.Logger
+	svr *http.Server
 
 	grpcServer   *grpc.Server
 	grpcAddr     string
@@ -34,11 +34,11 @@ func (app *App) Start(ctx context.Context) error {
 
 	go func() {
 		if err := app.svr.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			app.logger.Fatal("[app] failed to start http server", zap.Error(err))
+			logging.For("app").Error("failed to start http server", "error", err)
 		}
 	}()
 
-	app.logger.Info("[app] http server started")
+	logging.For("app").Info("http server started")
 	return nil
 }
 
@@ -47,7 +47,7 @@ func (app *App) Stop(ctx context.Context) error {
 	var errs []error
 
 	if err := app.svr.Shutdown(ctx); err != nil {
-		app.logger.Error("[app] failed to shutdown http server", zap.Error(err))
+		logging.For("app").Error("failed to shutdown http server", "error", err)
 		errs = append(errs, fmt.Errorf("[app] failed to shutdown http server: %w", err))
 	}
 
@@ -77,7 +77,7 @@ func (app *App) startGrpc(ctx context.Context) error {
 
 	go func() {
 		if serveErr := app.grpcServer.Serve(ln); serveErr != nil && !isExpectedGRPCServeErr(serveErr) {
-			app.logger.Error("[app] grpc serve exited with error", zap.Error(serveErr))
+			logging.For("app").Error("grpc serve exited with error", "error", serveErr)
 		}
 	}()
 
@@ -85,10 +85,10 @@ func (app *App) startGrpc(ctx context.Context) error {
 		if err := app.grpcRegistry.Register(ctx, app.grpcInstance); err != nil {
 			return fmt.Errorf("[app] failed to register grpc service: %w", err)
 		}
-		app.logger.Info("[app] grpc service registered", zap.String("instance", app.grpcInstance.Addr))
+		logging.For("app").Info("grpc service registered", "instance", app.grpcInstance.Addr)
 	}
 
-	app.logger.Info("[app] grpc server started", zap.String("addr", app.grpcAddr))
+	logging.For("app").Info("grpc server started", "addr", app.grpcAddr)
 	return nil
 }
 

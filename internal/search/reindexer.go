@@ -9,9 +9,9 @@ import (
 	"github.com/elastic/go-elasticsearch/v9"
 	"github.com/elastic/go-elasticsearch/v9/esutil"
 	"github.com/jrmarcco/hermet/internal/domain"
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/jrmarcco/hermet/internal/pkg/sharding"
 	"github.com/jrmarcco/jit/xsync"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -29,8 +29,6 @@ type Reindexer struct {
 
 	client *elasticsearch.Client
 	index  string
-
-	logger *zap.Logger
 }
 
 func NewReindexer(
@@ -38,14 +36,12 @@ func NewReindexer(
 	msgShard *sharding.ShardHelper,
 	client *elasticsearch.Client,
 	index string,
-	logger *zap.Logger,
 ) *Reindexer {
 	return &Reindexer{
 		dbs:      dbs,
 		msgShard: msgShard,
 		client:   client,
 		index:    index,
-		logger:   logger,
 	}
 }
 
@@ -71,7 +67,7 @@ func (r *Reindexer) Run(ctx context.Context) (int64, error) {
 		FlushInterval: 2 * time.Second, //nolint:mnd // 2s 兜底 flush
 
 		OnError: func(_ context.Context, err error) {
-			r.logger.Error("[reindexer] bulk indexer error", zap.Error(err))
+			logging.For("reindexer").Error("bulk indexer error", "error", err)
 		},
 	})
 	if err != nil {
@@ -91,9 +87,9 @@ func (r *Reindexer) Run(ctx context.Context) (int64, error) {
 		}
 		total += count
 
-		r.logger.Info("[reindexer] table done",
-			zap.String("table", dst.DB+"."+dst.TB),
-			zap.Int64("indexed", count),
+		logging.For("reindexer").Info("table done",
+			"table", dst.DB+"."+dst.TB,
+			"indexed", count,
 		)
 	}
 

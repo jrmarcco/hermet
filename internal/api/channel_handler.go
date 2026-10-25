@@ -9,20 +9,17 @@ import (
 	"github.com/jrmarcco/hermet/internal/domain"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin"
 	"github.com/jrmarcco/hermet/internal/service"
-	"go.uber.org/zap"
 )
 
 var _ xgin.RouteRegistry = (*ChannelHandler)(nil)
 
 type ChannelHandler struct {
-	svc    service.ChannelService
-	logger *zap.Logger
+	svc service.ChannelService
 }
 
-func NewChannelHandler(svc service.ChannelService, logger *zap.Logger) *ChannelHandler {
+func NewChannelHandler(svc service.ChannelService) *ChannelHandler {
 	return &ChannelHandler{
-		svc:    svc,
-		logger: logger,
+		svc: svc,
 	}
 }
 

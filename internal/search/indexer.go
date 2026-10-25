@@ -9,8 +9,8 @@ import (
 	"github.com/elastic/go-elasticsearch/v9"
 	"github.com/elastic/go-elasticsearch/v9/esutil"
 	"github.com/jrmarcco/hermet/internal/domain"
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
-	"go.uber.org/zap"
 )
 
 // Indexer 消费消息索引事件并批量写入 ES。
@@ -24,8 +24,6 @@ type Indexer struct {
 	bulk esutil.BulkIndexer
 
 	index string
-
-	logger *zap.Logger
 }
 
 // BulkConfig bulk indexer 攒批参数 ( es 前缀配置段 )。
@@ -39,7 +37,6 @@ func NewIndexer(
 	client *elasticsearch.Client,
 	index string,
 	bulkCfg BulkConfig,
-	logger *zap.Logger,
 ) (*Indexer, error) {
 	bulk, err := esutil.NewBulkIndexer(esutil.BulkIndexerConfig{
 		Client: client,
@@ -51,7 +48,7 @@ func NewIndexer(
 		FlushInterval: bulkCfg.FlushInterval,
 
 		OnError: func(_ context.Context, err error) {
-			logger.Error("[es-indexer] bulk indexer error", zap.Error(err))
+			logging.For("es-indexer").Error("bulk indexer error", "error", err)
 		},
 	})
 	if err != nil {
@@ -62,8 +59,6 @@ func NewIndexer(
 		bulk: bulk,
 
 		index: index,
-
-		logger: logger,
 	}, nil
 }
 
@@ -82,30 +77,30 @@ func (i *Indexer) ProcessIndexEvent(ctx context.Context, msg *xmq.Message) error
 	event := &domain.MessageIndexEvent{}
 	if err := json.Unmarshal(msg.Val, event); err != nil {
 		// 毒事件跳过 ( ES 可重建，不值得无限重投 )。
-		i.logger.Error(
-			"[es-indexer] failed to unmarshal index event, skip",
-			zap.ByteString("val", msg.Val),
-			zap.Error(err),
+		logging.For("es-indexer").Error(
+			"failed to unmarshal index event, skip",
+			"val", msg.Val,
+			"error", err,
 		)
 		return nil
 	}
 
 	if event.MessageID == "" || event.ConversationID == "" || event.SenderID == 0 {
-		i.logger.Error(
-			"[es-indexer] index event missing required fields, skip",
-			zap.String("message_id", event.MessageID),
-			zap.String("conversation_id", event.ConversationID),
-			zap.Uint64("sender_id", event.SenderID),
+		logging.For("es-indexer").Error(
+			"index event missing required fields, skip",
+			"message_id", event.MessageID,
+			"conversation_id", event.ConversationID,
+			"sender_id", event.SenderID,
 		)
 		return nil
 	}
 
 	doc, err := json.Marshal(event)
 	if err != nil {
-		i.logger.Error(
-			"[es-indexer] failed to marshal index document, skip",
-			zap.String("message_id", event.MessageID),
-			zap.Error(err),
+		logging.For("es-indexer").Error(
+			"failed to marshal index document, skip",
+			"message_id", event.MessageID,
+			"error", err,
 		)
 		return nil
 	}
@@ -118,11 +113,11 @@ func (i *Indexer) ProcessIndexEvent(ctx context.Context, msg *xmq.Message) error
 		Body:       jsonReader(doc),
 
 		OnFailure: func(_ context.Context, _ esutil.BulkIndexerItem, resp esutil.BulkIndexerResponseItem, err error) {
-			i.logger.Error(
-				"[es-indexer] bulk item failed",
-				zap.String("message_id", resp.DocumentID),
-				zap.Int("status", resp.Status),
-				zap.NamedError("bulk_error", err),
+			logging.For("es-indexer").Error(
+				"bulk item failed",
+				"message_id", resp.DocumentID,
+				"status", resp.Status,
+				"bulk_error", err,
 			)
 		},
 	}); err != nil {

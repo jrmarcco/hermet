@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/jrmarcco/jit/xsync"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	gormlogger "gorm.io/gorm/logger"
 )
 
-func newDBShardingClients(zapLogger *zap.Logger, lc fx.Lifecycle) (*xsync.Map[string, *gorm.DB], error) {
+func newDBShardingClients(lc fx.Lifecycle) (*xsync.Map[string, *gorm.DB], error) {
 	type shardingConfig struct {
 		Name string `mapstructure:"name"`
 		DSN  string `mapstructure:"dsn"`
@@ -32,16 +32,16 @@ func newDBShardingClients(zapLogger *zap.Logger, lc fx.Lifecycle) (*xsync.Map[st
 		return nil, err
 	}
 
-	var level logger.LogLevel
+	var level gormlogger.LogLevel
 	switch cfg.LogLevel {
 	case "silent":
-		level = logger.Silent
+		level = gormlogger.Silent
 	case "error":
-		level = logger.Error
+		level = gormlogger.Error
 	case "warn":
-		level = logger.Warn
+		level = gormlogger.Warn
 	case "info":
-		level = logger.Info
+		level = gormlogger.Info
 	default:
 		return nil, fmt.Errorf("invalid log level: %s", cfg.LogLevel)
 	}
@@ -53,7 +53,6 @@ func newDBShardingClients(zapLogger *zap.Logger, lc fx.Lifecycle) (*xsync.Map[st
 	for _, s := range cfg.Sharding {
 		db, err := gorm.Open(postgres.Open(s.DSN), &gorm.Config{
 			Logger: NewGormLogger(
-				zapLogger,
 				WithLogLevel(level),
 				WithSlowThreshold(cfg.SlowThreshold),
 				WithIgnoreRecordNotFoundError(cfg.IgnoreRecordNotFoundError),
@@ -79,10 +78,10 @@ func newDBShardingClients(zapLogger *zap.Logger, lc fx.Lifecycle) (*xsync.Map[st
 		lc.Append(fx.Hook{
 			OnStop: func(_ context.Context) error {
 				if err := innerDB.Close(); err != nil {
-					zapLogger.Error("[db] failed to close db connection", zap.Error(err))
+					logging.For("db").Error("failed to close db connection", "error", err)
 					return fmt.Errorf("failed to close db connection: %w", err)
 				}
-				zapLogger.Info("[db] db connection closed")
+				logging.For("db").Info("db connection closed")
 				return nil
 			},
 		})

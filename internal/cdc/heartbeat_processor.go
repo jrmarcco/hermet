@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/jrmarcco/hermet/internal/cdc/event"
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xprocessor"
-	"go.uber.org/zap"
 )
 
 // HeartbeatStatus 心跳状态。
@@ -141,14 +141,12 @@ type HeartbeatProcessor struct {
 	*BaseProcessor
 
 	monitor *HeartbeatMonitor
-	logger  *zap.Logger
 }
 
 func NewHeartbeatProcessor(
 	config HeartbeatProcessorConfig,
 	factory xconsumer.ConsumerFactory,
 	monitor *HeartbeatMonitor,
-	logger *zap.Logger,
 ) (*HeartbeatProcessor, error) {
 	if len(config.DataSources) == 0 {
 		return nil, fmt.Errorf("data sources are required")
@@ -160,7 +158,6 @@ func NewHeartbeatProcessor(
 
 	processor := &HeartbeatProcessor{
 		monitor: monitor,
-		logger:  logger,
 	}
 
 	topics := make([]xprocessor.TopicConfig, 0, len(config.DataSources))
@@ -192,11 +189,11 @@ func (p *HeartbeatProcessor) processHeartbeat(_ context.Context, msg *xmq.Messag
 
 	var heartbeat event.HeartbeatEvent
 	if err := json.Unmarshal(msg.Val, &heartbeat); err != nil {
-		p.logger.Error(
-			"[cdc-heartbeat] failed to unmarshal heartbeat message",
-			zap.String("topic", msg.Topic),
-			zap.String("data_source", ds),
-			zap.Error(err),
+		logging.For("cdc-heartbeat").Error(
+			"failed to unmarshal heartbeat message",
+			"topic", msg.Topic,
+			"data_source", ds,
+			"error", err,
 		)
 		p.monitor.Record(ds, 0, err)
 		return err
@@ -205,11 +202,11 @@ func (p *HeartbeatProcessor) processHeartbeat(_ context.Context, msg *xmq.Messag
 	// 记录心跳。
 	p.monitor.Record(ds, heartbeat.TimestampMs, nil)
 
-	p.logger.Debug(
-		"[cdc-heartbeat] received heartbeat",
-		zap.String("topic", msg.Topic),
-		zap.String("data_source", ds),
-		zap.Int64("ts_ms", heartbeat.TimestampMs),
+	logging.For("cdc-heartbeat").Debug(
+		"received heartbeat",
+		"topic", msg.Topic,
+		"data_source", ds,
+		"ts_ms", heartbeat.TimestampMs,
 	)
 	return nil
 }
@@ -226,7 +223,7 @@ func (p *HeartbeatProcessor) StartHealthCheck(ctx context.Context, interval time
 	for {
 		select {
 		case <-ctx.Done():
-			p.logger.Info("[cdc-heartbeat] health check stopped")
+			logging.For("cdc-heartbeat").Info("health check stopped")
 			return
 		case <-ticker.C:
 			p.healthCheck()
@@ -239,20 +236,20 @@ func (p *HeartbeatProcessor) healthCheck() {
 
 	for ds, status := range statuses {
 		if !status.IsHealthy(p.monitor.HeartbeatTimeout) {
-			p.logger.Error(
-				"[cdc-heartbeat] data source unhealthy - no heartbeat received",
-				zap.String("data_source", ds),
-				zap.Time("last_heartbeat", status.LastHeartbeatTime),
+			logging.For("cdc-heartbeat").Error(
+				"data source unhealthy - no heartbeat received",
+				"data_source", ds,
+				"last_heartbeat", status.LastHeartbeatTime,
 			)
 			continue
 		}
 
 		delay := status.GetDelay()
-		p.logger.Debug(
-			"[cdc-heartbeat] data source healthy",
-			zap.String("data_source", ds),
-			zap.Int64("delay_ms", delay),
-			zap.Int64("message_count", status.MessageCount),
+		logging.For("cdc-heartbeat").Debug(
+			"data source healthy",
+			"data_source", ds,
+			"delay_ms", delay,
+			"message_count", status.MessageCount,
 		)
 	}
 }

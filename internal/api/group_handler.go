@@ -9,20 +9,17 @@ import (
 	"github.com/jrmarcco/hermet/internal/errs"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin"
 	"github.com/jrmarcco/hermet/internal/service"
-	"go.uber.org/zap"
 )
 
 var _ xgin.RouteRegistry = (*GroupHandler)(nil)
 
 type GroupHandler struct {
-	svc    service.GroupService
-	logger *zap.Logger
+	svc service.GroupService
 }
 
-func NewGroupHandler(svc service.GroupService, logger *zap.Logger) *GroupHandler {
+func NewGroupHandler(svc service.GroupService) *GroupHandler {
 	return &GroupHandler{
-		svc:    svc,
-		logger: logger,
+		svc: svc,
 	}
 }
 

@@ -7,8 +7,8 @@ import (
 
 	"github.com/jrmarcco/hermet/internal/domain"
 	"github.com/jrmarcco/hermet/internal/errs"
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/jrmarcco/hermet/internal/repo"
-	"go.uber.org/zap"
 )
 
 type ContactService interface {
@@ -27,23 +27,18 @@ type DefaultContactService struct {
 
 	contactRepo            repo.ContactRepo
 	contactApplicationRepo repo.ContactApplicationRepo
-
-	logger *zap.Logger
 }
 
 func NewDefaultContactService(
 	bizUserRepo repo.UserRepo,
 	contactRepo repo.ContactRepo,
 	contactApplicationRepo repo.ContactApplicationRepo,
-	logger *zap.Logger,
 ) *DefaultContactService {
 	return &DefaultContactService{
 		bizUserRepo: bizUserRepo,
 
 		contactRepo:            contactRepo,
 		contactApplicationRepo: contactApplicationRepo,
-
-		logger: logger,
 	}
 }
 
@@ -106,7 +101,7 @@ func (s *DefaultContactService) ReviewApplication(ctx context.Context, userID ui
 
 	err = s.contactApplicationRepo.UpdateStatus(ctx, event.ApplicationID, event.Status)
 	if err != nil {
-		s.logger.Error("[hermet] failed to review contact application", zap.Error(err))
+		logging.For("hermet").Error("failed to review contact application", "error", err)
 		return errors.New("failed to review contact application")
 	}
 

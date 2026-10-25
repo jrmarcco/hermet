@@ -3,10 +3,11 @@ package provider
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/jrmarcco/jit/xbean/option"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -14,9 +15,8 @@ import (
 var _ logger.Interface = (*GormLogger)(nil)
 
 // GormLogger 是 gorm logger 的装饰器。
-// 使用 zap 记录 gorm 的日志。
+// 使用 slog 记录 gorm 的日志 ( 与业务日志共用同一条管道 )。
 type GormLogger struct {
-	zapLogger                 *zap.Logger
 	logLevel                  logger.LogLevel
 	slowThreshold             time.Duration
 	ignoreRecordNotFoundError bool
@@ -40,66 +40,58 @@ func WithIgnoreRecordNotFoundError(ignore bool) option.Opt[GormLogger] {
 	}
 }
 
-func NewGormLogger(zLogger *zap.Logger, opts ...option.Opt[GormLogger]) *GormLogger {
+func NewGormLogger(opts ...option.Opt[GormLogger]) *GormLogger {
 	const defaultSlowThreshold = 100 * time.Millisecond
-	zl := &GormLogger{
-		zapLogger:                 zLogger,
-		logLevel:                  logger.Warn,
-		slowThreshold:             defaultSlowThreshold,
-		ignoreRecordNotFoundError: false,
+	gl := &GormLogger{
+		logLevel:      logger.Warn,
+		slowThreshold: defaultSlowThreshold,
 	}
 
-	option.Apply(zl, opts...)
-	return zl
+	option.Apply(gl, opts...)
+	return gl
 }
 
-func (zl *GormLogger) LogMode(level logger.LogLevel) logger.Interface {
-	newLogger := *zl
+func (gl *GormLogger) LogMode(level logger.LogLevel) logger.Interface {
+	newLogger := *gl
 	newLogger.logLevel = level
 	return &newLogger
 }
 
-func (zl *GormLogger) Info(_ context.Context, str string, args ...interface{}) {
-	if zl.logLevel < logger.Info {
+func (gl *GormLogger) Info(_ context.Context, str string, args ...interface{}) {
+	if gl.logLevel < logger.Info {
 		return
 	}
-	zl.zapLogger.Sugar().Infof(str, args...)
+	logging.For("gorm").Info(fmt.Sprintf(str, args...))
 }
 
-func (zl *GormLogger) Warn(_ context.Context, str string, args ...interface{}) {
-	if zl.logLevel < logger.Warn {
+func (gl *GormLogger) Warn(_ context.Context, str string, args ...interface{}) {
+	if gl.logLevel < logger.Warn {
 		return
 	}
-	zl.zapLogger.Sugar().Warnf(str, args...)
+	logging.For("gorm").Warn(fmt.Sprintf(str, args...))
 }
 
-func (zl *GormLogger) Error(_ context.Context, str string, args ...interface{}) {
-	if zl.logLevel < logger.Error {
+func (gl *GormLogger) Error(_ context.Context, str string, args ...interface{}) {
+	if gl.logLevel < logger.Error {
 		return
 	}
-	zl.zapLogger.Sugar().Errorf(str, args...)
+	logging.For("gorm").Error(fmt.Sprintf(str, args...))
 }
 
-func (zl *GormLogger) Trace(_ context.Context, begin time.Time, fc func() (string, int64), err error) {
-	if zl.logLevel <= logger.Silent {
+func (gl *GormLogger) Trace(_ context.Context, begin time.Time, fc func() (string, int64), err error) {
+	if gl.logLevel <= logger.Silent {
 		return
 	}
 
 	elapsed := time.Since(begin)
 	sql, rows := fc()
 
-	fields := []zap.Field{
-		zap.String("sql", sql),
-		zap.Duration("elapsed", elapsed),
-		zap.Int64("rows", rows),
-	}
-
 	switch {
-	case err != nil && zl.logLevel >= logger.Error && (!zl.ignoreRecordNotFoundError || !errors.Is(err, gorm.ErrRecordNotFound)):
-		zl.zapLogger.Error("gorm query error", append(fields, zap.Error(err))...)
-	case zl.slowThreshold != 0 && elapsed > zl.slowThreshold && zl.logLevel >= logger.Warn:
-		zl.zapLogger.Warn("gorm slow query", fields...)
-	case zl.logLevel >= logger.Info:
-		zl.zapLogger.Info("gorm query", fields...)
+	case err != nil && gl.logLevel >= logger.Error && (!gl.ignoreRecordNotFoundError || !errors.Is(err, gorm.ErrRecordNotFound)):
+		logging.For("gorm").Error("gorm query error", "sql", sql, "elapsed", elapsed, "rows", rows, "error", err)
+	case gl.slowThreshold != 0 && elapsed > gl.slowThreshold && gl.logLevel >= logger.Warn:
+		logging.For("gorm").Warn("gorm slow query", "sql", sql, "elapsed", elapsed, "rows", rows)
+	case gl.logLevel >= logger.Info:
+		logging.For("gorm").Info("gorm query", "sql", sql, "elapsed", elapsed, "rows", rows)
 	}
 }

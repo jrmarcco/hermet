@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/jrmarcco/jit/xpool"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 )
 
 // newBlockTaskPool 创建一个阻塞任务池。
@@ -50,7 +50,7 @@ import (
 //     错误处理队列或 worker 不够，增加 errQueueSize/errWorkerCnt。
 //   - runningCnt 长期贴近 maxG：
 //     容量不足或下游 grpc 变慢。
-func newBlockTaskPool(logger *zap.Logger, lifecycle fx.Lifecycle) (*xpool.BlockTaskPool, error) {
+func newBlockTaskPool(lifecycle fx.Lifecycle) (*xpool.BlockTaskPool, error) {
 	type config struct {
 		InitGoroutines int32 `mapstructure:"init_goroutines"`
 		CoreGoroutines int32 `mapstructure:"core_goroutines"`
@@ -97,18 +97,18 @@ func newBlockTaskPool(logger *zap.Logger, lifecycle fx.Lifecycle) (*xpool.BlockT
 	lifecycle.Append(fx.Hook{
 		OnStart: func(_ context.Context) error {
 			if err := pool.Start(); err != nil {
-				logger.Error("[xpool] failed to start block task pool", zap.Error(err))
+				logging.For("xpool").Error("failed to start block task pool", "error", err)
 				return fmt.Errorf("failed to start block task pool: %w", err)
 			}
-			logger.Info("[xpool] block task pool started")
+			logging.For("xpool").Info("block task pool started")
 			return nil
 		},
 		OnStop: func(_ context.Context) error {
 			if _, err := pool.Shutdown(); err != nil {
-				logger.Error("[xpool] failed to shutdown block task pool", zap.Error(err))
+				logging.For("xpool").Error("failed to shutdown block task pool", "error", err)
 				return fmt.Errorf("failed to shutdown block task pool: %w", err)
 			}
-			logger.Info("[xpool] block task pool shutdown")
+			logging.For("xpool").Info("block task pool shutdown")
 			return nil
 		},
 	})

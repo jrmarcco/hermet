@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/jrmarcco/hermet/internal/cdc"
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq/xconsumer"
 	"github.com/jrmarcco/hermet/internal/service"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 )
 
 // cdc_module.go 负责配置 CDC ( Change Data Capture ) 相关的依赖注入。
@@ -34,7 +34,6 @@ type cdcProcessorConfig struct {
 func newContactReviewCdcProcessor(
 	cdcService service.CDCService,
 	factory xconsumer.ConsumerFactory,
-	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
 ) (*cdc.ContactReviewProcessor, error) {
 	cfg, err := loadCdcProcessorConfig("mq.cdc.contact_review")
@@ -55,7 +54,7 @@ func newContactReviewCdcProcessor(
 	lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if err := processor.Start(ctx); err != nil {
-				zapLogger.Error("failed to start contact review processor", zap.Error(err))
+				logging.For("cdc").Error("failed to start contact review processor", "error", err)
 				return err
 			}
 			return nil
@@ -70,7 +69,6 @@ func newContactReviewCdcProcessor(
 func newContactCdcProcessor(
 	cdcService service.CDCService,
 	factory xconsumer.ConsumerFactory,
-	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
 ) (*cdc.ContactProcessor, error) {
 	cfg, err := loadCdcProcessorConfig("mq.cdc.contact")
@@ -91,7 +89,7 @@ func newContactCdcProcessor(
 	lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if err := processor.Start(ctx); err != nil {
-				zapLogger.Error("failed to start contact processor", zap.Error(err))
+				logging.For("cdc").Error("failed to start contact processor", "error", err)
 				return err
 			}
 			return nil
@@ -106,7 +104,6 @@ func newContactCdcProcessor(
 func newUserGroupCdcProcessor(
 	cdcService service.CDCService,
 	factory xconsumer.ConsumerFactory,
-	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
 ) (*cdc.UserGroupProcessor, error) {
 	cfg, err := loadCdcProcessorConfig("mq.cdc.user_group")
@@ -127,7 +124,7 @@ func newUserGroupCdcProcessor(
 	lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if err := processor.Start(ctx); err != nil {
-				zapLogger.Error("failed to start user group processor", zap.Error(err))
+				logging.For("cdc").Error("failed to start user group processor", "error", err)
 				return err
 			}
 			return nil
@@ -139,7 +136,6 @@ func newUserGroupCdcProcessor(
 func newGroupMemberCdcProcessor(
 	cdcService service.CDCService,
 	factory xconsumer.ConsumerFactory,
-	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
 ) (*cdc.GroupMemberProcessor, error) {
 	cfg, err := loadCdcProcessorConfig("mq.cdc.group_member")
@@ -160,7 +156,7 @@ func newGroupMemberCdcProcessor(
 	lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if err := processor.Start(ctx); err != nil {
-				zapLogger.Error("failed to start group member processor", zap.Error(err))
+				logging.For("cdc").Error("failed to start group member processor", "error", err)
 				return err
 			}
 			return nil
@@ -172,7 +168,6 @@ func newGroupMemberCdcProcessor(
 func newOutboxEventCdcProcessor(
 	cdcService service.CDCService,
 	factory xconsumer.ConsumerFactory,
-	zapLogger *zap.Logger,
 	lifecycle fx.Lifecycle,
 ) (*cdc.OutboxEventProcessor, error) {
 	cfg, err := loadCdcProcessorConfig("mq.cdc.outbox_event")
@@ -193,7 +188,7 @@ func newOutboxEventCdcProcessor(
 	lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			if err := processor.Start(ctx); err != nil {
-				zapLogger.Error("failed to start group member outbox processor", zap.Error(err))
+				logging.For("cdc").Error("failed to start group member outbox processor", "error", err)
 				return err
 			}
 			return nil

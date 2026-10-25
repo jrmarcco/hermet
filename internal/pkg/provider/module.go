@@ -11,7 +11,6 @@ import (
 )
 
 var (
-	ZapLoggerFxModule  = fx.Module("zap-logger", fx.Provide(newZapLogger))
 	EtcdFxModule       = fx.Module("etcd", fx.Provide(newEtcdClient))
 	RedisFxModule      = fx.Module("redis", fx.Provide(newRedisCmdable))
 	GoCacheFxModule    = fx.Module("go-cache", fx.Provide(newGoCache))

@@ -11,7 +11,6 @@ import (
 	"github.com/jrmarcco/xgrpc/register"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
@@ -35,8 +34,6 @@ type appFxParams struct {
 	GrpcServer   *grpc.Server
 	GrpcRegistry register.Registry
 	GrpcInstance register.ServiceInstance
-
-	Logger *zap.Logger
 
 	Lifecycle fx.Lifecycle
 }
@@ -84,8 +81,7 @@ func newApp(params appFxParams) (*App, error) {
 	}
 
 	app := &App{
-		svr:    svr,
-		logger: params.Logger,
+		svr: svr,
 
 		grpcServer:   params.GrpcServer,
 		grpcAddr:     grpcCfg.Addr,

@@ -1,7 +1,19 @@
-profile:
-  env: dev
-
 hermet:
+  # 日志配置
+  # mode:  dev ( 单行紧凑格式 ) | prod ( JSON，面向采集 )
+  # level: debug | info | warn | error
+  # color: auto | always | never ( 仅 dev 生效 )
+  # file:  可选落盘段 ( 终端 + 文件双写，lumberjack 按大小轮转 )
+  #   file:
+  #     path: /var/log/hermet/hermet.log
+  #     max_size_mb: 100    # 单文件上限，超过切割
+  #     max_backups: 7      # 保留旧文件份数 ( 0 保留全部 )
+  #     max_age_days: 30    # 旧文件保留天数 ( 0 不限 )
+  #     compress: true      # 旧文件 gzip 压缩
+  log:
+    mode: dev
+    level: info
+
   web:
     addr: :10081
     read_header_timeout: 5s # 读取请求头超时，防止 Slowloris 攻击

@@ -8,10 +8,10 @@ import (
 	"net/http/pprof"
 	"time"
 
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 )
 
 // AdminFxModule 提供运维管理端口 ( /metrics + /debug/pprof )。
@@ -26,7 +26,7 @@ type adminConfig struct {
 	ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
 }
 
-func startAdminServer(logger *zap.Logger, lifecycle fx.Lifecycle) error {
+func startAdminServer(lifecycle fx.Lifecycle) error {
 	cfg := adminConfig{}
 	if err := viper.UnmarshalKey("hermet.admin", &cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal admin config: %w", err)
@@ -61,11 +61,11 @@ func startAdminServer(logger *zap.Logger, lifecycle fx.Lifecycle) error {
 		OnStart: func(_ context.Context) error {
 			go func() {
 				if err := svr.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-					logger.Error("[admin] admin server exited with error", zap.Error(err))
+					logging.For("admin").Error("admin server exited with error", "error", err)
 				}
 			}()
 
-			logger.Info("[admin] admin server started", zap.String("addr", cfg.Addr))
+			logging.For("admin").Info("admin server started", "addr", cfg.Addr)
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {

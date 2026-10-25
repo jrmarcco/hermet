@@ -10,10 +10,10 @@ import (
 	"github.com/jrmarcco/hermet/internal/cdc/event"
 	"github.com/jrmarcco/hermet/internal/domain"
 	"github.com/jrmarcco/hermet/internal/errs"
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -64,8 +64,6 @@ type DefaultCDCService struct {
 
 	contactRepo repo.ContactRepo
 	channelRepo repo.ChannelRepo
-
-	logger *zap.Logger
 }
 
 func NewDefaultCDCService(
@@ -76,7 +74,6 @@ func NewDefaultCDCService(
 	groupMemberRepo repo.GroupMemberRepo,
 	contactRepo repo.ContactRepo,
 	channelRepo repo.ChannelRepo,
-	logger *zap.Logger,
 ) *DefaultCDCService {
 	return &DefaultCDCService{
 		rdb: rdb,
@@ -89,8 +86,6 @@ func NewDefaultCDCService(
 
 		contactRepo: contactRepo,
 		channelRepo: channelRepo,
-
-		logger: logger,
 	}
 }
 
@@ -108,7 +103,7 @@ func (s *DefaultCDCService) ProcessContactReview(ctx context.Context, msg *xmq.M
 	// 幂等性判断 ( 防止重复处理相同的联系人申请事件 )。
 	cacheKey := fmt.Sprintf("contact:review:%d", evt.ID)
 	if exists, _ := s.rdb.Exists(ctx, cacheKey).Result(); exists > 0 {
-		s.logger.Debug("[cdc-contact-review] contact review already processed", zap.Uint64("review_id", evt.ID))
+		logging.For("cdc-contact-review").Debug("contact review already processed", "review_id", evt.ID)
 		return nil
 	}
 
@@ -138,10 +133,10 @@ func (s *DefaultCDCService) ProcessContactReview(ctx context.Context, msg *xmq.M
 	})
 
 	if err := eg.Wait(); err != nil {
-		s.logger.Error(
-			"[cdc-contact-review] failed to create contact relation",
-			zap.Uint64("review_id", evt.ID),
-			zap.Error(err),
+		logging.For("cdc-contact-review").Error(
+			"failed to create contact relation",
+			"review_id", evt.ID,
+			"error", err,
 		)
 		return err
 	}
@@ -234,10 +229,10 @@ func (s *DefaultCDCService) createChannel(ctx context.Context, channel domain.Ch
 	// 幂等性判断 ( 防止重复处理相同的联系人关系建立事件 )。
 	cacheKey := fmt.Sprintf("channel:create:%s-%d-%d", channel.ChannelType, channel.UserID, channel.TargetID)
 	if exists, _ := s.rdb.Exists(ctx, cacheKey).Result(); exists > 0 {
-		s.logger.Debug(
-			"[cdc-channel] channel already processed",
-			zap.Uint64("user_id", channel.UserID),
-			zap.Uint64("target_id", channel.TargetID),
+		logging.For("cdc-channel").Debug(
+			"channel already processed",
+			"user_id", channel.UserID,
+			"target_id", channel.TargetID,
 		)
 		return nil
 	}
@@ -249,7 +244,7 @@ func (s *DefaultCDCService) createChannel(ctx context.Context, channel domain.Ch
 
 	// 创建会话 ( 这里消费的是联系人关系建立事件，只需要创建会话即可 )。
 	if err := s.channelRepo.Create(ctx, channel); err != nil {
-		s.logger.Error("[cdc-contact] failed to create channel for contact", zap.Error(err))
+		logging.For("cdc-contact").Error("failed to create channel for contact", "error", err)
 		return err
 	}
 
@@ -268,7 +263,7 @@ func (s *DefaultCDCService) fillInChannelRedundant(ctx context.Context, channel 
 		user, err := s.userRepo.FindByID(ctx, channel.TargetID)
 		if err != nil {
 			if errors.Is(err, errs.ErrRecordNotFound) {
-				s.logger.Error("[cdc-user-group] user not found", zap.Uint64("user_id", channel.TargetID), zap.Error(err))
+				logging.For("cdc-user-group").Error("user not found", "user_id", channel.TargetID, "error", err)
 				return err
 			}
 			return fmt.Errorf("failed to find user: %w", err)
@@ -283,7 +278,7 @@ func (s *DefaultCDCService) fillInChannelRedundant(ctx context.Context, channel 
 		group, err := s.groupRepo.FindByID(ctx, channel.TargetID)
 		if err != nil {
 			if errors.Is(err, errs.ErrRecordNotFound) {
-				s.logger.Error("[cdc-user-group] chat group not found", zap.Uint64("group_id", channel.TargetID), zap.Error(err))
+				logging.For("cdc-user-group").Error("chat group not found", "group_id", channel.TargetID, "error", err)
 				return err
 			}
 			return fmt.Errorf("failed to find chat group: %w", err)
@@ -322,7 +317,7 @@ func (s *DefaultCDCService) ProcessGroupMember(ctx context.Context, msg *xmq.Mes
 	user, err := s.userRepo.FindByID(ctx, evt.UserID)
 	if err != nil {
 		if errors.Is(err, errs.ErrRecordNotFound) {
-			s.logger.Error("[cdc-group-member] user not found", zap.Uint64("user_id", evt.UserID), zap.Error(err))
+			logging.For("cdc-group-member").Error("user not found", "user_id", evt.UserID, "error", err)
 			return err
 		}
 		return fmt.Errorf("failed to find user: %w", err)
@@ -351,10 +346,10 @@ func (s *DefaultCDCService) createGmv(ctx context.Context, gmv domain.GroupMembe
 	// 幂等性判断 ( 防止重复处理相同的聊天群成员添加事件 )。
 	cacheKey := fmt.Sprintf("group:member:create:%d-%d", gmv.GroupID, gmv.UserID)
 	if exists, _ := s.rdb.Exists(ctx, cacheKey).Result(); exists > 0 {
-		s.logger.Debug(
-			"[cdc-group-member] group member already processed",
-			zap.Uint64("group_id", gmv.GroupID),
-			zap.Uint64("user_id", gmv.UserID),
+		logging.For("cdc-group-member").Debug(
+			"group member already processed",
+			"group_id", gmv.GroupID,
+			"user_id", gmv.UserID,
 		)
 		return nil
 	}
@@ -388,10 +383,10 @@ func (s *DefaultCDCService) ProcessOutboxEvent(ctx context.Context, msg *xmq.Mes
 
 	cacheKey := fmt.Sprintf("group:member:outbox:%d-%d", gmOutboxEvent.GroupID, gmOutboxEvent.UserID)
 	if exists, _ := s.rdb.Exists(ctx, cacheKey).Result(); exists > 0 {
-		s.logger.Debug(
-			"[cdc-group-member-outbox] group member outbox already processed",
-			zap.Uint64("group_id", gmOutboxEvent.GroupID),
-			zap.Uint64("user_id", gmOutboxEvent.UserID),
+		logging.For("cdc-group-member-outbox").Debug(
+			"group member outbox already processed",
+			"group_id", gmOutboxEvent.GroupID,
+			"user_id", gmOutboxEvent.UserID,
 		)
 		return nil
 	}

@@ -7,9 +7,9 @@ import (
 
 	"github.com/jrmarcco/hermet/internal/domain"
 	"github.com/jrmarcco/hermet/internal/mq"
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/repo"
-	"go.uber.org/zap"
 )
 
 type GroupService interface {
@@ -26,23 +26,18 @@ type DefaultGroupService struct {
 
 	groupRepo       repo.GroupRepo
 	groupMemberRepo repo.GroupMemberRepo
-
-	logger *zap.Logger
 }
 
 func NewDefaultGroupService(
 	gmProducer mq.Producer,
 	groupRepo repo.GroupRepo,
 	groupMemberRepo repo.GroupMemberRepo,
-	logger *zap.Logger,
 ) (*DefaultGroupService, error) {
 	return &DefaultGroupService{
 		gmProducer: gmProducer,
 
 		groupRepo:       groupRepo,
 		groupMemberRepo: groupMemberRepo,
-
-		logger: logger,
 	}, nil
 }
 
@@ -110,24 +105,24 @@ func (s *DefaultGroupService) ProcessAddMembersMsg(ctx context.Context, msg *xmq
 		// TODO: 需要增加成员添加失败处理。
 		// 1. 指数退避重试 3 次 ( 1s -> 2s -> 4s )。
 		// 2. 如果 3 次重试都失败，转发消息到死信队列 ( DLQ )。
-		s.logger.Error(
-			"[chat-group-service] failed to add members, batch skipped",
-			zap.Uint64("group_id", event.GID),
-			zap.Error(err),
+		logging.For("chat-group-service").Error(
+			"failed to add members, batch skipped",
+			"group_id", event.GID,
+			"error", err,
 		)
 	}
 
 	if event.IsLastBatch {
 		if err := s.groupRepo.UpdateStatus(ctx, event.GID, string(domain.ChatGroupStatusActive)); err != nil {
-			s.logger.Error(
-				"[chat-group-service] failed to update chat group status to active",
-				zap.Uint64("group_id", event.GID),
-				zap.Error(err),
+			logging.For("chat-group-service").Error(
+				"failed to update chat group status to active",
+				"group_id", event.GID,
+				"error", err,
 			)
 		}
-		s.logger.Debug(
-			"[chat-group-service] chat group activated successfully",
-			zap.Uint64("group_id", event.GID),
+		logging.For("chat-group-service").Debug(
+			"chat group activated successfully",
+			"group_id", event.GID,
 		)
 	}
 	return nil

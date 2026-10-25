@@ -7,6 +7,7 @@ import (
 	"github.com/jrmarcco/hermet/internal/app"
 	"github.com/jrmarcco/hermet/internal/bootstrap"
 	"github.com/jrmarcco/hermet/internal/grpc"
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/jrmarcco/hermet/internal/pkg/provider"
 	"github.com/jrmarcco/hermet/internal/repo"
 	"github.com/jrmarcco/hermet/internal/repo/dao"
@@ -16,7 +17,6 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
-	"go.uber.org/zap"
 )
 
 func main() {
@@ -24,13 +24,15 @@ func main() {
 		panic(err)
 	}
 
-	fx.New(
-		fx.WithLogger(func(logger *zap.Logger) fxevent.Logger {
-			return &fxevent.ZapLogger{Logger: logger}
-		}),
+	// 日志装配必须先于 fx：fx 的事件日志在装配最早期求值。
+	cleanupLogging := provider.SetupLogging()
+	defer cleanupLogging()
 
-		// 初始化 zap.logger。
-		provider.ZapLoggerFxModule,
+	fx.New(
+		// fx 事件日志与业务日志共用同一条 slog 管道。
+		fx.WithLogger(func() fxevent.Logger {
+			return &fxevent.SlogLogger{Logger: logging.For("fx")}
+		}),
 
 		// 初始化 etcd client。
 		provider.EtcdFxModule,

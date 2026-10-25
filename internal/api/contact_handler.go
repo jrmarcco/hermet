@@ -9,7 +9,6 @@ import (
 	"github.com/jrmarcco/hermet/internal/errs"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin"
 	"github.com/jrmarcco/hermet/internal/service"
-	"go.uber.org/zap"
 )
 
 var _ xgin.RouteRegistry = (*ContactHandler)(nil)
@@ -18,15 +17,12 @@ var _ xgin.RouteRegistry = (*ContactHandler)(nil)
 type ContactHandler struct {
 	userSvc    service.UserService
 	contactSvc service.ContactService
-
-	logger *zap.Logger
 }
 
-func NewContactHandler(userSvc service.UserService, contactSvc service.ContactService, logger *zap.Logger) *ContactHandler {
+func NewContactHandler(userSvc service.UserService, contactSvc service.ContactService) *ContactHandler {
 	return &ContactHandler{
 		userSvc:    userSvc,
 		contactSvc: contactSvc,
-		logger:     logger,
 	}
 }
 

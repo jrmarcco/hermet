@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v9"
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/jrmarcco/hermet/internal/pkg/provider"
 	"github.com/jrmarcco/hermet/internal/pkg/sharding"
 	"github.com/jrmarcco/hermet/internal/pkg/sharding/idgen/snowflake"
@@ -21,7 +22,6 @@ import (
 	"github.com/jrmarcco/jit/xsync"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -43,13 +43,9 @@ func run() error {
 		return fmt.Errorf("failed to read config: %w", err)
 	}
 
-	logger, err := zap.NewProduction()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = logger.Sync()
-	}()
+	// 与主服务共用同一条日志管道 ( hermet.log 配置段 )。
+	cleanupLogging := provider.SetupLogging()
+	defer cleanupLogging()
 
 	esCfg, err := loadEsConfig()
 	if err != nil {
@@ -73,7 +69,7 @@ func run() error {
 		return err
 	}
 
-	reindexer := search.NewReindexer(dbs, msgShard, esClient, esCfg.MessageIndex, logger)
+	reindexer := search.NewReindexer(dbs, msgShard, esClient, esCfg.MessageIndex)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
@@ -84,9 +80,9 @@ func run() error {
 		return fmt.Errorf("reindex failed ( indexed %d docs ): %w", total, err)
 	}
 
-	logger.Info("reindex done",
-		zap.Int64("total", total),
-		zap.Duration("elapsed", time.Since(start)),
+	logging.For("reindex").Info("reindex done",
+		"total", total,
+		"elapsed", time.Since(start),
 	)
 	return nil
 }

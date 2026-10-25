@@ -11,13 +11,13 @@ import (
 	"github.com/jrmarcco/hermet/internal/domain"
 	"github.com/jrmarcco/hermet/internal/errs"
 	"github.com/jrmarcco/hermet/internal/mq"
+	"github.com/jrmarcco/hermet/internal/pkg/logging"
 	"github.com/jrmarcco/hermet/internal/pkg/sharding"
 	"github.com/jrmarcco/hermet/internal/pkg/sharding/idgen"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/repo"
 	messagev1 "github.com/jrmarcco/synp-api/api/go/message/v1"
 	"github.com/jrmarcco/xgrpc/client"
-	"go.uber.org/zap"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -64,8 +64,6 @@ type DefaultMessageService struct {
 	fanoutCfg MessageFanoutConfig
 
 	idgen idgen.Generator
-
-	logger *zap.Logger
 }
 
 func NewDefaultMessageService(
@@ -82,8 +80,6 @@ func NewDefaultMessageService(
 	fanoutCfg MessageFanoutConfig,
 
 	gen idgen.Generator,
-
-	logger *zap.Logger,
 ) *DefaultMessageService {
 	return &DefaultMessageService{
 		messageRepo: messageRepo,
@@ -99,8 +95,6 @@ func NewDefaultMessageService(
 		fanoutCfg: fanoutCfg,
 
 		idgen: gen,
-
-		logger: logger,
 	}
 }
 
@@ -116,10 +110,10 @@ func NewDefaultMessageService(
 func (s *DefaultMessageService) ProcessUpstreamMsg(ctx context.Context, upstreamMsg *xmq.Message) error {
 	stamped := &messagev1.UpstreamMessage{}
 	if err := protojson.Unmarshal(upstreamMsg.Val, stamped); err != nil {
-		s.logger.Error(
-			"[message-service] failed to unmarshal upstream message, skip",
-			zap.ByteString("val", upstreamMsg.Val),
-			zap.Error(err),
+		logging.For("message-service").Error(
+			"failed to unmarshal upstream message, skip",
+			"val", upstreamMsg.Val,
+			"error", err,
 		)
 		return nil
 	}
@@ -133,11 +127,11 @@ func (s *DefaultMessageService) ProcessUpstreamMsg(ctx context.Context, upstream
 
 	body := &domain.Message{}
 	if err := json.Unmarshal(stamped.GetBody(), body); err != nil {
-		s.logger.Error(
-			"[message-service] failed to unmarshal upstream body, skip",
-			zap.String("message_id", stamped.GetMessageId()),
-			zap.Uint64("sender_id", senderID),
-			zap.Error(err),
+		logging.For("message-service").Error(
+			"failed to unmarshal upstream body, skip",
+			"message_id", stamped.GetMessageId(),
+			"sender_id", senderID,
+			"error", err,
 		)
 		return nil
 	}
@@ -148,10 +142,10 @@ func (s *DefaultMessageService) ProcessUpstreamMsg(ctx context.Context, upstream
 	case domain.ChannelTypeGroup:
 		return s.processGroupChat(ctx, stamped, businessID, senderID, body)
 	default:
-		s.logger.Error(
-			"[message-service] unknown destination type, skip",
-			zap.String("message_id", stamped.GetMessageId()),
-			zap.String("destination_type", string(body.DestinationType)),
+		logging.For("message-service").Error(
+			"unknown destination type, skip",
+			"message_id", stamped.GetMessageId(),
+			"destination_type", string(body.DestinationType),
 		)
 		return nil
 	}
@@ -165,11 +159,11 @@ func (s *DefaultMessageService) processSingleChat(
 ) error {
 	receiverID := body.DestinationID
 	if receiverID == 0 || receiverID == senderID {
-		s.logger.Error(
-			"[message-service] invalid single chat destination, skip",
-			zap.String("message_id", stamped.GetMessageId()),
-			zap.Uint64("sender_id", senderID),
-			zap.Uint64("receiver_id", receiverID),
+		logging.For("message-service").Error(
+			"invalid single chat destination, skip",
+			"message_id", stamped.GetMessageId(),
+			"sender_id", senderID,
+			"receiver_id", receiverID,
 		)
 		return nil
 	}
@@ -177,12 +171,12 @@ func (s *DefaultMessageService) processSingleChat(
 	if err := s.validateContact(ctx, senderID, receiverID); err != nil {
 		// 业务级失败不通过 UPSTREAM_ACK 表达 ( 网关级回执与业务结果解耦，见契约 )，
 		// 后续可作为系统消息走同步链路下发，当前先记录日志。
-		s.logger.Warn(
-			"[message-service] single chat validation failed, skip",
-			zap.String("message_id", stamped.GetMessageId()),
-			zap.Uint64("sender_id", senderID),
-			zap.Uint64("receiver_id", receiverID),
-			zap.Error(err),
+		logging.For("message-service").Warn(
+			"single chat validation failed, skip",
+			"message_id", stamped.GetMessageId(),
+			"sender_id", senderID,
+			"receiver_id", receiverID,
+			"error", err,
 		)
 		return nil
 	}
@@ -244,10 +238,10 @@ func (s *DefaultMessageService) processGroupChat(
 ) error {
 	groupID := body.DestinationID
 	if groupID == 0 {
-		s.logger.Error(
-			"[message-service] invalid group destination, skip",
-			zap.String("message_id", stamped.GetMessageId()),
-			zap.Uint64("sender_id", senderID),
+		logging.For("message-service").Error(
+			"invalid group destination, skip",
+			"message_id", stamped.GetMessageId(),
+			"sender_id", senderID,
 		)
 		return nil
 	}
@@ -258,11 +252,11 @@ func (s *DefaultMessageService) processGroupChat(
 		return fmt.Errorf("failed to check group membership: %w", err)
 	}
 	if !active {
-		s.logger.Warn(
-			"[message-service] sender is not an active group member, skip",
-			zap.String("message_id", stamped.GetMessageId()),
-			zap.Uint64("sender_id", senderID),
-			zap.Uint64("group_id", groupID),
+		logging.For("message-service").Warn(
+			"sender is not an active group member, skip",
+			"message_id", stamped.GetMessageId(),
+			"sender_id", senderID,
+			"group_id", groupID,
 		)
 		return nil
 	}
@@ -272,10 +266,10 @@ func (s *DefaultMessageService) processGroupChat(
 		return fmt.Errorf("failed to list group members: %w", err)
 	}
 	if len(memberIDs) == 0 {
-		s.logger.Warn(
-			"[message-service] group has no active members, skip",
-			zap.String("message_id", stamped.GetMessageId()),
-			zap.Uint64("group_id", groupID),
+		logging.For("message-service").Warn(
+			"group has no active members, skip",
+			"message_id", stamped.GetMessageId(),
+			"group_id", groupID,
 		)
 		return nil
 	}
@@ -365,11 +359,11 @@ func (s *DefaultMessageService) notify(ctx context.Context, messageID string, bu
 	val, err := protojson.Marshal(notifyMsg)
 	if err != nil {
 		// proto 序列化失败属于代码缺陷，记录后丢弃该条通知 ( 通知可丢 )。
-		s.logger.Error(
-			"[message-service] failed to marshal notify message",
-			zap.String("message_id", messageID),
-			zap.Uint64("receiver_id", receiverID),
-			zap.Error(err),
+		logging.For("message-service").Error(
+			"failed to marshal notify message",
+			"message_id", messageID,
+			"receiver_id", receiverID,
+			"error", err,
 		)
 		return
 	}
@@ -377,11 +371,11 @@ func (s *DefaultMessageService) notify(ctx context.Context, messageID string, bu
 	key := fmt.Appendf(nil, "%d:%d", businessID, receiverID)
 	if err := s.notifyProducer.Produce(ctx, key, val); err != nil {
 		// 通知失败无需重试 ( 只影响实时性，客户端重连/心跳时主动 SYNC 兜底 )。
-		s.logger.Warn(
-			"[message-service] failed to produce notify message",
-			zap.String("message_id", messageID),
-			zap.Uint64("receiver_id", receiverID),
-			zap.Error(err),
+		logging.For("message-service").Warn(
+			"failed to produce notify message",
+			"message_id", messageID,
+			"receiver_id", receiverID,
+			"error", err,
 		)
 	}
 }
@@ -443,10 +437,10 @@ func (s *DefaultMessageService) emitIndexEvent(
 
 	val, err := json.Marshal(event)
 	if err != nil {
-		s.logger.Error(
-			"[message-service] failed to marshal index event",
-			zap.String("message_id", messageID),
-			zap.Error(err),
+		logging.For("message-service").Error(
+			"failed to marshal index event",
+			"message_id", messageID,
+			"error", err,
 		)
 		return
 	}
@@ -454,10 +448,10 @@ func (s *DefaultMessageService) emitIndexEvent(
 	// 分区键 conversation_id: 同会话事件有序 ( 利于 bulk 局部性 )。
 	key := []byte(conversationID)
 	if err := s.indexProducer.Produce(ctx, key, val); err != nil {
-		s.logger.Warn(
-			"[message-service] failed to produce index event ( reindex 可补 )",
-			zap.String("message_id", messageID),
-			zap.Error(err),
+		logging.For("message-service").Warn(
+			"failed to produce index event ( reindex 可补 )",
+			"message_id", messageID,
+			"error", err,
 		)
 	}
 }
