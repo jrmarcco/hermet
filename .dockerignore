@@ -1,0 +1,21 @@
+# 构建上下文裁剪: 加快传输、避免敏感文件进入构建层。
+.git
+.gitignore
+.idea
+.vscode
+.editorconfig
+
+# 本地部署产物 ( 含私钥与数据 )
+scripts/docker/
+
+# 文档与本地工具不参与构建
+docs/
+api_test.http
+LICENSE
+README.md
+Makefile
+
+# 本地构建产物
+bin/
+*.out
+coverage.*
