@@ -30,7 +30,7 @@ func (h *ChannelHandler) Register(engine *gin.Engine) {
 }
 
 type getChannelResp struct {
-	ID uint64 `json:"id"`
+	ID xgin.U64 `json:"id"`
 
 	// 会话目的地 ID ( 用于唯一标识一个会话 )。
 	// 取值规则:
@@ -41,9 +41,9 @@ type getChannelResp struct {
 	// 	  DestinationID = TargetID。
 	DestinationID string `json:"destination"`
 
-	UserID        uint64 `json:"userId"`
-	TargetID      uint64 `json:"targetId"`
-	TargetInfoVer int    `json:"targetInfoVer"`
+	UserID        xgin.U64 `json:"userId"`
+	TargetID      xgin.U64 `json:"targetId"`
+	TargetInfoVer int      `json:"targetInfoVer"`
 
 	ChannelType   string `json:"channelType"`
 	ChannelName   string `json:"channelName"`
@@ -55,12 +55,12 @@ type getChannelResp struct {
 	IsHidden  bool `json:"isHidden"`
 	IsStarred bool `json:"isStarred"`
 
-	LastMessageID         uint64 `json:"lastMessageId"`
-	LastMessageType       string `json:"lastMessageType"`
-	LastMessageContent    string `json:"lastMessageContent"`
-	LastMessageSenderID   uint64 `json:"lastMessageSenderId"`
-	LastMessageSenderName string `json:"lastMessageSenderName"`
-	LastMessageTime       int64  `json:"lastMessageTime"`
+	LastMessageID         xgin.U64 `json:"lastMessageId"`
+	LastMessageType       string   `json:"lastMessageType"`
+	LastMessageContent    string   `json:"lastMessageContent"`
+	LastMessageSenderID   xgin.U64 `json:"lastMessageSenderId"`
+	LastMessageSenderName string   `json:"lastMessageSenderName"`
+	LastMessageTime       int64    `json:"lastMessageTime"`
 
 	UnreadCount  int `json:"unreadCount"`
 	MentionCount int `json:"mentionCount"`
@@ -75,11 +75,11 @@ func (h *ChannelHandler) GetChannels(ctx *gin.Context, au xgin.ContextUser) (xgi
 	data := make([]getChannelResp, 0, len(channels))
 	for i := range channels {
 		data = append(data, getChannelResp{
-			ID:            channels[i].ID,
+			ID:            xgin.U64(channels[i].ID),
 			DestinationID: relationID(channels[i].UserID, channels[i].TargetID, channels[i].ChannelType),
 
-			UserID:        channels[i].UserID,
-			TargetID:      channels[i].TargetID,
+			UserID:        xgin.U64(channels[i].UserID),
+			TargetID:      xgin.U64(channels[i].TargetID),
 			TargetInfoVer: channels[i].TargetInfoVer,
 
 			ChannelType:   string(channels[i].ChannelType),
@@ -90,10 +90,10 @@ func (h *ChannelHandler) GetChannels(ctx *gin.Context, au xgin.ContextUser) (xgi
 			IsMuted:  channels[i].IsMuted,
 			IsPinned: channels[i].IsPinned,
 
-			LastMessageID:         channels[i].LastMessageID,
+			LastMessageID:         xgin.U64(channels[i].LastMessageID),
 			LastMessageType:       channels[i].LastMessageType,
 			LastMessageContent:    channels[i].LastMessageContent,
-			LastMessageSenderID:   channels[i].LastMessageSenderID,
+			LastMessageSenderID:   xgin.U64(channels[i].LastMessageSenderID),
 			LastMessageSenderName: channels[i].LastMessageSenderName,
 			LastMessageTime:       channels[i].LastMessageTime,
 

@@ -2,12 +2,14 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jrmarcco/hermet/internal/domain"
+	"github.com/jrmarcco/hermet/internal/errs"
 	"github.com/jrmarcco/hermet/internal/pkg/xgin"
 	"github.com/jrmarcco/hermet/internal/pkg/xmq"
 	"github.com/jrmarcco/hermet/internal/service"
@@ -52,12 +54,29 @@ type addUserRequest struct {
 }
 
 func (h *AdminHandler) AddUser(ctx *gin.Context, req addUserRequest) (xgin.R, error) {
+	if req.Email == "" && req.Mobile == "" {
+		return xgin.R{}, fmt.Errorf("%w: email or mobile is required", errs.ErrInvalidParam)
+	}
+	if req.Nickname == "" {
+		return xgin.R{}, fmt.Errorf("%w: nickname is required", errs.ErrInvalidParam)
+	}
+
+	// gender 缺省按 unknown 处理，非法取值直接拒绝——
+	// 否则会穿透到数据库触发 check 约束，以 500 泄漏内部 SQL 错误。
+	gender := domain.UserGender(req.Gender)
+	if gender == "" {
+		gender = domain.UserGenderUnknown
+	}
+	if !gender.IsValid() {
+		return xgin.R{}, fmt.Errorf("%w: invalid gender", errs.ErrInvalidParam)
+	}
+
 	if err := h.userService.AddUser(ctx, domain.BizUser{
 		Email:    req.Email,
 		Mobile:   req.Mobile,
 		Nickname: req.Nickname,
 		Avatar:   req.Avatar,
-		Gender:   domain.UserGender(req.Gender),
+		Gender:   gender,
 		Region:   req.Region,
 		Birthday: req.Birthday,
 		Tagline:  req.Tagline,
@@ -71,18 +90,18 @@ func (h *AdminHandler) AddUser(ctx *gin.Context, req addUserRequest) (xgin.R, er
 }
 
 type sendMsgRequest struct {
-	SenderID        uint64 `json:"senderId"`
-	DestinationID   uint64 `json:"destinationId"`
-	DestinationType string `json:"destinationType"`
-	Content         string `json:"content"`
+	SenderID        xgin.U64 `json:"senderId"`
+	DestinationID   xgin.U64 `json:"destinationId"`
+	DestinationType string   `json:"destinationType"`
+	Content         string   `json:"content"`
 }
 
 func (h *AdminHandler) SendMessage(ctx *gin.Context, req sendMsgRequest) (xgin.R, error) {
 	body := domain.Message{
 		ID:  uuid.NewString(),
-		SID: req.SenderID,
+		SID: uint64(req.SenderID),
 
-		DestinationID:   req.DestinationID,
+		DestinationID:   uint64(req.DestinationID),
 		DestinationType: domain.ChannelType(req.DestinationType),
 
 		Content:     []byte(req.Content),
@@ -97,7 +116,7 @@ func (h *AdminHandler) SendMessage(ctx *gin.Context, req sendMsgRequest) (xgin.R
 	}
 
 	// 模拟网关盖章后的 UpstreamMessage ( protojson 编码 )。
-	senderID := req.SenderID
+	senderID := uint64(req.SenderID)
 	if senderID == 0 {
 		senderID = 1
 	}

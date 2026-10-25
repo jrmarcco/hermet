@@ -10,39 +10,93 @@ import (
 type ContentType string
 
 const (
-	ContentTypeText  ContentType = "text"
-	ContentTypeImage ContentType = "image"
+	ContentTypeText   ContentType = "text"
+	ContentTypeImage  ContentType = "image"
+	ContentTypeSystem ContentType = "system"
 )
+
+// SystemTypeSendFailed 系统回执类型: UPSTREAM 消息业务级发送失败。
+const SystemTypeSendFailed = "send_failed"
+
+// SendFailReason 业务级发送失败原因 ( 系统回执 body.reason )。
+type SendFailReason string
+
+const (
+	// SendFailReasonNotAllowed 目的地存在但无权发送 ( 非好友 / 被屏蔽 / 非群成员 )。
+	SendFailReasonNotAllowed SendFailReason = "not_allowed"
+	// SendFailReasonInvalidDestination 目的地非法 ( 缺失 / 指向自己 / 未知类型 )。
+	SendFailReasonInvalidDestination SendFailReason = "invalid_destination"
+	// SendFailReasonInvalidBody body 不是合法的业务消息 JSON。
+	SendFailReasonInvalidBody SendFailReason = "invalid_body"
+)
+
+// NoticeText 返回面向发送者的回执文案 ( 不透出内部实现细节 )。
+func (r SendFailReason) NoticeText() string {
+	switch r {
+	case SendFailReasonNotAllowed:
+		return "消息发送失败: 对方不是你的联系人或你不是群成员"
+	case SendFailReasonInvalidDestination:
+		return "消息发送失败: 目的地不存在或类型非法"
+	case SendFailReasonInvalidBody:
+		return "消息发送失败: 消息体格式非法"
+	default:
+		return "消息发送失败"
+	}
+}
+
+// SystemNotice 是系统回执的 body 格式 ( contentType = system )。
+// 客户端按 system 字段识别，未识别的客户端可退化为按 content 文本渲染。
+type SystemNotice struct {
+	SystemType string `json:"systemType"`
+
+	// Reason 取 SendFailReason 常量。
+	Reason string `json:"reason"`
+
+	// UpstreamID 触发本次回执的 UPSTREAM 帧 message_id，
+	// 发送端以此关联本地 pending 消息。
+	UpstreamID string `json:"upstreamId"`
+
+	// Content 面向用户的文案。
+	Content string `json:"content"`
+}
 
 // Message 对应网关 UPSTREAM 帧 body 的业务格式 ( 前端自定义，后端只透传 )。
 //
 // 注意: 身份字段以网关盖章的 UpstreamMessage 为准 ( 契约安全前提 )，
 // body 内自报的 SID 仅作展示用途，不做权限判断依据。
 type Message struct {
-	ID string // 消息 ID
+	ID string `json:"id"` // 消息 ID
 
-	SID uint64 // Sender ID ( 发送者 ID )
-	MID uint64 // Message ID ( 这里指的是网关消息的 ID )
+	SID uint64 `json:"sid"` // Sender ID ( 发送者 ID )
+	MID uint64 `json:"mid"` // Message ID ( 这里指的是网关消息的 ID )
 
-	DestinationID   uint64      // Destination ID ( 目的地 ID：用户 ID 或 群 ID )
-	DestinationType ChannelType // Destination Type ( 目的地类型 )
+	DestinationID   uint64      `json:"destinationId"`   // Destination ID ( 目的地 ID：用户 ID 或 群 ID )
+	DestinationType ChannelType `json:"destinationType"` // Destination Type ( 目的地类型 )
 
-	Content     []byte      // 消息内容
-	ContentType ContentType // 消息类型
+	Content     []byte      `json:"content"`     // 消息内容
+	ContentType ContentType `json:"contentType"` // 消息类型
 
-	SendAt int64 // 消息发送时间 ( 统一使用服务器时间 )
+	SendAt int64 `json:"sendAt"` // 消息发送时间 ( 统一使用服务器时间 )
 }
 
-// UnmarshalJSON 兼容前端字符串形式的 content。
+// UnmarshalJSON 兼容前端的历史与现状编码:
 //
-// Content 为 []byte 时标准库期望 base64，而业务契约语义是明文字符串
-// ( 见 docs/frontend-api.md §5 )——这里显式按字符串接收。
+//   - Content 为 []byte 时标准库期望 base64，而业务契约语义是明文字符串
+//     ( 见 docs/frontend-api.md §5 )——这里显式按字符串接收。
+//   - int64 ID 字段同时接受十进制字符串与数字字面量: ID 超出 JS 安全整数
+//     范围时前端只能以字符串承载 ( 服务端响应也已统一字符串化 )，
+//     字符串形态的 destinationId 不再被静默丢弃。
 func (m *Message) UnmarshalJSON(data []byte) error {
 	type alias Message
 
 	aux := struct {
 		*alias
+
 		Content *string `json:"content"`
+
+		SID           *flexibleU64 `json:"sid"`
+		MID           *flexibleU64 `json:"mid"`
+		DestinationID *flexibleU64 `json:"destinationId"`
 	}{alias: (*alias)(m)}
 
 	if err := json.Unmarshal(data, &aux); err != nil {
@@ -51,6 +105,52 @@ func (m *Message) UnmarshalJSON(data []byte) error {
 	if aux.Content != nil {
 		m.Content = []byte(*aux.Content)
 	}
+	if aux.SID != nil {
+		m.SID = uint64(*aux.SID)
+	}
+	if aux.MID != nil {
+		m.MID = uint64(*aux.MID)
+	}
+	if aux.DestinationID != nil {
+		m.DestinationID = uint64(*aux.DestinationID)
+	}
+	return nil
+}
+
+// MarshalJSON 与 UnmarshalJSON 对称: Content 按明文字符串序列化。
+//
+// 标准库对 []byte 做 base64 编码，与业务契约的明文语义不符
+// ( 管理端测试接口会经 Marshal -> UnmarshalJSON 往返 )。
+func (m Message) MarshalJSON() ([]byte, error) {
+	type alias Message
+
+	return json.Marshal(struct {
+		alias
+		Content string `json:"content"`
+	}{
+		alias:   alias(m),
+		Content: string(m.Content),
+	})
+}
+
+// flexibleU64 兼容十进制字符串与数字字面量的 uint64。
+type flexibleU64 uint64
+
+func (u *flexibleU64) UnmarshalJSON(data []byte) error {
+	s := string(data)
+	if s == "null" {
+		*u = 0
+		return nil
+	}
+	if len(s) >= 2 && s[0] == '"' {
+		s = s[1 : len(s)-1]
+	}
+
+	val, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return err
+	}
+	*u = flexibleU64(val)
 	return nil
 }
 
@@ -195,6 +295,9 @@ const (
 
 // InboxEntry 收件箱条目 ( SyncService 同步链路下发 )。
 type InboxEntry struct {
+	BusinessID uint64
+	UserID     uint64
+
 	Seq int64
 
 	Kind InboxEntryKind

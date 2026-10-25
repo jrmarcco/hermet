@@ -163,10 +163,22 @@ func writeRes(ctx *gin.Context, res R, err error) {
 		return
 	}
 	if err != nil {
+		// 客户端参数错误应答 400 并回显校验信息；
+		// 其余按服务端错误应答 500，只回通用文案——
+		// 原始错误 ( 可能含 SQL/内部实现细节 ) 仅进日志，不透出给客户端。
+		// 错误信封与正常信封一致使用 message 字段。
+		status := http.StatusInternalServerError
+		message := "internal error"
+		if errors.Is(err, errs.ErrInvalidParam) {
+			status = http.StatusBadRequest
+			message = err.Error()
+		}
+
 		slog.Error("failed to handle request", slog.Any("err", err))
-		ctx.PureJSON(http.StatusInternalServerError, gin.H{
-			"code": http.StatusInternalServerError,
-			"msg":  err.Error(),
+		ctx.PureJSON(status, gin.H{
+			"code":    status,
+			"message": message,
+			"data":    nil,
 		})
 		return
 	}

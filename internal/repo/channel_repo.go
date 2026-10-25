@@ -47,13 +47,20 @@ func NewDefaultChannelRepo(
 }
 
 func (r *DefaultChannelRepo) Create(ctx context.Context, channel domain.Channel) error {
-	// 1. 准备 Sharder ( 以 target_id 为分片键获取 Sharder )。
-	sharder := sharding.NewSingleIDSharder(channel.TargetID)
+	// 1. 准备 Sharder。
+	//
+	// channel 表统一按 user_id 分片 ( 与收件箱同布局 ):
+	//   - 读侧 ListByUserID 按 user_id 路由；
+	//   - 消息链路的会话快照更新 ( UpdateLastMessage* ) 也按 user_id 路由。
+	// 若写入按 target_id 路由，群聊场景下全部成员的会话行会集中到
+	// hash(group_id) 对应的分片，只有恰好与群 ID 同分片的成员能读到
+	// 自己的会话行 ( 其余成员会话列表缺行 )。
+	sharder := sharding.NewSingleIDSharder(channel.UserID)
 
 	// 2. 生成 channel ID 并获取分片信息。
 	id, dst, err := r.cShardHelper.NextIDAndShard(sharder)
 	if err != nil {
-		return fmt.Errorf("failed to get shard destination from channel target id [ %d ]: %w", channel.TargetID, err)
+		return fmt.Errorf("failed to get shard destination from channel user id [ %d ]: %w", channel.UserID, err)
 	}
 
 	// 3. 加载 gorm.DB 连接。

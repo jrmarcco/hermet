@@ -34,8 +34,17 @@ type searchReq struct {
 }
 
 type searchResp struct {
-	Items []search.SearchResultItem `json:"items"`
-	Total int64                     `json:"total"`
+	Items []searchResultItem `json:"items"`
+	Total int64              `json:"total"`
+}
+
+// searchResultItem 搜索结果条目 ( int64 ID 以字符串序列化，见 xgin.U64 )。
+type searchResultItem struct {
+	MessageID      string   `json:"messageId"`
+	ConversationID string   `json:"conversationId"`
+	SenderID       xgin.U64 `json:"senderId"`
+	ContentType    string   `json:"contentType"`
+	SentAt         int64    `json:"sentAt"`
 }
 
 // Search 会话内消息搜索 ( 权限: 请求者必须是会话参与者 )。
@@ -60,10 +69,21 @@ func (h *MessageHandler) Search(ctx *gin.Context, req searchReq) (xgin.R, error)
 		return xgin.R{}, err
 	}
 
+	items := make([]searchResultItem, 0, len(result.Items))
+	for i := range result.Items {
+		items = append(items, searchResultItem{
+			MessageID:      result.Items[i].MessageID,
+			ConversationID: result.Items[i].ConversationID,
+			SenderID:       xgin.U64(result.Items[i].SenderID),
+			ContentType:    result.Items[i].ContentType,
+			SentAt:         result.Items[i].SentAt,
+		})
+	}
+
 	return xgin.R{
 		Code: http.StatusOK,
 		Data: searchResp{
-			Items: result.Items,
+			Items: items,
 			Total: result.Total,
 		},
 	}, nil

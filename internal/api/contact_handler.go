@@ -37,15 +37,15 @@ func (h *ContactHandler) Register(engine *gin.Engine) {
 }
 
 type applyContactReq struct {
-	ContactID uint64 `json:"contactId"`
-	Message   string `json:"message"`
-	Source    string `json:"source"` // 添加来源 ( search=搜索添加 / qrcode=扫码添加 / group=群聊添加 )
+	ContactID xgin.U64 `json:"contactId"`
+	Message   string   `json:"message"`
+	Source    string   `json:"source"` // 添加来源 ( search=搜索添加 / qrcode=扫码添加 / group=群聊添加 )
 }
 
 // Apply 联系人申请。
 // 注意：这里只提交联系人申请，不会立即添加联系人。
 func (h *ContactHandler) Apply(ctx *gin.Context, req applyContactReq, au xgin.ContextUser) (xgin.R, error) {
-	if req.ContactID == au.UID {
+	if req.ContactID == xgin.U64(au.UID) {
 		return xgin.R{}, fmt.Errorf("%w: can not add self as contact", errs.ErrInvalidParam)
 	}
 
@@ -56,7 +56,7 @@ func (h *ContactHandler) Apply(ctx *gin.Context, req applyContactReq, au xgin.Co
 
 	event := domain.ContactApplyEvent{
 		ApplicantID: au.UID,
-		TargetID:    req.ContactID,
+		TargetID:    uint64(req.ContactID),
 		Message:     req.Message,
 		Source:      source,
 	}
@@ -70,8 +70,8 @@ func (h *ContactHandler) Apply(ctx *gin.Context, req applyContactReq, au xgin.Co
 }
 
 type reviewApplicationReq struct {
-	ApplicationID uint64 `json:"applicationId"`
-	Status        string `json:"status"`
+	ApplicationID xgin.U64 `json:"applicationId"`
+	Status        string   `json:"status"`
 }
 
 // ReviewApplication 审批联系人申请。
@@ -83,7 +83,7 @@ func (h *ContactHandler) ReviewApplication(ctx *gin.Context, req reviewApplicati
 	}
 
 	event := domain.ContactReviewEvent{
-		ApplicationID: req.ApplicationID,
+		ApplicationID: uint64(req.ApplicationID),
 		Status:        status,
 	}
 
@@ -97,13 +97,13 @@ func (h *ContactHandler) ReviewApplication(ctx *gin.Context, req reviewApplicati
 }
 
 type getApplicationsResp struct {
-	ID                 uint64 `json:"id"`
-	ApplicantID        uint64 `json:"applicantId"`
-	ApplicantName      string `json:"applicantName"`
-	ApplicantAvatar    string `json:"applicantAvatar"`
-	ApplicationMessage string `json:"applicationMessage"`
-	Source             string `json:"source"`
-	CreatedAt          int64  `json:"createdAt"`
+	ID                 xgin.U64 `json:"id"`
+	ApplicantID        xgin.U64 `json:"applicantId"`
+	ApplicantName      string   `json:"applicantName"`
+	ApplicantAvatar    string   `json:"applicantAvatar"`
+	ApplicationMessage string   `json:"applicationMessage"`
+	Source             string   `json:"source"`
+	CreatedAt          int64    `json:"createdAt"`
 }
 
 // GetApplications 获取联系人申请。
@@ -118,8 +118,8 @@ func (h *ContactHandler) GetApplications(ctx *gin.Context, au xgin.ContextUser) 
 	resps := make([]getApplicationsResp, 0, len(applications))
 	for i := range applications {
 		resps = append(resps, getApplicationsResp{
-			ID:                 applications[i].ID,
-			ApplicantID:        applications[i].ApplicantID,
+			ID:                 xgin.U64(applications[i].ID),
+			ApplicantID:        xgin.U64(applications[i].ApplicantID),
 			ApplicantName:      applications[i].ApplicantName,
 			ApplicantAvatar:    applications[i].ApplicantAvatar,
 			ApplicationMessage: applications[i].ApplicationMessage,
@@ -135,10 +135,10 @@ func (h *ContactHandler) GetApplications(ctx *gin.Context, au xgin.ContextUser) 
 }
 
 type getContactsResp struct {
-	ID uint64 `json:"id"`
+	ID xgin.U64 `json:"id"`
 
-	UserID    uint64 `json:"userId"`
-	ContactID uint64 `json:"contactId"`
+	UserID    xgin.U64 `json:"userId"`
+	ContactID xgin.U64 `json:"contactId"`
 
 	ContactNickname string `json:"contactNickname"`
 	ContactAvatar   string `json:"contactAvatar"`
@@ -163,10 +163,10 @@ func (h *ContactHandler) GetContacts(ctx *gin.Context, au xgin.ContextUser) (xgi
 	resps := make([]getContactsResp, 0, len(contacts))
 	for i := range contacts {
 		resps = append(resps, getContactsResp{
-			ID: contacts[i].ID,
+			ID: xgin.U64(contacts[i].ID),
 
-			UserID:    contacts[i].UserID,
-			ContactID: contacts[i].ContactID,
+			UserID:    xgin.U64(contacts[i].UserID),
+			ContactID: xgin.U64(contacts[i].ContactID),
 
 			ContactNickname: contacts[i].ContactNickname,
 			ContactAvatar:   contacts[i].ContactAvatar,

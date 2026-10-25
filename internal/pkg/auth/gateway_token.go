@@ -6,6 +6,9 @@
 //  3. 校验项: 签名、exp、aud ( 固定为网关服务标识 synp-gateway )。
 //  4. 业务 claims ( business_id / user_id / session_id ) 以顶层 snake_case 键写入，
 //     与网关侧的解析结构 ( gateway internal/pkg/auth/jwtClaims ) 保持一致。
+//  5. business_id / user_id 在 token payload JSON 中以十进制字符串序列化
+//     ( JS Number 无法无损承载 > 2^53-1 的 int64 )；解析侧同时兼容
+//     字符串与数字字面量 ( 升级前签发的存量 token )。
 //
 // 注意: 这里没有复用 jit/xjwt，因为它不支持 aud claim 且把 payload 包在
 // Data 字段下，与网关的顶层 claims 契约不兼容。待 jit 支持后可替换
@@ -13,8 +16,10 @@
 package auth
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -28,6 +33,67 @@ type GatewayClaims struct {
 	BusinessID uint64 `json:"business_id"`
 	UserID     uint64 `json:"user_id"`
 	SessionID  string `json:"session_id"`
+}
+
+// MarshalJSON 将 business_id / user_id 序列化为十进制字符串。
+func (c GatewayClaims) MarshalJSON() ([]byte, error) {
+	type alias GatewayClaims
+
+	return json.Marshal(struct {
+		alias
+
+		BusinessID string `json:"business_id"`
+		UserID     string `json:"user_id"`
+	}{
+		alias: alias(c),
+
+		BusinessID: strconv.FormatUint(c.BusinessID, 10),
+		UserID:     strconv.FormatUint(c.UserID, 10),
+	})
+}
+
+// UnmarshalJSON 兼容字符串与数字字面量两种 ID 形态。
+func (c *GatewayClaims) UnmarshalJSON(data []byte) error {
+	type alias GatewayClaims
+
+	aux := struct {
+		*alias
+
+		BusinessID *flexibleU64 `json:"business_id"`
+		UserID     *flexibleU64 `json:"user_id"`
+	}{alias: (*alias)(c)}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if aux.BusinessID != nil {
+		c.BusinessID = uint64(*aux.BusinessID)
+	}
+	if aux.UserID != nil {
+		c.UserID = uint64(*aux.UserID)
+	}
+	return nil
+}
+
+// flexibleU64 兼容十进制字符串与数字字面量的 uint64。
+type flexibleU64 uint64
+
+func (u *flexibleU64) UnmarshalJSON(data []byte) error {
+	s := string(data)
+	if s == "null" {
+		*u = 0
+		return nil
+	}
+	if len(s) >= 2 && s[0] == '"' {
+		s = s[1 : len(s)-1]
+	}
+
+	val, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return err
+	}
+	*u = flexibleU64(val)
+	return nil
 }
 
 var (

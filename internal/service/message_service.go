@@ -104,7 +104,8 @@ func NewDefaultMessageService(
 // 随后投递通知 ( 只携带 latest_seq，不携带消息本体 )，客户端经 SYNC 拉取增量。
 //
 // 错误语义:
-//   - 解析失败 / 校验不通过: 记录日志后返回 nil ( 毒消息与业务拒绝不重投，避免无限循环 )。
+//   - 解析失败 / 校验不通过: 记录日志、向发送者收件箱写一条系统失败回执后返回 nil
+//     ( 毒消息与业务拒绝不重投，避免无限循环；回执走同步链路，客户端可见 )。
 //   - 落库失败: 返回 error，Kafka 按消费语义重投 ( 全链路幂等，重投安全 )。
 //   - 通知失败: 仅记录日志 ( 契约允许通知丢失，只影响实时性 )。
 func (s *DefaultMessageService) ProcessUpstreamMsg(ctx context.Context, upstreamMsg *xmq.Message) error {
@@ -133,7 +134,13 @@ func (s *DefaultMessageService) ProcessUpstreamMsg(ctx context.Context, upstream
 			"sender_id", senderID,
 			"error", err,
 		)
+		s.recordSendFailure(ctx, stamped, businessID, senderID, "", domain.SendFailReasonInvalidBody, err)
 		return nil
+	}
+
+	// contentType 缺省按 text 处理 ( 兼容未携带该字段的客户端 )。
+	if body.ContentType == "" {
+		body.ContentType = domain.ContentTypeText
 	}
 
 	switch body.DestinationType {
@@ -147,6 +154,7 @@ func (s *DefaultMessageService) ProcessUpstreamMsg(ctx context.Context, upstream
 			"message_id", stamped.GetMessageId(),
 			"destination_type", string(body.DestinationType),
 		)
+		s.recordSendFailure(ctx, stamped, businessID, senderID, "", domain.SendFailReasonInvalidDestination, nil)
 		return nil
 	}
 }
@@ -165,18 +173,28 @@ func (s *DefaultMessageService) processSingleChat(
 			"sender_id", senderID,
 			"receiver_id", receiverID,
 		)
+		s.recordSendFailure(
+			ctx, stamped, businessID, senderID,
+			"",
+			domain.SendFailReasonInvalidDestination, nil,
+		)
 		return nil
 	}
 
 	if err := s.validateContact(ctx, senderID, receiverID); err != nil {
 		// 业务级失败不通过 UPSTREAM_ACK 表达 ( 网关级回执与业务结果解耦，见契约 )，
-		// 后续可作为系统消息走同步链路下发，当前先记录日志。
+		// 改为向发送者收件箱写一条系统失败回执，经 NOTIFY -> SYNC 链路送达。
 		logging.For("message-service").Warn(
 			"single chat validation failed, skip",
 			"message_id", stamped.GetMessageId(),
 			"sender_id", senderID,
 			"receiver_id", receiverID,
 			"error", err,
+		)
+		s.recordSendFailure(
+			ctx, stamped, businessID, senderID,
+			domain.SingleConversationID(senderID, receiverID),
+			domain.SendFailReasonNotAllowed, err,
 		)
 		return nil
 	}
@@ -200,7 +218,9 @@ func (s *DefaultMessageService) processSingleChat(
 
 		ConversationID: conversationID,
 
-		Body:           body.Content,
+		// body 列存 UPSTREAM 帧 body 原文 ( 客户端按原格式解释，
+		// 含 id/contentType 等业务字段 )，而非仅 content 文本。
+		Body:           stamped.GetBody(),
 		ContentType:    string(body.ContentType),
 		ContentPreview: contentPreview(body),
 
@@ -219,7 +239,8 @@ func (s *DefaultMessageService) processSingleChat(
 	s.notify(ctx, stamped.GetMessageId(), businessID, receiverID, result.ReceiverSeq)
 
 	// 索引事件 ( ES 查询加速层，可丢可重，失败不影响主链路 )。
-	s.emitIndexEvent(ctx, msg.BusinessID, msg.MessageID, msg.ConversationID, msg.SenderID, msg.Body, msg.ContentType, msg.SentAt)
+	// ES 全文检索按可分词文本索引，这里投递 content 而非整个 body 原文。
+	s.emitIndexEvent(ctx, msg.BusinessID, msg.MessageID, msg.ConversationID, msg.SenderID, body.Content, msg.ContentType, msg.SentAt)
 
 	return nil
 }
@@ -243,8 +264,15 @@ func (s *DefaultMessageService) processGroupChat(
 			"message_id", stamped.GetMessageId(),
 			"sender_id", senderID,
 		)
+		s.recordSendFailure(
+			ctx, stamped, businessID, senderID,
+			"",
+			domain.SendFailReasonInvalidDestination, nil,
+		)
 		return nil
 	}
+
+	conversationID := domain.GroupConversationID(groupID)
 
 	active, err := s.userGroupRepo.IsActiveMember(ctx, senderID, groupID)
 	if err != nil {
@@ -258,6 +286,7 @@ func (s *DefaultMessageService) processGroupChat(
 			"sender_id", senderID,
 			"group_id", groupID,
 		)
+		s.recordSendFailure(ctx, stamped, businessID, senderID, conversationID, domain.SendFailReasonNotAllowed, nil)
 		return nil
 	}
 
@@ -273,8 +302,6 @@ func (s *DefaultMessageService) processGroupChat(
 		)
 		return nil
 	}
-
-	conversationID := domain.GroupConversationID(groupID)
 
 	snowflakeID, err := s.nextSnowflakeID(conversationID)
 	if err != nil {
@@ -292,7 +319,8 @@ func (s *DefaultMessageService) processGroupChat(
 
 		ConversationID: conversationID,
 
-		Body:           body.Content,
+		// body 列存 UPSTREAM 帧 body 原文 ( 同单聊 )。
+		Body:           stamped.GetBody(),
 		ContentType:    string(body.ContentType),
 		ContentPreview: contentPreview(body),
 
@@ -319,7 +347,7 @@ func (s *DefaultMessageService) processGroupChat(
 	}
 
 	// 索引事件 ( ES 查询加速层，可丢可重，失败不影响主链路 )。
-	s.emitIndexEvent(ctx, msg.BusinessID, msg.MessageID, msg.ConversationID, msg.SenderID, msg.Body, msg.ContentType, msg.SentAt)
+	s.emitIndexEvent(ctx, msg.BusinessID, msg.MessageID, msg.ConversationID, msg.SenderID, body.Content, msg.ContentType, msg.SentAt)
 
 	return nil
 }
@@ -340,6 +368,71 @@ func (s *DefaultMessageService) validateContact(ctx context.Context, senderID, r
 		return fmt.Errorf("receiver [ %d ] is blocked by sender [ %d ]", receiverID, senderID)
 	}
 	return nil
+}
+
+// recordSendFailure 向发送者收件箱写一条系统失败回执并投递通知。
+//
+// 业务级失败 ( 非好友 / 非群成员 / body 非法等 ) 不再静默丢弃:
+// 回执作为普通收件箱条目走 NOTIFY -> SYNC 同步链路，发送端经多端自同步可见。
+// 写失败仅记日志 ( 回执是尽力而为的补充，不影响主链路 )。
+func (s *DefaultMessageService) recordSendFailure(
+	ctx context.Context,
+	stamped *messagev1.UpstreamMessage,
+	businessID, senderID uint64,
+	conversationID string,
+	reason domain.SendFailReason,
+	_ error,
+) {
+	if senderID == 0 {
+		return
+	}
+
+	sentAt := time.Now().UnixMilli()
+
+	notice := domain.SystemNotice{
+		SystemType: domain.SystemTypeSendFailed,
+		Reason:     string(reason),
+		UpstreamID: stamped.GetMessageId(),
+		Content:    reason.NoticeText(),
+	}
+	val, err := json.Marshal(notice)
+	if err != nil {
+		// 静态结构序列化失败属于代码缺陷，记录后丢弃回执。
+		logging.For("message-service").Error(
+			"failed to marshal send failure notice",
+			"message_id", stamped.GetMessageId(),
+			"error", err,
+		)
+		return
+	}
+
+	seq, err := s.messageRepo.AppendSystemInboxEntry(ctx, domain.InboxEntry{
+		BusinessID: businessID,
+		UserID:     senderID,
+
+		Kind: domain.InboxEntryKindChat,
+
+		// 复用帧 ID 做幂等键 ( business_id + user_id + message_id 唯一 )。
+		MessageID: stamped.GetMessageId(),
+
+		ConversationID: conversationID,
+
+		SenderID:    senderID,
+		Body:        val,
+		ContentType: string(domain.ContentTypeSystem),
+		SentAt:      sentAt,
+	})
+	if err != nil {
+		logging.For("message-service").Warn(
+			"failed to append send failure notice",
+			"message_id", stamped.GetMessageId(),
+			"sender_id", senderID,
+			"error", err,
+		)
+		return
+	}
+
+	s.notify(ctx, stamped.GetMessageId(), businessID, senderID, seq)
 }
 
 func (s *DefaultMessageService) notify(ctx context.Context, messageID string, businessID, receiverID uint64, latestSeq int64) {

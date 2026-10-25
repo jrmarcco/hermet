@@ -38,6 +38,13 @@ func (b *JwtBuilder) Build() gin.HandlerFunc {
 			return
 		}
 
+		// CORS 预检 ( OPTIONS ) 不携带凭证，交由 CORS 中间件应答，
+		// 不能在鉴权层被 401 拦截 ( 否则浏览器直连后端时预检失败 )。
+		if ctx.Request.Method == http.MethodOptions {
+			ctx.Next()
+			return
+		}
+
 		token := strings.TrimPrefix(ctx.GetHeader(xgin.HeaderNameAccessToken), "Bearer ")
 		if token == "" {
 			ctx.AbortWithStatus(http.StatusUnauthorized)

@@ -45,8 +45,13 @@
 - Base URL: `http://<backend>:10081`
 - 鉴权: 除登录/刷新/`/.well-known/jwks.json` 外，请求头带 `x-access-token: Bearer <accessToken>`
 - 响应体: `{"code": <http status>, "message": "", "data": <any>}`；
-  未登录返回 HTTP 401 ( 无 body )；服务端错误返回 HTTP 500 + `{"code":500,"msg":"..."}`
+  未登录返回 HTTP 401 ( 无 body )；
+  参数校验失败返回 HTTP 400 + 具体校验信息；
+  服务端错误返回 HTTP 500 + `message: "internal error"` ( 内部错误细节只进服务端日志 )
 - 时间戳: Unix 毫秒值
+- **int64 ID 一律以十进制字符串序列化** ( 联系人/会话/群/用户等全部 ID，如
+  `"contactId": "134605228232032256"` )——JS `Number` 无法无损承载超过 2^53-1 的整数；
+  请求中的 ID 字段同时接受字符串与数字，但**强烈建议统一传字符串**
 
 ### 3.1 认证
 
@@ -67,7 +72,9 @@
 ```
 
 - accessToken: RS256 JWT ( iss=synp-auth, aud=synp-gateway, 有效期 2h )，
-  同时用于 HTTP 鉴权与 WS AUTH
+  同时用于 HTTP 鉴权与 WS AUTH；
+  payload 中 `user_id` / `business_id` 以**十进制字符串**承载
+  ( `"user_id":"134605228232032256"`，JS 可无损读取 )
 - refreshToken: 有效期 7 天，仅用于 HTTP 刷新
 
 **refresh-token**
@@ -88,19 +95,19 @@
 | GET  | `/api/v1/contact/contacts` | 联系人列表 |
 
 ```json
-// apply
-{ "contactId": 134605228232032256, "message": "hello", "source": "search" }
+// apply ( ID 建议传字符串，数字形态兼容 )
+{ "contactId": "134605228232032256", "message": "hello", "source": "search" }
 // source: search=搜索 / qrcode=扫码 / group=群聊添加；不能添加自己
 
 // review
-{ "applicationId": 143667005994565632, "status": "approved" }
+{ "applicationId": "143667005994565632", "status": "approved" }
 // status: approved / rejected
 
-// applications → data[]
+// applications → data[] ( ID 均为字符串 )
 { "id", "applicantId", "applicantName", "applicantAvatar",
   "applicationMessage", "source", "createdAt" }
 
-// contacts → data[]
+// contacts → data[] ( ID 均为字符串 )
 { "id", "userId", "contactId", "contactNickname", "contactAvatar",
   "contactGender", "contactMobile", "contactInfoVer", "remarkName",
   "source", "addedAt" }
@@ -115,10 +122,12 @@
 | POST | `/api/v1/group/create` | 建群 ( 创建者为群主 ) |
 
 ```json
-// request
-{ "name": "群名", "avatar": "https://...", "memberIds": [10001, 10002] }
+// request ( memberIds 建议传字符串数组 )
+{ "name": "群名", "avatar": "https://...", "memberIds": ["10001", "10002"] }
 
-// response data: 群信息 ( 含群 ID )
+// response data: 群信息 ( 含群 ID，ID 为字符串 )
+{ "id": "240079435428384768", "name": "群名", "avatar": "...", "status": "active",
+  "creatorId": "10001", "lastMessageAt": 0, "createdAt": 1761400000000 }
 ```
 
 > 建群异步生效 ( 成员分批写入 )，会话列表稍后可见。
@@ -130,19 +139,19 @@
 | GET | `/api/v1/channel/channels` | 当前用户的会话列表 ( 按最后消息时间倒序 ) |
 
 ```json
-// data[] 关键字段
+// data[] 关键字段 ( int64 ID 均为字符串 )
 {
-  "id": 123,
+  "id": "123",
   "destination": "10001:10002",     // 会话目的地 ( 见 §5 会话 ID 规则 )
   "channelType": "single",          // single=单聊 / group=群聊
-  "targetId": 10002,
+  "targetId": "10002",
   "channelName": "对方昵称或群名",
   "channelAvatar": "...",
   "isMuted": false, "isPinned": false,
-  "lastMessageId": 456,
+  "lastMessageId": "456",
   "lastMessageType": "text",
   "lastMessageContent": "最后一条消息摘要",
-  "lastMessageSenderId": 10001,
+  "lastMessageSenderId": "10001",
   "lastMessageTime": 1761400000000,
   "unreadCount": 3, "mentionCount": 0
 }
@@ -160,44 +169,50 @@ Query 参数: `conversationId` ( 会话 ID，见 §5 )、`keyword`、`from` ( �
 // data
 { "items": [ { "messageId", "conversationId", "senderId", "contentType", "sentAt" } ],
   "total": 12 }
-```
+// senderId 为字符串
 
 > 搜索为异步索引 ( 秒级延迟 )，且只返回定位信息 ( messageId/sentAt )，
 > 消息本体经同步链路按 seq 拉取。
 
 ## 4. WebSocket 协议
 
-**连接**: `ws://<gateway>:10071`，文本帧 ( protojson 编码 )
+**连接**: `ws://<gateway>:10071`，**text 文本帧** ( protojson 编码；浏览器
+`WebSocket.onmessage` 的 `ev.data` 为 string，不是 Blob )
 
 **帧结构** ( `Message` ):
 
 ```json
 {
-  "commandType": 4,          // CommandType 数字，见下表
-  "messageId": "01JD...",    // 帧唯一 ID ( 前端建议 ULID )，*_ACK 原样回填
-  "body": "..."              // 按 commandType 解释，JSON 序列化后的字符串/对象
+  "commandType": "COMMAND_TYPE_UPSTREAM",  // 指令，见下表 ( 枚举名字符串 )
+  "messageId": "01JD...",                  // 帧唯一 ID ( 前端建议 ULID )，*_ACK 原样回填
+  "body": "..."                            // 按 commandType 解释，JSON 序列化 + base64
 }
 ```
 
-| 指令 | 值 | 方向 | body |
+| 指令 | 枚举名 | 方向 | body |
 |---|---|---|---|
-| HEARTBEAT | 1 | C→G | 空 |
-| AUTH | 2 | C→G | `{"token": "<accessToken>"}` |
-| AUTH_ACK | 3 | G→C | `{"success": true}` 或 `{"success": false, "errorMessage": "..."}` |
-| UPSTREAM | 4 | C→G | 业务消息 ( §5 ) |
-| UPSTREAM_ACK | 5 | G→C | `{"isSuccess": true, "timestampMs": 1761400000000}` |
-| SYNC | 6 | C→G | `{"cursor": 42, "limit": 0}` |
-| SYNC_ACK | 7 | G→C | `{"isSuccess": true, "response": {...}}` |
-| CONVERSATION_SYNC | 8 | C→G | `{"conversationId": "g:100", "cursor": 0, "limit": 0}` |
-| CONVERSATION_SYNC_ACK | 9 | G→C | `{"isSuccess": true, "response": {...}}` |
-| NOTIFY | 10 | G→C | `{"latestSeq": 43}` |
-| REDIRECT / RATE_LIMIT_EXCEEDED | 11 / 12 | G→C | 预留 |
+| HEARTBEAT | `COMMAND_TYPE_HEARTBEAT` | C→G | 空 |
+| AUTH | `COMMAND_TYPE_AUTH` | C→G | `{"token": "<accessToken>"}` |
+| AUTH_ACK | `COMMAND_TYPE_AUTH_ACK` | G→C | `{"success": true}` 或 `{"success": false, "errorMessage": "..."}` |
+| UPSTREAM | `COMMAND_TYPE_UPSTREAM` | C→G | 业务消息 ( §5 ) |
+| UPSTREAM_ACK | `COMMAND_TYPE_UPSTREAM_ACK` | G→C | `{"isSuccess": true, "timestampMs": 1761400000000}` |
+| SYNC | `COMMAND_TYPE_SYNC` | C→G | `{"cursor": 42, "limit": 0}` |
+| SYNC_ACK | `COMMAND_TYPE_SYNC_ACK` | G→C | `{"isSuccess": true, "response": {...}}` |
+| CONVERSATION_SYNC | `COMMAND_TYPE_CONVERSATION_SYNC` | C→G | `{"conversationId": "g:100", "cursor": 0, "limit": 0}` |
+| CONVERSATION_SYNC_ACK | `COMMAND_TYPE_CONVERSATION_SYNC_ACK` | G→C | `{"isSuccess": true, "response": {...}}` |
+| NOTIFY | `COMMAND_TYPE_NOTIFY` | G→C | `{"latestSeq": 43}` |
+| REDIRECT / RATE_LIMIT_EXCEEDED | `COMMAND_TYPE_REDIRECT` / `COMMAND_TYPE_RATE_LIMIT_EXCEEDED` | G→C | 预留 |
 
 **规则**
 
 - 连接后 **15s 内**必须完成 AUTH，否则被关闭；鉴权前其他指令一律拒绝；
 - 心跳建议 30s 一次，连接空闲约 90s 会被服务端关闭；
-- 客户端身份 ( businessId/userId/sessionId ) 由网关从 JWT 盖章，**前端自报身份不可信也不会被采用**。
+- 客户端身份 ( businessId/userId/sessionId ) 由网关从 JWT 盖章，**前端自报身份不可信也不会被采用**；
+- 下行帧的零值字段**照常输出** ( `isSuccess: false` / `hasMore: false` /
+  `cursorExpired: false` 不会缺省 )，客户端按字段存在编写即可；
+- NOTIFY 帧的 `messageId` 由服务端**每次下发独立生成**，与触发消息的
+  UPSTREAM 帧 ID 无关——**不要**以 `NOTIFY.messageId` 做帧关联或消息去重
+  ( 去重按 `latestSeq` 比对 / 收件箱 `seq` )。
 
 ## 5. 业务消息格式 ( UPSTREAM body )
 
@@ -205,12 +220,13 @@ body 是前端自定义 JSON，网关与后端不解释结构，但 backend 按�
 
 ```json
 {
-  "id": "01JD...",              // 可选，前端本地消息 ID
-  "sid": 10001,                 // 可选，仅展示用途 ( 服务端以盖章身份为准 )
-  "destinationId": 10002,       // 必填: 单聊=对方 userId；群聊=groupId
-  "destinationType": "single",  // 必填: single=单聊 / group=群聊
-  "content": "你好",             // 必填: 消息内容 ( 文本，UTF-8；搜索按全文索引 )
-  "contentType": "text"         // 必填: text / image
+  "id": "01JD...",                      // 可选，前端本地消息 ID
+  "sid": "10001",                       // 可选，仅展示用途 ( 服务端以盖章身份为准 )
+  "destinationId": "134605228232032256", // 必填: 单聊=对方 userId；群聊=groupId
+                                       // 建议传十进制字符串；数字形态亦兼容
+  "destinationType": "single",          // 必填: single=单聊 / group=群聊
+  "content": "你好",                     // 必填: 消息内容 ( 文本，UTF-8；搜索按全文索引 )
+  "contentType": "text"                 // text / image；缺省按 text 处理
 }
 ```
 
@@ -225,7 +241,20 @@ UPSTREAM ( messageId=帧ID, body=上述 JSON )
   ← SYNC_ACK { entries, latestSeq, hasMore, cursorExpired }
 ```
 
-- 被拒绝的消息 ( 非好友/非群成员 ) **不会有任何回执**，静默丢弃 ( 后续将改为系统消息下发 )；
+- **业务级失败有回执**: 消息被后端拒绝 ( 非好友 / 被屏蔽 / 非群成员 /
+  目的地非法 / body 非法 ) 时，后端会向**发送者自己的收件箱**写一条
+  `contentType: "system"` 的系统条目 ( 经 NOTIFY → SYNC 链路送达，多端可见 )，
+  body 为:
+
+  ```json
+  {
+    "systemType": "send_failed",
+    "reason": "not_allowed",            // not_allowed / invalid_destination / invalid_body
+    "upstreamId": "01JD...",            // 触发帧的 messageId，用于关联本地 pending 消息
+    "content": "消息发送失败: ..."       // 可直接展示的文案
+  }
+  ```
+
 - 同一帧因重发产生重复投递是正常的，服务端按 messageId 幂等落库。
 
 ## 6. 会话 ID 规则 ( conversationId )
@@ -270,6 +299,10 @@ UPSTREAM ( messageId=帧ID, body=上述 JSON )
 3. `cursorExpired=true` 表示游标早于服务端保留窗口，需重置本地数据重新同步；
 4. `body` 是发送者 UPSTREAM 帧 body 的**原文**，按 `contentType` 渲染；
 5. 收到指针条目 ( conversationUpdate ) 时，对该会话发 CONVERSATION_SYNC 拉正文。
+
+**messageId 语义 ( 重要 )**: 同步链路条目里的 `messageId` 恒为发送端
+UPSTREAM **帧的 messageId** ( 网关帧 ID )，与 body 内业务自定义的 `id` 字段
+无关。多端自同步合并本地 pending 消息时按帧 ID 关联，不要按 body.id。
 
 ## 8. 群聊 timeline ( CONVERSATION_SYNC )
 
@@ -321,5 +354,18 @@ UPSTREAM ( messageId=帧ID, body=上述 JSON )
 - 顶号/强制下线通知 ( 契约待定义 ): 同账号新登录会使旧 session 失效，
   旧连接在下次 AUTH 时失败，**不会收到主动断开通知**；
 - 撤回/删除/已读回执、群成员管理 API、消息历史向前翻页接口 ( 可用
-  CONVERSATION_SYNC 小游标变通 )；
-- 业务级失败回执 ( 非好友/被禁言发送无效，无系统消息提示，规划中 )。
+  CONVERSATION_SYNC 小游标变通 )。
+
+## 12. 已支持 ( 此前版本未支持 )
+
+- **业务级失败回执** ( §5 ): 非好友/被屏蔽/非群成员/目的地非法/body
+  反序列化失败的 UPSTREAM，后端会向发送者收件箱写 `contentType: "system"`
+  的系统条目，经同步链路送达，不再静默丢弃。
+
+## 13. 兼容性说明
+
+- 存量数据: 2026-10 之前落库的部分收件箱条目 body 为**纯文本** ( 旧测试
+  客户端写入 )，客户端需按纯文本 content 兼容渲染；新数据 body 一律为
+  UPSTREAM 原文 JSON；
+- 顶号瞬间新连接的 AUTH_ACK 仍属尽力而为送达: 未收到 ACK 时按协议
+  重复发送 AUTH 即可 ( 幂等 )。

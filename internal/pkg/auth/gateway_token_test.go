@@ -1,9 +1,12 @@
 package auth
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,6 +99,43 @@ func TestGatewayTokenRoundTrip(t *testing.T) {
 	require.Equal(t, jwt.ClaimStrings{testAudience}, claims.Audience)
 	require.Equal(t, testJti, claims.ID)
 	require.NotNil(t, claims.ExpiresAt)
+}
+
+// TestGatewayClaimsStringIDs 验证 ID claims 以十进制字符串写入 token payload
+// ( JS Number 无法无损承载 > 2^53-1 的 int64 )，且验签可读回。
+func TestGatewayClaimsStringIDs(t *testing.T) {
+	t.Parallel()
+
+	privatePEM, publicPEM := genTestKeyPair(t)
+	signer := newTestSigner(t, privatePEM, publicPEM)
+
+	const userID = uint64(134605228232032256)
+
+	token, err := signer.Sign(1, userID, "session-1")
+	require.NoError(t, err)
+
+	// payload 第二段按原文检查: user_id 必须是带引号的字符串。
+	payload := token[strings.Index(token, ".")+1 : strings.LastIndex(token, ".")]
+	decoded, err := base64.RawURLEncoding.DecodeString(payload)
+	require.NoError(t, err)
+	require.Contains(t, string(decoded), `"user_id":"134605228232032256"`)
+
+	claims, err := signer.Verifier().Verify(token)
+	require.NoError(t, err)
+	require.Equal(t, userID, claims.UserID)
+}
+
+// TestGatewayClaimsUnmarshalNumberForm 验证解析侧兼容数字字面量 ( 存量 token )。
+func TestGatewayClaimsUnmarshalNumberForm(t *testing.T) {
+	t.Parallel()
+
+	claims := &GatewayClaims{}
+	err := json.Unmarshal([]byte(`{"business_id":1,"user_id":134605228232032256,"session_id":"s"}`), claims)
+	require.NoError(t, err)
+
+	require.Equal(t, uint64(1), claims.BusinessID)
+	require.Equal(t, uint64(134605228232032256), claims.UserID)
+	require.Equal(t, "s", claims.SessionID)
 }
 
 func TestGatewayTokenTampered(t *testing.T) {

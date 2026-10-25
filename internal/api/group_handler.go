@@ -30,9 +30,9 @@ func (h *GroupHandler) Register(engine *gin.Engine) {
 }
 
 type createGroupReq struct {
-	Name      string   `json:"name"`
-	Avatar    string   `json:"avatar"`
-	MemberIDs []uint64 `json:"memberIds"`
+	Name      string     `json:"name"`
+	Avatar    string     `json:"avatar"`
+	MemberIDs []xgin.U64 `json:"memberIds"`
 }
 
 // createGroup 创建群聊。
@@ -41,12 +41,17 @@ func (h *GroupHandler) CreateGroup(ctx *gin.Context, req createGroupReq, au xgin
 		return xgin.R{}, fmt.Errorf("%w: name is required", errs.ErrInvalidParam)
 	}
 
-	channel, err := h.svc.Create(ctx, domain.GroupCreateEvent{
+	memberIDs := make([]uint64, 0, len(req.MemberIDs))
+	for _, id := range req.MemberIDs {
+		memberIDs = append(memberIDs, uint64(id))
+	}
+
+	group, err := h.svc.Create(ctx, domain.GroupCreateEvent{
 		Name:      req.Name,
 		Avatar:    req.Avatar,
 		CreatorID: au.UID,
 
-		MemberIDs: req.MemberIDs,
+		MemberIDs: memberIDs,
 	})
 	if err != nil {
 		return xgin.R{}, err
@@ -54,6 +59,26 @@ func (h *GroupHandler) CreateGroup(ctx *gin.Context, req createGroupReq, au xgin
 
 	return xgin.R{
 		Code: http.StatusOK,
-		Data: channel,
+		Data: createGroupResp{
+			ID:            xgin.U64(group.ID),
+			Name:          group.GroupName,
+			Avatar:        group.GroupAvatar,
+			Status:        string(group.GroupStatus),
+			CreatorID:     xgin.U64(group.CreatorID),
+			LastMessageAt: group.LastMessageAt,
+			CreatedAt:     group.CreatedAt,
+		},
 	}, nil
+}
+
+type createGroupResp struct {
+	ID     xgin.U64 `json:"id"`
+	Name   string   `json:"name"`
+	Avatar string   `json:"avatar"`
+	Status string   `json:"status"`
+
+	CreatorID xgin.U64 `json:"creatorId"`
+
+	LastMessageAt int64 `json:"lastMessageAt"`
+	CreatedAt     int64 `json:"createdAt"`
 }

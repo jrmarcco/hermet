@@ -35,6 +35,10 @@ type MessageRepo interface {
 	// ListConversationTimeline 返回会话 timeline 内 ( cursor, latest_seq ] 按序的至多 limit 条消息
 	// ( limit+1 探测 has_more )，同时返回会话当前最大 conversation_seq。
 	ListConversationTimeline(ctx context.Context, businessID uint64, conversationID string, cursor int64, limit int) (messages []domain.TimelineMessage, latestSeq int64, hasMore bool, err error)
+
+	// AppendSystemInboxEntry 在指定用户收件箱追加一条系统条目 ( 不写正本、不分配会话 seq )，
+	// 返回分配的收件箱 seq。按 ( business_id, user_id, message_id ) 幂等。
+	AppendSystemInboxEntry(ctx context.Context, entry domain.InboxEntry) (seq int64, err error)
 }
 
 // defaultFanoutBatchSize 群扇出每批成员数兜底值 ( 服务层配置缺省时 )。
@@ -493,6 +497,53 @@ func (r *TxMessageRepo) fanoutGroupBatch(
 	}
 
 	return allocations, nil
+}
+
+// AppendSystemInboxEntry 在用户分片事务内为系统条目分配 seq 并写入收件箱
+// ( 业务级失败回执等场景；不触碰正本与 conversation_seq )。
+func (r *TxMessageRepo) AppendSystemInboxEntry(ctx context.Context, entry domain.InboxEntry) (int64, error) {
+	dst, err := r.inboxShardHelper.DstFromSharder(sharding.NewSingleIDSharder(entry.UserID))
+	if err != nil {
+		return 0, fmt.Errorf("failed to get shard destination from user id [ %d ]: %w", entry.UserID, err)
+	}
+
+	db, ok := r.dbs.Load(dst.DB)
+	if !ok {
+		return 0, fmt.Errorf("failed to load database [ %s ]", dst.DB)
+	}
+
+	var seq int64
+	err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var txErr error
+		seq, txErr = r.inboxDao.NextSeqInTx(ctx, tx, dst.TB, entry.BusinessID, entry.UserID, 1)
+		if txErr != nil {
+			return txErr
+		}
+
+		entity := dao.InboxEntry{
+			BusinessID: entry.BusinessID,
+			UserID:     entry.UserID,
+			Seq:        seq,
+
+			Kind: dao.InboxEntryKind(entry.Kind),
+
+			MessageID: entry.MessageID,
+
+			ConversationID: entry.ConversationID,
+
+			SenderID:    entry.SenderID,
+			Body:        entry.Body,
+			ContentType: entry.ContentType,
+			SentAt:      entry.SentAt,
+
+			CreatedAt: entry.SentAt,
+		}
+		return r.inboxDao.CreateEntryInTx(ctx, tx, dst.TB, entity)
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to append system inbox entry: %w", err)
+	}
+	return seq, nil
 }
 
 func (r *TxMessageRepo) ListConversationTimeline(
