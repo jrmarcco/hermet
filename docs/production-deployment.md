@@ -49,6 +49,7 @@
 
 ```bash
 cd gateway/scripts/docker/kafka
+# 需要 jdk 环境 ( keytool )
 ./init.sh                       # 生成 .env ( 随机 KAFKA_CLUSTER_ID ) 与自签证书
 # 生产必改 .env:
 #   KAFKA_EXTERNAL_IP=<对客户端广播的 IP/LB 地址>
